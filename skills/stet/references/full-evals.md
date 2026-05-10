@@ -99,6 +99,12 @@ stet eval status --out .stet/eval-output --json
 stet eval report --out .stet/eval-output --json
 ```
 
+`stet eval run` keeps task selection canonical and sorted, while harness
+dispatch is shuffled by default with a generated seed recorded in
+`manifest.json`. Use `--task-order-seed <seed>`, or suite manifest
+`eval.task_order_seed`, when you need a named replay seed; task-selection
+evidence stays sorted for comparison and replay.
+
 For Docker Desktop hosts, do not raise all concurrency knobs together. Use:
 
 ```bash
@@ -179,7 +185,7 @@ stet eval report --change-manifest .stet/rules/stet.change.yaml --json
   Successful smoke artifacts are seeded into the canonical root so smoked tasks
   count toward the full run.
 - To compare reasoning levels, keep the model fixed and use first-class
-  reasoning arms: `stet eval run --dataset <dataset> --model <model> --reasoning-efforts xhigh,high,low --out <out>`.
+  reasoning arms: `stet eval run --dataset <dataset> --model <model> --reasoning-efforts max,xhigh,high,low --out <out>`.
   Add `--pinned-task-source` and `--pinned-dataset-key` when reusing prior Stet
   history. Do not repeat the same model under `--models` for reasoning tests.
 - If multiple experiment arms request the same explicit `model_key`, read the
@@ -194,6 +200,14 @@ stet eval report --change-manifest .stet/rules/stet.change.yaml --json
   standard model comparison truth.
 - `strict_publishable_pass_rate` remains explicit legacy publish gating; do not
   substitute it for leaderboard/model-comparison truth.
+- For public leaderboard matrices built after cleaned-patch revalidation, keep
+  one shared task denominator across tests, equivalence, review, and footprint;
+  do not drop `base_tests_pass_without_patch` tasks unless the whole task has no
+  usable patch evidence across arms.
+- In `leaderboard/runs.yaml`, use `studies:` for historical or methodology-bound
+  comparisons that should appear beside the leaderboard but not be ranked with
+  the current cohort. Give same-model snapshots distinct source `key` values so
+  old and fresh runs cannot overwrite each other during ingestion.
 - `publish.exclusions_by_reason` and compare-level `blocked_runs` explain why a
   result is not cleanly publishable even when task execution mostly finished.
 - `decision_metrics.graders.<grader_id>` is the canonical run-level grader

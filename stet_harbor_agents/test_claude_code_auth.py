@@ -58,6 +58,7 @@ def install_fake_harbor_modules(with_exec_input=True):
     if with_exec_input:
         class ClaudeCode:
             def __init__(self, *args, **kwargs):
+                self._init_kwargs = dict(kwargs)
                 self._extra_env = kwargs.get("extra_env", {})
                 self._should_fail_run = False
 
@@ -79,6 +80,7 @@ def install_fake_harbor_modules(with_exec_input=True):
     else:
         class ClaudeCode:
             def __init__(self, *args, **kwargs):
+                self._init_kwargs = dict(kwargs)
                 self._extra_env = kwargs.get("extra_env", {})
                 self._should_fail_run = False
 
@@ -207,10 +209,11 @@ class ClaudeCodeAuthAgentTests(unittest.TestCase):
 
         self.assertEqual(agent._reasoning_env(), {"CLAUDE_CODE_EFFORT_LEVEL": "high"})
 
-    def test_xhigh_reasoning_effort_maps_to_claude_code_max(self):
+    def test_xhigh_reasoning_effort_passes_through_to_claude_code(self):
         agent = self.module.ClaudeCodeAuthAgent(reasoning_effort="xhigh")
 
-        self.assertEqual(agent._reasoning_env(), {"CLAUDE_CODE_EFFORT_LEVEL": "max"})
+        self.assertEqual(agent._reasoning_env(), {"CLAUDE_CODE_EFFORT_LEVEL": "xhigh"})
+        self.assertEqual(agent._init_kwargs["reasoning_effort"], "xhigh")
 
     def test_invalid_reasoning_effort_is_rejected(self):
         agent = self.module.ClaudeCodeAuthAgent(reasoning_effort="huge")
@@ -465,9 +468,16 @@ index 5555555..6666666 100644
 
         asyncio.run(agent.setup(environment))
 
-        self.assertEqual(len(environment.commands), 1)
-        self.assertIn("tar --exclude=.git -cf - .", environment.commands[0])
-        self.assertEqual(environment.execs[0]["timeout_sec"], 1800)
+        # The harness CLI cache pre-check probes for a baked binary first; the
+        # snapshot tar follows.
+        self.assertEqual(len(environment.commands), 2)
+        self.assertIn("command -v claude", environment.commands[0])
+        self.assertIn("tar --exclude=.git -cf - .", environment.commands[1])
+        snapshot_exec = next(
+            e for e in environment.execs
+            if "tar --exclude=.git -cf - ." in e["command"]
+        )
+        self.assertEqual(snapshot_exec["timeout_sec"], 1800)
 
     def test_run_captures_patch_even_when_agent_run_fails(self):
         agent = self.module.ClaudeCodeAuthAgent()

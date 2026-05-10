@@ -189,16 +189,17 @@ docker system df
 docker network ls
 ```
 
-If no Stet/Harbor run is active and Docker has stale stopped containers or
-unused per-run networks, clean only unused resources:
+If no Stet/Harbor run is active and Docker has stale stopped containers,
+Harbor task images, or unused per-run networks, inspect with Stet first:
 
 ```bash
-docker container prune -f
-docker network prune -f
+stet harbor cleanup
 ```
 
-Do not prune images/build cache during normal performance work; warm layers can
-make repeated Harbor runs faster.
+Apply only the confirmed Stet-owned plan with `stet harbor cleanup --apply`.
+Add `--prune-buildkit` only when broad Docker BuildKit cache cleanup is
+acceptable. Do not delete `.stet` run roots or `~/.cache/stet` evidence
+artifacts.
 
 When Docker Desktop cannot allocate more memory, tune concurrency instead of
 raising resource limits. Start with `--workers 2` for dataset builds. For eval

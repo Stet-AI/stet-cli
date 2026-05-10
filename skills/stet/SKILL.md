@@ -50,8 +50,12 @@ Canonical read path:
 
 1. For active work, read `stet eval status --json`.
    Prefer `activity_state`, `active_work`, `blocking_tasks`,
-   `last_artifact`, and `lifecycle`. Treat `STET_STATUS_SUMMARY ...` stderr
-   lines as human-facing mirrors, not automation truth.
+   `last_artifact`, and `lifecycle`. If `activity_state` is
+   `waiting_on_quota`, read `retry_after`, `completed_tasks`,
+   `remaining_tasks`, and `next_action`; the active Stet process is waiting and
+   will resume missing retryable work automatically. Treat
+   `STET_STATUS_SUMMARY ...` stderr lines as human-facing mirrors, not
+   automation truth.
 2. For completed work, read the persisted `eval_report.v1.json` for that flow
    when it exists. Ordinary output roots commonly persist it at
    `<root>/.stet/eval-report/eval_report.v1.json`; change-manifest rules flows
@@ -100,7 +104,10 @@ Rules for the optimizer:
   change the Search Space.
 - Trust the Trial Result's `next_action` and lifecycle posture unless there is
   clear contradictory evidence. Mixed, stale, missing, or partial evidence
-  fails closed to `inspect` or repair/resume.
+  fails closed to `inspect` or repair/resume. If status or report exposes
+  `repair.code=GRADE_CUSTOM_REPAIRABLE`, run the emitted
+  `stet eval rules repair ... --json` command; it reuses validation artifacts
+  and reruns only the affected custom grader coverage.
 - Distinguish release promotion from baseline refresh. Promotion changes
   rollout state; baseline refresh changes the frozen reference for future
   searches.
@@ -133,7 +140,9 @@ Rules for the optimizer:
 - For LLM-as-a-judge provenance, read both `evaluator_model` and
   `evaluator_model_status` from
   `decision_receipt.tasks[*].{baseline,candidate}_graders.<grader_id>`, and
-  read aggregate model sets plus status from `decision_receipt.graders`.
+  read aggregate model sets plus status from `decision_receipt.graders`. Also
+  check `decision_receipt.graders.profile_status` and `grader_profile`; treat
+  `mixed` or `missing_legacy` profile status as inspect-only evidence.
 - For custom graders, verify expected grader IDs are present in
   `decision_receipt.compare.grader_coverage`, `experiment.json.graders`, or arm
   `decision_metrics.graders` before issuing a verdict. Explicitly requested
@@ -143,12 +152,17 @@ Rules for the optimizer:
   `stet --version`, `stet update`, or `stet update --version <tag>`. Pilot
   users need access to `benredmond/stet-dist`, not the private source repo.
   `stet update` refreshes both the binary and local Harbor support agents.
-- Harbor-installed Codex/Claude support agents use `--harness-cli-cache auto`
-  by default. Leave it on for normal batches, use `--harness-cli-cache off`
-  only for cold-start probes, and inspect `runner_runtime.v1.json` plus
-  `harness_cli_cache.json` artifacts before treating setup time as model signal.
-  Cache entries refresh after 24h by default; use
-  `STET_HARNESS_CLI_CACHE_TTL_SEC=0` only for intentional no-TTL reuse.
+- Harbor-installed Codex/Claude support agents are baked into
+  `.stet/harbor.Dockerfile` (`ARG BAKE_CLAUDE_CODE` / `ARG BAKE_CODEX`, both
+  default on; both fetch the latest published version on each fresh build).
+  `/logs/agent/harness_cli_cache.json` reports `status: skipped_image_baked`
+  with `baked_binary_path` and `baked_binary_version` — that is the healthy
+  default. The host `--harness-cli-cache auto` cache only kicks in for
+  unbaked Dockerfiles or operator-pinned versions; `--harness-cli-cache off`
+  is for cold-start probes against unbaked images, and 24h TTL refreshes
+  apply unless overridden by `STET_HARNESS_CLI_CACHE_TTL_SEC`. Inspect
+  `runner_runtime.v1.json` plus `harness_cli_cache.json` before treating
+  setup time as model signal.
 - For the shipped Stet agent skill, use the same private dist repo:
   `npx skills add git@github.com:benredmond/stet-dist.git --skill stet`.
   Release automation syncs `skills/stet` into
@@ -192,10 +206,10 @@ models, setting up a repo, improving a skill, or checking a release?"
 | "What is this run doing?" | `stet eval status` | [compare-and-checkin](references/compare-and-checkin.md) |
 | "Repair missing additive grader coverage on a finished run" | `stet runs repair-ai-coverage` or `stet runs regrade-graders` | [compare-and-checkin](references/compare-and-checkin.md) |
 | "Why is this root taking so much disk?" / "Can I reclaim raw artifacts?" | `stet artifacts status --root <root>` then `stet artifacts compact --root <root>` if not pinned | [compare-and-checkin](references/compare-and-checkin.md) |
-| "Resume an incomplete rules compare" | `stet eval rules resume` | [rules-flow](references/rules-flow.md) |
+| "Repair or resume an incomplete rules compare" | `stet eval rules repair` (`resume` remains accepted) | [rules-flow](references/rules-flow.md) |
 | "Set up evals for this repo" | author `.stet/harbor.Dockerfile` + `.stet/stet.harness.yaml`, then `stet init` and `stet suite discover` | [onboarding](references/onboarding.md) |
 | "Build a large dataset (50+ tasks)" | `stet suite discover` + `stet suite build` | [dataset-build](references/dataset-build.md) |
-| "Is my shared skill revision better?" | `stet eval rules skill --plan`, then `stet eval rules skill` against the committed prior skill | [rules-flow](references/rules-flow.md), [iterative-improvement](references/iterative-improvement.md) |
+| "Is my shared skill revision better?" | `stet eval rules skill --plan --skill <path> --repo <path> --model <id> --goal "<...>" --out <dir>`, then `stet eval rules skill` against the committed prior skill | [rules-flow](references/rules-flow.md), [iterative-improvement](references/iterative-improvement.md) |
 | "Is my research / plan better?" | choose or write custom rubrics | [rubric-authoring](references/rubric-authoring.md) |
 | "Help me write a custom grader" | rubric design + calibrate | [rubric-authoring](references/rubric-authoring.md) |
 | "Keep improving until it passes" | scored improve-eval loop | [iterative-improvement](references/iterative-improvement.md) |
@@ -216,7 +230,7 @@ models, setting up a repo, improving a skill, or checking a release?"
 | Pairwise compare | Baseline vs candidate | `stet eval compare` -> `stet eval report` |
 | Baseline-first | Freeze reusable evidence, then compare candidates without rerunning the baseline arm | `stet baseline freeze` -> `stet eval compare --baseline` |
 | New skill A/B | Check whether adding a skill changes agent behavior | baseline absent/effectively empty skill -> choose test posture -> custom behavior graders -> `stet eval rules` |
-| Rules skill loop | Replay-backed shared skill improvement on the canonical rules surface | `stet eval rules skill --plan` -> `stet eval rules skill` -> `stet eval status` -> `stet eval report` |
+| Rules skill loop | Replay-backed shared skill improvement on the canonical rules surface | `stet eval rules skill --plan` -> `stet eval rules skill` -> `stet eval status` -> `stet eval report`. Both plan and launch require `--skill`, `--repo`, `--model`, `--goal`, and `--out`. |
 | Repo onboarding | New repo, no dataset yet | author harness Dockerfile -> `stet init` -> `stet suite discover` -> `stet suite build` |
 | Dataset eval | Reusable benchmark | `stet suite build` -> `stet eval run` -> `stet eval report` |
 | Workbench probe | Iterative artifact improvement | `stet eval workbench probe` -> `stet eval report` -> `stet eval workbench gate` |
@@ -236,9 +250,11 @@ models, setting up a repo, improving a skill, or checking a release?"
   root/report, or setup evidence that must be inspected directly.
 - Start with the cheapest surface that preserves the operator's decision
   semantics. Use `stet probe` for quick safety reads. Use manifest-backed
-  rules flows for shared behavior changes that may become rollout state:
-  `agents_md`, `claude_md`, `skill_diff`, `docs_glob`, `harness_bundle`, and
-  `model_update`.
+  rules flows for shared behavior changes that may become rollout state.
+  Treatments split by mechanism: file overlays (`agents_md`, `claude_md`,
+  `skill_diff`, `harness_bundle`), prompt-template context (`docs_glob`),
+  and runtime selector (`model_update`). See
+  [rules-flow](references/rules-flow.md) ("How file overlays work") for why.
 - Cheap `stet probe --file` or `stet eval config-diff` runs may discard bad
   AGENTS.md, CLAUDE.md, skill, or policy drafts, but any candidate you keep,
   recommend, baseline, promote, or call an improvement needs rules evidence.
@@ -281,6 +297,10 @@ models, setting up a repo, improving a skill, or checking a release?"
   `experiment.json.graders`, or arm `decision_metrics.graders`. Missing or
   asymmetric explicit coverage should fail closed to `inspect`; one-sided
   graders are excluded from rollout recommendations.
+- If LLM grader provenance is part of the decision, read
+  `decision_receipt.graders.profile_status` and `grader_profile`. `mixed` or
+  `missing_legacy` means the report is inspect-only until rerun or repaired
+  with resolved profile evidence.
 - Recover incomplete or under-graded roots with the ordered commands emitted by
   `stet eval status` or `stet eval report`: usually
   `stet runs repair-ai-coverage ...`, then `stet runs regrade-graders ...`.
@@ -289,6 +309,9 @@ models, setting up a repo, improving a skill, or checking a release?"
   `stet eval rules resume --change-manifest <stet.change.yaml>` or
   `--rules-root <dir>`. Do not rerun `stet eval rules` to recover partial
   evidence; use `--restart` only when intentionally discarding it.
+- Treat `waiting_on_quota` as an intentional automatic pause. Do not delete
+  artifacts or relaunch successful task evidence; wait for `retry_after`, or
+  use the flow's resume command only if the active process has exited.
 - Treat auth, license, Claude `/login`, and Harbor setup-skew failures such as
   missing `stet_harbor_agents.*` modules as infrastructure risk before
   interpreting candidate quality. For Claude Code auth, prefer the Stet-private
@@ -357,8 +380,9 @@ Decision shortcuts:
   validation workers, and command workers. When Docker Desktop cannot allocate
   more memory, keep effective concurrency explicit: harness pressure is roughly
   `model-workers * harbor-concurrency`; validation pressure is roughly
-  `workers * command-workers`. Clean stale containers/networks before blaming
-  model quality or repo setup.
+  `workers * command-workers`. Use `stet harbor cleanup` before broad Docker
+  spelunking; apply with `--apply` only when no active run is using the listed
+  stale Harbor resources.
 
 ## Read As Needed
 

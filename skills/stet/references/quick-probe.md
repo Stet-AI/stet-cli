@@ -101,6 +101,9 @@ benchmark suite.
 stet eval smoke --repo . --models "opus 4.6,sonnet 4.6" --tasks 5 --json
 ```
 
+Add `--agent <provider>` with `--ai-cmd` only when smoke must use a specific
+harness provider instead of Stet's inferred runtime.
+
 ## Escalate Only When Needed
 
 - Need a reusable frozen "before" object for later compare or rerun continuity:

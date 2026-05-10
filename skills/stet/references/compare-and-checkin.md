@@ -77,6 +77,12 @@ Report compare results with baseline/candidate/delta explicitly. The report now
 includes metric narrative lines and a failure taxonomy for all recommendation
 types (promote, hold, inspect), not just inspect.
 
+Compare task selection is canonical and sorted, while harness dispatch is
+shuffled by default with a generated seed recorded in arm manifests. For
+dataset-backed compares, `--task-order-seed <seed>` overrides that seed for
+deterministic replay while preserving the same sorted task set in
+`task_selection` and reports.
+
 ```text
 STET :: COMPARE
 
@@ -179,6 +185,9 @@ Machine-readable default:
   exact per-task judge, and read aggregate model sets plus status from
   `decision_receipt.graders.run.<grader_id>.evaluator_models` or
   `decision_receipt.graders.compare.<grader_id>.{baseline,candidate}_evaluator_models`.
+- Also read `decision_receipt.graders.profile_status` and `grader_profile`.
+  Treat `mixed` or `missing_legacy` profile status as inspect-only evidence,
+  even when aggregate grader scores are present.
 - When `quality` is present, use it to identify the enabled grader bundles,
   effective grader IDs, and recurring strengths/risks per dimension. Treat
   those recurring reasons as evidence for follow-up guidance rather than as
@@ -216,6 +225,9 @@ Machine-readable default:
 - If `validity` is partial/invalid, `evidence_quality` is degraded/insufficient,
   or status/report surfaces contradict each other, lower confidence and fail
   closed to `inspect`.
+- If `evidence_quality.factors` includes `signal=provenance` or
+  `evidence.mixed_arm_provenance`, treat the compare as inspect-only until the
+  affected arm is rerun or repaired.
 
 The `failure_taxonomy` field in compare JSON also carries these counts so
 programmatic consumers can distinguish `no_patch` from ordinary test failures.

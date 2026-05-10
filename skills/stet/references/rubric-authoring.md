@@ -57,6 +57,10 @@ then        [s] stop          keep the current rubric draft only
 - One rubric, one dimension.
 - Describe observable evidence, not vibes.
 - Write pass and fail so two reasonable graders would usually agree.
+- State evidence/applicability policy for missing inputs. For task-detail code
+  graders, use `grader_context.agent_patch_status`: empty or missing patches on
+  implementation tasks are not vacuous high scores; mark patch-intrinsic
+  dimensions `insufficient_evidence` when there is no patch evidence to inspect.
 - Use `unsure` only for genuine middle cases.
 - Prefer scored `0`-`4` rubrics when the user needs discrimination, not just a
   gate.
@@ -127,6 +131,11 @@ Task-detail grader context:
   metadata with logical paths, normalized task intent, and deterministic
   repo-fit excerpts. Write rubrics so they use this structured evidence rather
   than expecting the evaluator to grep or inspect the repo live.
+- Scored task-detail graders may return `applicability`, `evidence_status`,
+  and `scoring_policy`. Use `not_applicable` when no code change was required,
+  `insufficient_evidence` when the rubric needs patch evidence that is missing,
+  and `no_patch_but_change_required` when an implementation task produced no
+  substantive patch.
 
 ## Run It
 

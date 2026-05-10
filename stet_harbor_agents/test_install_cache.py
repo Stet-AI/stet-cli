@@ -247,7 +247,8 @@ class HarnessCLIInstallCacheTests(unittest.TestCase):
 
             self.assertEqual(metadata["status"], "hit")
             self.assertEqual(metadata["ttl_seconds"], 999999999999)
-            self.assertEqual(len(environment.commands), 1)
+            # Two commands: the baked-binary pre-check + cache activation.
+            self.assertEqual(len(environment.commands), 2)
 
     def test_fractional_age_past_ttl_refreshes_cache(self):
         class Environment:
@@ -333,6 +334,238 @@ class HarnessCLIInstallCacheTests(unittest.TestCase):
                             setup=setup,
                         )
                     )
+
+
+class BakedBinaryShortCircuitTests(unittest.TestCase):
+    @staticmethod
+    def _exec_result(return_code: int, stdout: str):
+        class ExecResult:
+            pass
+
+        result = ExecResult()
+        result.return_code = return_code
+        result.stdout = stdout
+        return result
+
+    @classmethod
+    def _environment(cls, exec_result):
+        class Environment:
+            def __init__(self):
+                self.commands = []
+
+            async def exec(self_inner, command: str, **kwargs):
+                self_inner.commands.append(command)
+                return exec_result
+
+        return Environment()
+
+    def test_baked_binary_short_circuits_install(self):
+        environment = self._environment(
+            self._exec_result(0, "/usr/local/bin/claude\n2.1.126 (Claude Code)\n")
+        )
+        setup_calls = []
+
+        async def setup():
+            setup_calls.append(True)
+
+        metadata_writes = []
+        with mock.patch(
+            "stet_harbor_agents.install_cache._write_metadata",
+            side_effect=lambda m: metadata_writes.append(dict(m)),
+        ):
+            import asyncio
+
+            metadata = asyncio.run(
+                setup_with_cli_cache(
+                    environment=environment,
+                    harness_name="claude-code",
+                    harness_version="default",
+                    install_method="harbor-installed-agent",
+                    binary_name="claude",
+                    setup=setup,
+                )
+            )
+
+        self.assertEqual(setup_calls, [])
+        self.assertEqual(metadata["status"], "skipped_image_baked")
+        self.assertEqual(metadata["baked_binary_path"], "/usr/local/bin/claude")
+        self.assertEqual(metadata["baked_binary_version"], "2.1.126 (Claude Code)")
+        self.assertEqual(metadata_writes[-1]["status"], "skipped_image_baked")
+        self.assertEqual(len(environment.commands), 1)
+
+    def test_missing_baked_binary_falls_through_to_install(self):
+        environment = self._environment(self._exec_result(1, ""))
+        setup_calls = []
+
+        async def setup():
+            setup_calls.append(True)
+
+        async def populate(_environment, cache_dir: Path, _binary_name: str):
+            (cache_dir / "bin").mkdir(parents=True)
+            (cache_dir / "bin" / "claude").write_text("#!/bin/sh\n", encoding="utf-8")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "STET_HARNESS_CLI_CACHE_DIR": tmpdir,
+                    "STET_HARNESS_CLI_CACHE_MODE": "on",
+                },
+                clear=False,
+            ), mock.patch(
+                "stet_harbor_agents.install_cache._populate_cache", populate
+            ):
+                import asyncio
+
+                metadata = asyncio.run(
+                    setup_with_cli_cache(
+                        environment=environment,
+                        harness_name="claude-code",
+                        harness_version="default",
+                        install_method="harbor-installed-agent",
+                        binary_name="claude",
+                        setup=setup,
+                    )
+                )
+
+        self.assertEqual(len(setup_calls), 1)
+        self.assertEqual(metadata["status"], "miss")
+
+    def test_baked_binary_short_circuits_when_cache_disabled(self):
+        environment = self._environment(
+            self._exec_result(0, "/usr/local/bin/claude\n2.1.126\n")
+        )
+        setup_calls = []
+
+        async def setup():
+            setup_calls.append(True)
+
+        with mock.patch.dict(
+            os.environ,
+            {"STET_HARNESS_CLI_CACHE_MODE": "off"},
+            clear=False,
+        ):
+            import asyncio
+
+            metadata = asyncio.run(
+                setup_with_cli_cache(
+                    environment=environment,
+                    harness_name="claude-code",
+                    harness_version="default",
+                    install_method="harbor-installed-agent",
+                    binary_name="claude",
+                    setup=setup,
+                )
+            )
+
+        self.assertEqual(setup_calls, [])
+        self.assertEqual(metadata["status"], "skipped_image_baked")
+        self.assertEqual(metadata["mode"], "off")
+        self.assertEqual(metadata["baked_binary_path"], "/usr/local/bin/claude")
+        self.assertFalse(metadata["enabled"])
+
+    def test_baked_binary_version_mismatch_falls_through(self):
+        environment = self._environment(
+            self._exec_result(0, "/usr/local/bin/claude\n2.1.126 (Claude Code)\n")
+        )
+        setup_calls = []
+
+        async def setup():
+            setup_calls.append(True)
+
+        async def populate(_environment, cache_dir: Path, _binary_name: str):
+            (cache_dir / "bin").mkdir(parents=True)
+            (cache_dir / "bin" / "claude").write_text("#!/bin/sh\n", encoding="utf-8")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "STET_HARNESS_CLI_CACHE_DIR": tmpdir,
+                    "STET_HARNESS_CLI_CACHE_MODE": "on",
+                },
+                clear=False,
+            ), mock.patch(
+                "stet_harbor_agents.install_cache._populate_cache", populate
+            ):
+                import asyncio
+
+                metadata = asyncio.run(
+                    setup_with_cli_cache(
+                        environment=environment,
+                        harness_name="claude-code",
+                        harness_version="1.9.0",
+                        install_method="harbor-installed-agent",
+                        binary_name="claude",
+                        setup=setup,
+                    )
+                )
+
+        self.assertEqual(len(setup_calls), 1)
+        self.assertEqual(metadata["status"], "miss")
+
+    def test_baked_binary_substring_version_does_not_match(self):
+        # Reviewer #2: requesting "2.1.1" must NOT match a baked "2.1.126";
+        # version match is a whole-token check, not substring containment.
+        environment = self._environment(
+            self._exec_result(0, "/usr/local/bin/claude\n2.1.126 (Claude Code)\n")
+        )
+        setup_calls = []
+
+        async def setup():
+            setup_calls.append(True)
+
+        async def populate(_environment, cache_dir: Path, _binary_name: str):
+            (cache_dir / "bin").mkdir(parents=True)
+            (cache_dir / "bin" / "claude").write_text("#!/bin/sh\n", encoding="utf-8")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "STET_HARNESS_CLI_CACHE_DIR": tmpdir,
+                    "STET_HARNESS_CLI_CACHE_MODE": "on",
+                },
+                clear=False,
+            ), mock.patch(
+                "stet_harbor_agents.install_cache._populate_cache", populate
+            ):
+                import asyncio
+
+                metadata = asyncio.run(
+                    setup_with_cli_cache(
+                        environment=environment,
+                        harness_name="claude-code",
+                        harness_version="2.1.1",
+                        install_method="harbor-installed-agent",
+                        binary_name="claude",
+                        setup=setup,
+                    )
+                )
+
+        self.assertEqual(len(setup_calls), 1)
+        self.assertEqual(metadata["status"], "miss")
+
+    def test_baked_binary_exact_version_match(self):
+        environment = self._environment(
+            self._exec_result(0, "/usr/local/bin/claude\n2.1.126 (Claude Code)\n")
+        )
+
+        async def setup():
+            raise AssertionError("exact version match must short-circuit install")
+
+        metadata = __import__("asyncio").run(
+            setup_with_cli_cache(
+                environment=environment,
+                harness_name="claude-code",
+                harness_version="2.1.126",
+                install_method="harbor-installed-agent",
+                binary_name="claude",
+                setup=setup,
+            )
+        )
+        self.assertEqual(metadata["status"], "skipped_image_baked")
+        self.assertEqual(metadata["baked_binary_version"], "2.1.126 (Claude Code)")
 
 
 if __name__ == "__main__":

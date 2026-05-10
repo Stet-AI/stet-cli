@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import os
+from dataclasses import replace
 from pathlib import Path
 
 from harbor.agents.installed.claude_code import ClaudeCode
@@ -13,20 +14,42 @@ from stet_harbor_agents.install_cache import setup_with_cli_cache
 from stet_harbor_agents.patch_capture import AgentPatchCaptureMixin
 
 
+def _claude_code_auth_cli_flags():
+    flags = getattr(ClaudeCode, "CLI_FLAGS", None)
+    if not flags:
+        return []
+
+    updated_flags = []
+    for flag in flags:
+        if getattr(flag, "kwarg", None) == "reasoning_effort":
+            choices = list(getattr(flag, "choices", None) or [])
+            if "xhigh" not in choices:
+                choices.append("xhigh")
+            if "max" not in choices:
+                choices.append("max")
+            flag = replace(flag, choices=choices)
+        updated_flags.append(flag)
+    return updated_flags
+
+
 class ClaudeCodeAuthAgent(AgentPatchCaptureMixin, ClaudeCode):
     """Harbor Claude Code agent with local credential bootstrap support."""
+
+    CLI_FLAGS = _claude_code_auth_cli_flags()
 
     _REASONING_EFFORT_LEVELS = {
         "low": "low",
         "medium": "medium",
         "high": "high",
-        # Stet exposes xhigh as the cross-harness top reasoning level. Claude
-        # Code's native equivalent is max.
-        "xhigh": "max",
+        "max": "max",
+        "xhigh": "xhigh",
     }
 
     def __init__(self, *args, **kwargs):
         self._reasoning_effort = kwargs.get("reasoning_effort")
+        if self._reasoning_effort:
+            effort = str(self._reasoning_effort).strip().lower()
+            kwargs["reasoning_effort"] = self._REASONING_EFFORT_LEVELS.get(effort, effort)
         super().__init__(*args, **kwargs)
 
     @property

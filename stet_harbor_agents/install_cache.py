@@ -19,6 +19,12 @@ CACHE_MODE_ENV = "STET_HARNESS_CLI_CACHE_MODE"
 CACHE_TTL_ENV = "STET_HARNESS_CLI_CACHE_TTL_SEC"
 CACHE_ARTIFACT_PATH = Path("/logs/agent/harness_cli_cache.json")
 DEFAULT_CACHE_TTL_SEC = 24 * 60 * 60
+
+# /logs/agent/harness_cli_cache.json status values:
+#   "hit"                 host cache hit, agent CLI restored from cache
+#   "miss"                install ran and cache populated
+#   "disabled"            cache mode off or directory missing
+#   "skipped_image_baked" agent CLI already on PATH from baked image
 SECRET_KEY_RE = re.compile(
     r"(token|secret|password|credential|api[_-]?key|oauth)",
     re.IGNORECASE,
@@ -88,8 +94,37 @@ async def setup_with_cli_cache(
     extra: dict[str, str] | None = None,
 ) -> dict[str, str | bool | int | float]:
     mode = (os.environ.get(CACHE_MODE_ENV) or "auto").strip().lower()
+    descriptor = HarnessCLICacheDescriptor(
+        harness_name=harness_name,
+        harness_version=harness_version or "default",
+        install_method=install_method,
+        os_release_id=_os_release_value("ID"),
+        os_release_version_id=_os_release_value("VERSION_ID"),
+        arch=platform.machine(),
+        runtime_abi=_runtime_abi(),
+        extra=extra or {},
+    )
+    key = build_cache_key(descriptor)
+
     root_raw = (os.environ.get(CACHE_DIR_ENV) or "").strip()
-    if mode in ("", "off") or not root_raw:
+    cache_disabled = mode in ("", "off") or not root_raw
+
+    baked = await _detect_baked_binary(environment, binary_name, harness_version)
+    if baked is not None:
+        metadata = _metadata(
+            "skipped_image_baked",
+            mode or "auto",
+            harness_name,
+            harness_version,
+            key,
+            enabled=not cache_disabled,
+            baked_binary_path=baked["path"],
+            baked_binary_version=baked["version"],
+        )
+        _write_metadata(metadata)
+        return metadata
+
+    if cache_disabled:
         await setup()
         metadata = {
             "mode": mode or "off",
@@ -105,17 +140,6 @@ async def setup_with_cli_cache(
         raise ValueError("STET_HARNESS_CLI_CACHE_MODE must be auto, on, or off")
     ttl_seconds = _cache_ttl_seconds()
 
-    descriptor = HarnessCLICacheDescriptor(
-        harness_name=harness_name,
-        harness_version=harness_version or "default",
-        install_method=install_method,
-        os_release_id=_os_release_value("ID"),
-        os_release_version_id=_os_release_value("VERSION_ID"),
-        arch=platform.machine(),
-        runtime_abi=_runtime_abi(),
-        extra=extra or {},
-    )
-    key = build_cache_key(descriptor)
     root = Path(root_raw)
     cache_dir = root / "v1" / key["cache_key"]
     manifest_path = cache_dir / "manifest.json"
@@ -211,6 +235,57 @@ async def _acquire_lock(lock_dir: Path) -> None:
     raise TimeoutError(f"timed out waiting for harness CLI cache lock: {lock_dir}")
 
 
+async def _detect_baked_binary(
+    environment, binary_name: str, requested_version: str
+) -> dict[str, str] | None:
+    """Return ``{path, version}`` if ``binary_name`` is already on PATH inside
+    the container and matches the requested version (or the request is the
+    ``"default"`` sentinel). Otherwise return ``None`` so the cache/install
+    flow proceeds. The check is cheap — one short shell exec — and runs before
+    any lock or filesystem work so a baked image bypasses cache machinery
+    entirely."""
+    quoted = shlex.quote(binary_name)
+    command = (
+        f"p=$(command -v {quoted} 2>/dev/null || true); "
+        f"if [ -z \"$p\" ]; then exit 1; fi; "
+        f"v=$({quoted} --version 2>/dev/null | head -n1 || true); "
+        f"printf '%s\\n%s\\n' \"$p\" \"$v\""
+    )
+    try:
+        result = await environment.exec(command=command)
+    except Exception:
+        return None
+    if result is None:
+        return None
+    if getattr(result, "return_code", 1) != 0:
+        return None
+    stdout = getattr(result, "stdout", "") or ""
+    lines = [line.strip() for line in stdout.strip().splitlines() if line.strip()]
+    if not lines:
+        return None
+    path = lines[0]
+    version = lines[1] if len(lines) > 1 else ""
+    requested = (requested_version or "").strip()
+    if requested and requested.lower() != "default" and not _version_matches(
+        requested, version
+    ):
+        return None
+    return {"path": path, "version": version}
+
+
+def _version_matches(requested: str, reported: str) -> bool:
+    """Return True when ``requested`` appears as a whole token in ``reported``.
+
+    Avoids the substring trap where ``"2.1.1"`` would match a baked
+    ``"2.1.126"`` build. We tokenize on whitespace and on parentheses so that
+    formats like ``"2.1.126"``, ``"2.1.126 (Claude Code)"``, and
+    ``"codex-cli 0.52.0"`` all match exact pinned requests."""
+    if not requested:
+        return False
+    tokens = re.split(r"[\s()]+", reported)
+    return any(token == requested for token in tokens if token)
+
+
 async def _activate_cache(environment, cache_dir: Path, binary_name: str) -> None:
     command = (
         "prefix=$(npm prefix -g 2>/dev/null || true); "
@@ -251,13 +326,16 @@ def _metadata(
     harness_version: str,
     key: dict[str, str],
     *,
+    enabled: bool = True,
     miss_reason: str | None = None,
     ttl_seconds: int | None = None,
     cache_age_seconds: float | None = None,
+    baked_binary_path: str | None = None,
+    baked_binary_version: str | None = None,
 ) -> dict[str, str | bool | int | float]:
     metadata = {
         "mode": mode,
-        "enabled": True,
+        "enabled": enabled,
         "status": status,
         "harness_name": harness_name,
         "harness_version": harness_version,
@@ -269,6 +347,10 @@ def _metadata(
         metadata["ttl_seconds"] = ttl_seconds
     if cache_age_seconds is not None:
         metadata["cache_age_seconds"] = cache_age_seconds
+    if baked_binary_path:
+        metadata["baked_binary_path"] = baked_binary_path
+    if baked_binary_version:
+        metadata["baked_binary_version"] = baked_binary_version
     return metadata
 
 

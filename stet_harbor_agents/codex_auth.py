@@ -180,7 +180,7 @@ ln -sf /tmp/codex-secrets/auth.json "$CODEX_HOME/auth.json"
             ExecInput(
                 command=(
                     "trap 'rm -rf /tmp/codex-secrets \"$CODEX_HOME/auth.json\" \"$bootstrap_check\"' EXIT TERM INT; "
-                    ". ~/.nvm/nvm.sh; "
+                    "if [ -s \"$HOME/.nvm/nvm.sh\" ]; then . \"$HOME/.nvm/nvm.sh\"; fi; "
                     f"agent_log={shlex.quote(agent_log_path.as_posix())}; "
                     "mkdir -p \"$(dirname \"$agent_log\")\"; "
                     "bootstrap_check=$(mktemp /tmp/codex-bootstrap-XXXXXX.log); "
