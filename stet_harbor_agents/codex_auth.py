@@ -138,6 +138,27 @@ class CodexAuthAgent(AgentPatchCaptureMixin, Codex):
         ):
             env["OPENAI_BASE_URL"] = openai_base_url
 
+        codex_lb_provider_flags = ""
+        if codex_lb_api_key := (
+            self._extra_env.get("CODEX_LB_API_KEY")
+            or os.environ.get("CODEX_LB_API_KEY")
+        ):
+            env["CODEX_LB_API_KEY"] = codex_lb_api_key
+            env["CODEX_LB_BASE_URL"] = (
+                self._extra_env.get("CODEX_LB_BASE_URL")
+                or os.environ.get("CODEX_LB_BASE_URL")
+                or "http://host.docker.internal:2455/backend-api/codex"
+            )
+            codex_lb_provider_flags = (
+                "-c 'model_provider=\"codex-lb\"' "
+                "-c 'model_providers.codex-lb.name=\"OpenAI\"' "
+                "-c \"model_providers.codex-lb.base_url=\\\"$CODEX_LB_BASE_URL\\\"\" "
+                "-c 'model_providers.codex-lb.wire_api=\"responses\"' "
+                "-c 'model_providers.codex-lb.supports_websockets=true' "
+                "-c 'model_providers.codex-lb.requires_openai_auth=true' "
+                "-c 'model_providers.codex-lb.env_key=\"CODEX_LB_API_KEY\"' "
+            )
+
         cli_flags = self.build_cli_flags() if hasattr(self, "build_cli_flags") else ""
         if cli_flags:
             reasoning_flag = f"{cli_flags} "
@@ -209,6 +230,7 @@ ln -sf /tmp/codex-secrets/auth.json "$CODEX_HOME/auth.json"
                     f"--model {model} "
                     "--json "
                     "--enable unified_exec "
+                    f"{codex_lb_provider_flags}"
                     f"{reasoning_flag}"
                     "-- "
                     f"{escaped_instruction} "

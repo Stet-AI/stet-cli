@@ -163,7 +163,13 @@ class CodexAuthAgentTests(unittest.TestCase):
         self.auth_file.write_text('{"OPENAI_API_KEY":"test-key"}', encoding="utf-8")
 
     def tearDown(self):
-        for key in ("OPENAI_API_KEY", "OPENAI_BASE_URL", "CODEX_AUTH_FILE"):
+        for key in (
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
+            "CODEX_AUTH_FILE",
+            "CODEX_LB_API_KEY",
+            "CODEX_LB_BASE_URL",
+        ):
             os.environ.pop(key, None)
 
     def test_create_run_agent_commands_includes_bootstrap_verification_and_markers(self):
@@ -189,6 +195,41 @@ class CodexAuthAgentTests(unittest.TestCase):
         self.assertEqual(run_command.timeout_sec, 1800)
         self.assertEqual(run_command.env["OPENAI_BASE_URL"], "https://example.invalid/v1")
         self.assertIn("CODEX_HOME", run_command.env)
+        self.assertNotIn("model_provider=\"codex-lb\"", run_command.command)
+
+    def test_create_run_agent_commands_routes_through_codex_lb_when_key_is_set(self):
+        os.environ["CODEX_LB_API_KEY"] = "fake-codex-lb-key"
+        agent = self.module.CodexAuthAgent(
+            model_name="openai/gpt-5.3-codex",
+            auth_path=str(self.auth_file),
+            reasoning_effort="high",
+        )
+
+        commands = agent.create_run_agent_commands("fix the task")
+
+        run_command = commands[1]
+        self.assertEqual(
+            run_command.env["CODEX_LB_API_KEY"],
+            "fake-codex-lb-key",
+        )
+        self.assertEqual(
+            run_command.env["CODEX_LB_BASE_URL"],
+            "http://host.docker.internal:2455/backend-api/codex",
+        )
+        self.assertIn("-c 'model_provider=\"codex-lb\"'", run_command.command)
+        self.assertIn(
+            "-c 'model_providers.codex-lb.wire_api=\"responses\"'",
+            run_command.command,
+        )
+        self.assertIn(
+            "-c 'model_providers.codex-lb.env_key=\"CODEX_LB_API_KEY\"'",
+            run_command.command,
+        )
+        self.assertIn(
+            '-c "model_providers.codex-lb.base_url=\\"$CODEX_LB_BASE_URL\\""',
+            run_command.command,
+        )
+        self.assertNotIn("fake-codex-lb-key", run_command.command)
 
     def test_setup_failure_writes_classified_bootstrap_marker(self):
         agent = self.module.CodexAuthAgent(

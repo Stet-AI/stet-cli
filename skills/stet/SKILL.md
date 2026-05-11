@@ -163,6 +163,13 @@ Rules for the optimizer:
   apply unless overridden by `STET_HARNESS_CLI_CACHE_TTL_SEC`. Inspect
   `runner_runtime.v1.json` plus `harness_cli_cache.json` before treating
   setup time as model signal.
+- To run Codex model-under-test traffic through codex-lb, start codex-lb on a
+  host address reachable from Harbor containers, export `CODEX_LB_API_KEY`,
+  and optionally export `CODEX_LB_BASE_URL` (defaults to
+  `http://host.docker.internal:2455/backend-api/codex` for Harbor). The Codex
+  Harbor support agent automatically injects the transient Codex provider
+  config; keep independent graders on `--grader-ai-cmd` so codex-lb does not
+  judge itself.
 - For the shipped Stet agent skill, use the same private dist repo:
   `npx skills add git@github.com:benredmond/stet-dist.git --skill stet`.
   Release automation syncs `skills/stet` into
