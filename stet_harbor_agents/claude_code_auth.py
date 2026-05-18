@@ -10,6 +10,7 @@ from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 
 from stet_harbor_agents.compat import ExecInput
+from stet_harbor_agents.human_patch_guard import guard_env, guard_setup_command
 from stet_harbor_agents.install_cache import setup_with_cli_cache
 from stet_harbor_agents.patch_capture import AgentPatchCaptureMixin
 
@@ -138,6 +139,8 @@ fi
         commands = super().create_run_agent_commands(instruction)
         credential_env = self._credential_env()
         reasoning_env = self._reasoning_env()
+        human_patch_guard_env = guard_env(instruction)
+        human_patch_guard_command = guard_setup_command(instruction)
         if not commands:
             return commands
 
@@ -148,10 +151,11 @@ fi
                 merged_env.update(credential_env)
             if reasoning_env:
                 merged_env.update(reasoning_env)
-            final_env = merged_env if command.env is not None or credential_env or reasoning_env else None
-            updated_command = command.command
+            merged_env.update(human_patch_guard_env)
+            final_env = merged_env
+            updated_command = f"{human_patch_guard_command} && {command.command}"
             if index == 0 and credential_env:
-                updated_command = f"{self._credential_bootstrap_command()} && {updated_command}"
+                updated_command = f"{human_patch_guard_command} && {self._credential_bootstrap_command()} && {command.command}"
             updated_commands.append(
                 ExecInput(
                     command=updated_command,
@@ -184,6 +188,13 @@ fi
                 command = f"{command} && {self._credential_bootstrap_command()}"
                 self._stet_claude_bootstrap_pending = False
 
+        instruction = getattr(self, "_stet_current_instruction", "")
+        if instruction:
+            merged_env = dict(env or {})
+            merged_env.update(guard_env(instruction))
+            env = merged_env
+            command = f"{guard_setup_command(instruction)} && {command}"
+
         return await super().exec_as_agent(
             environment,
             command=command,
@@ -215,9 +226,12 @@ fi
         previous_bootstrap_pending = getattr(
             self, "_stet_claude_bootstrap_pending", False
         )
+        previous_instruction = getattr(self, "_stet_current_instruction", "")
         self._stet_claude_bootstrap_pending = True
+        self._stet_current_instruction = instruction
         try:
             await super().run(instruction=instruction, environment=environment, context=context)
         finally:
             self._stet_claude_bootstrap_pending = previous_bootstrap_pending
+            self._stet_current_instruction = previous_instruction
             await self.capture_agent_patch(environment)

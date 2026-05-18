@@ -221,6 +221,16 @@ class ClaudeCodeAuthAgentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsupported reasoning_effort"):
             agent._reasoning_env()
 
+    def test_create_run_agent_commands_installs_human_patch_guard(self):
+        agent = self.module.ClaudeCodeAuthAgent()
+
+        commands = agent.create_run_agent_commands("PR #1268: fix")
+
+        self.assertEqual(commands[0].env["STET_HUMAN_PATCH_GUARD"], "1")
+        self.assertEqual(commands[0].env["STET_TARGET_PR_NUMBER"], "1268")
+        self.assertIn("stet-human-patch-guard.py", commands[0].command)
+        self.assertIn("STET_TARGET_PR_NUMBER=1268", commands[0].command)
+
     def test_snapshot_command_uses_app_dot_copy(self):
         agent = self.module.ClaudeCodeAuthAgent()
         command = agent._snapshot_command()

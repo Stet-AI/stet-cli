@@ -180,7 +180,7 @@ class CodexAuthAgentTests(unittest.TestCase):
             reasoning_effort="high",
         )
 
-        commands = agent.create_run_agent_commands("fix the task")
+        commands = agent.create_run_agent_commands("PR #1076: fix the task")
 
         self.assertEqual(len(commands), 2)
         run_command = commands[1]
@@ -192,8 +192,11 @@ class CodexAuthAgentTests(unittest.TestCase):
         self.assertIn("tee -a \"$agent_log\"", run_command.command)
         self.assertIn("--model gpt-5.4", run_command.command)
         self.assertIn("-c model_reasoning_effort=high", run_command.command)
+        self.assertIn("STET_TARGET_PR_NUMBER", run_command.command)
         self.assertEqual(run_command.timeout_sec, 1800)
         self.assertEqual(run_command.env["OPENAI_BASE_URL"], "https://example.invalid/v1")
+        self.assertEqual(run_command.env["STET_HUMAN_PATCH_GUARD"], "1")
+        self.assertEqual(run_command.env["STET_TARGET_PR_NUMBER"], "1076")
         self.assertIn("CODEX_HOME", run_command.env)
         self.assertNotIn("model_provider=\"codex-lb\"", run_command.command)
 

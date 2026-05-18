@@ -12,6 +12,7 @@ from harbor.models.agent.context import AgentContext
 from harbor.models.trial.paths import EnvironmentPaths
 
 from stet_harbor_agents.compat import ExecInput, HARBOR_HAS_EXEC_INPUT
+from stet_harbor_agents.human_patch_guard import guard_env, guard_setup_command
 from stet_harbor_agents.install_cache import setup_with_cli_cache
 from stet_harbor_agents.patch_capture import AgentPatchCaptureMixin
 
@@ -132,6 +133,7 @@ class CodexAuthAgent(AgentPatchCaptureMixin, Codex):
 
         model = self.model_name.split("/")[-1]
         env = self._build_auth_env()
+        env.update(guard_env(instruction))
 
         if openai_base_url := (
             self._extra_env.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
@@ -191,6 +193,7 @@ ln -sf /tmp/codex-secrets/auth.json "$CODEX_HOME/auth.json"
         if mcp_command:
             setup_command += f"\n{mcp_command}"
 
+        human_patch_guard_command = guard_setup_command(instruction)
         agent_log_path = EnvironmentPaths.agent_dir / self._OUTPUT_FILENAME
 
         return [
@@ -201,6 +204,7 @@ ln -sf /tmp/codex-secrets/auth.json "$CODEX_HOME/auth.json"
             ExecInput(
                 command=(
                     "trap 'rm -rf /tmp/codex-secrets \"$CODEX_HOME/auth.json\" \"$bootstrap_check\"' EXIT TERM INT; "
+                    f"{human_patch_guard_command} && "
                     "if [ -s \"$HOME/.nvm/nvm.sh\" ]; then . \"$HOME/.nvm/nvm.sh\"; fi; "
                     f"agent_log={shlex.quote(agent_log_path.as_posix())}; "
                     "mkdir -p \"$(dirname \"$agent_log\")\"; "

@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.4.2] - 2026-05-18
+
+Blocks Harbor candidate agents from reading public human-patch artifacts during evals. Codex and Claude Code runs now install a guard that prevents direct PR diff/patch, GitHub API, raw head-commit, and downloaded PR-patch access while leaving ordinary package and source lookup available.
+
+### Fixed
+- Block public GitHub PR and head-commit artifact access in Harbor Codex and Claude Code agents so candidate evals cannot inspect the target human solution ([7774bac6])
+
+[v0.4.2]: https://github.com/benredmond/stet/releases/tag/v0.4.2
+[7774bac6]: https://github.com/benredmond/stet/commit/7774bac6fb8d245c7eefc4624e62c1d20c3d8d44
+
 ## [v0.4.1] - 2026-05-18
 
 Prevents Harbor patch capture from retaining harness and gold artifacts as agent output. Operators get cleaner trial results: `.stet/gold.patch`, guidance files, generated directories, and lockfile-only churn no longer leak into captured agent patches, while real source edits and deletions remain visible.
