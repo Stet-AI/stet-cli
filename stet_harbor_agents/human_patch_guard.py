@@ -66,6 +66,220 @@ def guard_setup_command(instruction: str) -> str:
                     patch_arg_name(arg),
                 ) is not None
 
+            def looks_like_github_pr_ref(arg):
+                return re.search(
+                    r"(?:^|[=+:])(?:refs/)?pull/(?:\d+|\*)(?:/(?:head|merge|\*))?(?::|$)",
+                    arg,
+                    re.IGNORECASE,
+                ) is not None
+
+            def config_env_names(command_args):
+                names = []
+                i = 0
+                while i < len(command_args):
+                    arg = command_args[i]
+                    value = ""
+                    if arg == "--config-env" and i + 1 < len(command_args):
+                        value = command_args[i + 1]
+                        i += 2
+                    elif arg.startswith("--config-env="):
+                        value = arg.split("=", 1)[1]
+                        i += 1
+                    else:
+                        i += 1
+                        continue
+                    if "=" in value:
+                        names.append(value.rsplit("=", 1)[1])
+                return names
+
+            def split_config_assignment(value):
+                value = (value or "").strip().strip("'\"")
+                if "=" not in value:
+                    return "", ""
+                key, assignment_value = value.split("=", 1)
+                return key.strip().lower(), assignment_value.strip().strip("'\"")
+
+            def env_config_assignments(command_args):
+                assignments = []
+                for i in range(int(os.environ.get("GIT_CONFIG_COUNT", "0") or "0")):
+                    key = os.environ.get(f"GIT_CONFIG_KEY_{i}", "").strip().lower()
+                    value = os.environ.get(f"GIT_CONFIG_VALUE_{i}", "").strip()
+                    if key:
+                        assignments.append((key, value))
+                parameters = os.environ.get("GIT_CONFIG_PARAMETERS", "")
+                for match in re.finditer(
+                    r"'([^']+)'\s*=\s*'([^']*)'|\"([^\"]+)\"\s*=\s*\"([^\"]*)\"|(\S+)",
+                    parameters,
+                ):
+                    groups = match.groups()
+                    if groups[0] is not None:
+                        assignments.append((groups[0].strip().lower(), groups[1].strip()))
+                        continue
+                    if groups[2] is not None:
+                        assignments.append((groups[2].strip().lower(), groups[3].strip()))
+                        continue
+                    key, value = split_config_assignment(groups[4])
+                    if key:
+                        assignments.append((key, value))
+                i = 0
+                while i < len(command_args):
+                    arg = command_args[i]
+                    raw = ""
+                    if arg == "--config-env" and i + 1 < len(command_args):
+                        raw = command_args[i + 1]
+                        i += 2
+                    elif arg.startswith("--config-env="):
+                        raw = arg.split("=", 1)[1]
+                        i += 1
+                    else:
+                        i += 1
+                        continue
+                    key, env_name = split_config_assignment(raw)
+                    if key:
+                        assignments.append((key, os.environ.get(env_name, "")))
+                return assignments
+
+            def git_config_env_contains_github_pr_ref(command_args):
+                for _, value in env_config_assignments(command_args):
+                    if looks_like_github_pr_ref(value or ""):
+                        return True
+                return False
+
+            def config_include_paths_from_env(command_args):
+                paths = []
+                for key, value in env_config_assignments(command_args):
+                    if key == "include.path" or (key.startswith("includeif.") and key.endswith(".path")):
+                        paths.append(value)
+                return paths
+
+            def config_file_contains_github_pr_ref(path):
+                return config_file_contains_github_pr_ref_seen(path, set())
+
+            def config_file_contains_github_pr_ref_seen(path, seen):
+                if not path:
+                    return False
+                path = os.path.abspath(os.path.expanduser(path))
+                if path in seen:
+                    return False
+                seen.add(path)
+                try:
+                    with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+                        content = handle.read()
+                except OSError:
+                    return False
+                if looks_like_github_pr_ref(content):
+                    return True
+                base = os.path.dirname(path)
+                in_include = False
+                for line in content.splitlines():
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith(("#", ";")):
+                        continue
+                    if stripped.startswith("[") and stripped.endswith("]"):
+                        section = stripped[1:-1].strip().lower()
+                        in_include = section == "include" or section.startswith("includeif ")
+                        continue
+                    if not in_include or "=" not in stripped:
+                        continue
+                    key, value = stripped.split("=", 1)
+                    if key.strip().lower() != "path":
+                        continue
+                    include_path = value.strip().strip('"')
+                    if not os.path.isabs(include_path):
+                        include_path = os.path.join(base, include_path)
+                    if config_file_contains_github_pr_ref_seen(include_path, seen):
+                        return True
+                return False
+
+            def config_include_paths_from_args(command_args):
+                paths = []
+                i = 0
+                while i < len(command_args):
+                    arg = command_args[i]
+                    value = ""
+                    if arg == "-c" and i + 1 < len(command_args):
+                        value = command_args[i + 1]
+                        i += 2
+                    elif arg.startswith("-c") and len(arg) > 2:
+                        value = arg[2:]
+                        i += 1
+                    else:
+                        i += 1
+                        continue
+                    if "=" not in value:
+                        continue
+                    key, include_path = value.split("=", 1)
+                    key = key.lower()
+                    if key == "include.path" or (key.startswith("includeif.") and key.endswith(".path")):
+                        paths.append(include_path)
+                return paths
+
+            def git_config_paths(command_args):
+                paths = []
+                cwd = os.getcwd()
+                git_dir = ""
+                i = 0
+                while i < len(command_args):
+                    arg = command_args[i]
+                    if arg == "--":
+                        break
+                    if arg == "-C" and i + 1 < len(command_args):
+                        next_cwd = command_args[i + 1]
+                        if not os.path.isabs(next_cwd):
+                            next_cwd = os.path.join(cwd, next_cwd)
+                        cwd = os.path.abspath(next_cwd)
+                        i += 2
+                        continue
+                    if arg == "--git-dir" and i + 1 < len(command_args):
+                        git_dir = command_args[i + 1]
+                        i += 2
+                        continue
+                    if arg.startswith("--git-dir="):
+                        git_dir = arg.split("=", 1)[1]
+                        i += 1
+                        continue
+                    if arg.startswith("-"):
+                        if arg in {"-c", "--config-env", "--exec-path", "--namespace", "--super-prefix", "--work-tree"}:
+                            i += 2
+                        else:
+                            i += 1
+                        continue
+                    break
+                if not git_dir:
+                    git_dir = os.environ.get("GIT_DIR", "")
+                if git_dir:
+                    if not os.path.isabs(git_dir):
+                        git_dir = os.path.join(cwd, git_dir)
+                    paths.append(os.path.join(git_dir, "config"))
+                else:
+                    dotgit = os.path.join(cwd, ".git")
+                    if os.path.isdir(dotgit):
+                        paths.append(os.path.join(dotgit, "config"))
+                    elif os.path.isfile(dotgit):
+                        try:
+                            with open(dotgit, "r", encoding="utf-8", errors="ignore") as handle:
+                                first_line = handle.readline().strip()
+                            if first_line.lower().startswith("gitdir:"):
+                                git_dir = first_line.split(":", 1)[1].strip()
+                                if not os.path.isabs(git_dir):
+                                    git_dir = os.path.join(cwd, git_dir)
+                                paths.append(os.path.join(git_dir, "config"))
+                        except OSError:
+                            pass
+                for key in ("GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"):
+                    path = os.environ.get(key, "")
+                    if path:
+                        paths.append(path)
+                home = os.environ.get("HOME", "")
+                if home:
+                    paths.append(os.path.join(home, ".gitconfig"))
+                xdg_config_home = os.environ.get("XDG_CONFIG_HOME", "")
+                if xdg_config_home:
+                    paths.append(os.path.join(xdg_config_home, "git", "config"))
+                elif home:
+                    paths.append(os.path.join(home, ".config", "git", "config"))
+                return paths
+
             def command_file_args(command_args):
                 return [
                     arg
@@ -77,6 +291,7 @@ def guard_setup_command(instruction: str) -> str:
                 option_with_value = {
                     "-c",
                     "-C",
+                    "--config-env",
                     "--exec-path",
                     "--git-dir",
                     "--namespace",
@@ -125,12 +340,32 @@ def guard_setup_command(instruction: str) -> str:
 
             if tool == "git":
                 lowered = [arg.lower() for arg in args]
+                for arg in lowered:
+                    if looks_like_github_pr_ref(arg):
+                        block("GitHub PR ref")
+                if git_config_env_contains_github_pr_ref(args):
+                    block("GitHub PR ref")
                 subcommand_index = git_subcommand_index(lowered)
                 if subcommand_index >= 0 and lowered[subcommand_index] in {"apply", "am"}:
                     file_args = command_file_args(lowered[subcommand_index + 1:])
                     for arg in file_args:
                         if looks_like_pr_patch_arg(arg):
                             block("applying downloaded PR patch file")
+                if subcommand_index >= 0 and lowered[subcommand_index] in {"clone", "fetch", "pull", "ls-remote"}:
+                    if "--stdin" in lowered[subcommand_index + 1:]:
+                        block("GitHub PR ref")
+                    for path in config_include_paths_from_env(args):
+                        if config_file_contains_github_pr_ref(path):
+                            block("GitHub PR ref")
+                    for path in config_include_paths_from_args(args):
+                        if config_file_contains_github_pr_ref(path):
+                            block("GitHub PR ref")
+                    for path in git_config_paths(args):
+                        if config_file_contains_github_pr_ref(path):
+                            block("GitHub PR ref")
+                    for arg in lowered[subcommand_index + 1:]:
+                        if looks_like_github_pr_ref(arg):
+                            block("GitHub PR ref")
             PY
             chmod +x "$stet_guard_dir/stet-human-patch-guard.py"
             for _stet_guard_tool in curl wget git gh python python3 node; do

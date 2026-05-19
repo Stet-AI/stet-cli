@@ -286,6 +286,375 @@ class HumanPatchGuardTests(unittest.TestCase):
             self.assertEqual(allowed.returncode, 0, allowed.stderr)
             self.assertIn("fake git ok", allowed.stdout)
 
+    def test_guard_blocks_git_pr_ref_fetch_variants(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_bin = Path(tmp) / "fake-bin"
+            guard_bin = Path(tmp) / "guard-bin"
+            fake_bin.mkdir()
+            self._write_fake_tool(fake_bin / "git")
+            env = self._guard_env(fake_bin, guard_bin)
+
+            for command in (
+                "git fetch --depth=1 https://github.com/wundergraph/graphql-go-tools.git pull/828/head:pr-828",
+                "git fetch origin refs/pull/828/head",
+                "git fetch --depth=1 origin +refs/pull/828/merge:refs/remotes/origin/pr-828",
+                "git fetch origin +refs/pull/*:refs/remotes/origin/pr/*",
+                "git fetch origin +refs/pull/828/*:refs/remotes/origin/pr-828/*",
+                "git -C /app fetch origin pull/828/head:pr-828",
+                "git ls-remote https://github.com/wundergraph/graphql-go-tools.git refs/pull/828/head",
+                "git -c remote.origin.fetch=+refs/pull/828/head:refs/remotes/origin/pr-828 fetch origin",
+                "git -c remote.origin.fetch=+refs/pull/*:refs/remotes/origin/pr/* fetch origin",
+                "git config remote.origin.fetch +refs/pull/828/head:refs/remotes/origin/pr-828",
+                "git clone -c remote.origin.fetch=+refs/pull/*/head:refs/remotes/origin/pr/* https://github.com/wundergraph/graphql-go-tools.git repo",
+            ):
+                with self.subTest(command=command):
+                    blocked = subprocess.run(
+                        [
+                            "sh",
+                            "-c",
+                            guard_setup_command("PR #828: minify") + "; " + command,
+                        ],
+                        env=env,
+                        text=True,
+                        capture_output=True,
+                    )
+                    self.assertEqual(blocked.returncode, 126, blocked.stderr)
+                    self.assertIn("GitHub PR ref", blocked.stderr)
+
+            stdin_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify")
+                    + "; printf '%s\\n' '+refs/pull/828/head:refs/remotes/origin/pr-828' | git fetch --stdin origin",
+                ],
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(stdin_blocked.returncode, 126, stdin_blocked.stderr)
+            self.assertIn("GitHub PR ref", stdin_blocked.stderr)
+
+            env_config_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify") + "; git fetch origin",
+                ],
+                env={
+                    **env,
+                    "GIT_CONFIG_COUNT": "1",
+                    "GIT_CONFIG_KEY_0": "remote.origin.fetch",
+                    "GIT_CONFIG_VALUE_0": "+refs/pull/828/head:refs/remotes/origin/pr-828",
+                },
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(env_config_blocked.returncode, 126, env_config_blocked.stderr)
+            self.assertIn("GitHub PR ref", env_config_blocked.stderr)
+
+            config_env_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify")
+                    + "; git --config-env=remote.origin.fetch=STET_TEST_PR_REFSPEC fetch origin",
+                ],
+                env={
+                    **env,
+                    "STET_TEST_PR_REFSPEC": "+refs/pull/828/head:refs/remotes/origin/pr-828",
+                },
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(config_env_blocked.returncode, 126, config_env_blocked.stderr)
+            self.assertIn("GitHub PR ref", config_env_blocked.stderr)
+
+            config_env_space_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify")
+                    + "; git --config-env remote.origin.fetch=STET_TEST_PR_REFSPEC fetch origin",
+                ],
+                env={
+                    **env,
+                    "STET_TEST_PR_REFSPEC": "+refs/pull/828/head:refs/remotes/origin/pr-828",
+                },
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(config_env_space_blocked.returncode, 126, config_env_space_blocked.stderr)
+            self.assertIn("GitHub PR ref", config_env_space_blocked.stderr)
+
+            repo = Path(tmp) / "repo"
+            git_dir = repo / ".git"
+            git_dir.mkdir(parents=True)
+            (git_dir / "config").write_text(
+                "[remote \"origin\"]\n"
+                "\turl = https://github.com/wundergraph/graphql-go-tools.git\n"
+                "\tfetch = +refs/pull/828/head:refs/remotes/origin/pr-828\n",
+                encoding="utf-8",
+            )
+            repo_config_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify")
+                    + "; git -C "
+                    + shlex.quote(str(repo))
+                    + " fetch origin",
+                ],
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(repo_config_blocked.returncode, 126, repo_config_blocked.stderr)
+            self.assertIn("GitHub PR ref", repo_config_blocked.stderr)
+
+            git_dir_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify") + "; git fetch origin",
+                ],
+                env={**env, "GIT_DIR": str(git_dir)},
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(git_dir_blocked.returncode, 126, git_dir_blocked.stderr)
+            self.assertIn("GitHub PR ref", git_dir_blocked.stderr)
+
+            include_config = Path(tmp) / "pr-ref.cfg"
+            include_config.write_text(
+                "[remote \"origin\"]\n"
+                "\tfetch = +refs/pull/828/head:refs/remotes/origin/pr-828\n",
+                encoding="utf-8",
+            )
+            (git_dir / "config").write_text(
+                "[include]\n"
+                f"\tpath = {include_config}\n",
+                encoding="utf-8",
+            )
+            include_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify")
+                    + "; git -C "
+                    + shlex.quote(str(repo))
+                    + " fetch origin",
+                ],
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(include_blocked.returncode, 126, include_blocked.stderr)
+            self.assertIn("GitHub PR ref", include_blocked.stderr)
+
+            argv_include_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify")
+                    + "; git -c include.path="
+                    + shlex.quote(str(include_config))
+                    + " fetch origin",
+                ],
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(argv_include_blocked.returncode, 126, argv_include_blocked.stderr)
+            self.assertIn("GitHub PR ref", argv_include_blocked.stderr)
+
+            clone_include_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify")
+                    + "; git -c include.path="
+                    + shlex.quote(str(include_config))
+                    + " clone https://github.com/wundergraph/graphql-go-tools.git repo-from-include",
+                ],
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(clone_include_blocked.returncode, 126, clone_include_blocked.stderr)
+            self.assertIn("GitHub PR ref", clone_include_blocked.stderr)
+
+            env_include_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify")
+                    + "; git --config-env=include.path=STET_TEST_INCLUDE fetch origin",
+                ],
+                env={**env, "STET_TEST_INCLUDE": str(include_config)},
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(env_include_blocked.returncode, 126, env_include_blocked.stderr)
+            self.assertIn("GitHub PR ref", env_include_blocked.stderr)
+
+            env_config_include_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify") + "; git fetch origin",
+                ],
+                env={
+                    **env,
+                    "GIT_CONFIG_COUNT": "1",
+                    "GIT_CONFIG_KEY_0": "include.path",
+                    "GIT_CONFIG_VALUE_0": str(include_config),
+                },
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(env_config_include_blocked.returncode, 126, env_config_include_blocked.stderr)
+            self.assertIn("GitHub PR ref", env_config_include_blocked.stderr)
+
+            parameters_include_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify") + "; git fetch origin",
+                ],
+                env={**env, "GIT_CONFIG_PARAMETERS": f"'include.path={include_config}'"},
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(parameters_include_blocked.returncode, 126, parameters_include_blocked.stderr)
+            self.assertIn("GitHub PR ref", parameters_include_blocked.stderr)
+
+            real_parameters_ref_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify") + "; git fetch origin",
+                ],
+                env={
+                    **env,
+                    "GIT_CONFIG_PARAMETERS": "'remote.origin.fetch'='+refs/pull/828/head:refs/remotes/origin/pr-828'",
+                },
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(real_parameters_ref_blocked.returncode, 126, real_parameters_ref_blocked.stderr)
+            self.assertIn("GitHub PR ref", real_parameters_ref_blocked.stderr)
+
+            real_parameters_include_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify") + "; git fetch origin",
+                ],
+                env={
+                    **env,
+                    "GIT_CONFIG_PARAMETERS": f"'include.path'='{include_config}'",
+                },
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(real_parameters_include_blocked.returncode, 126, real_parameters_include_blocked.stderr)
+            self.assertIn("GitHub PR ref", real_parameters_include_blocked.stderr)
+
+            (git_dir / "config").write_text(
+                "# padding\n"
+                + ("#" * (1024 * 1024 + 1))
+                + "\n[remote \"origin\"]\n"
+                "\tfetch = +refs/pull/828/head:refs/remotes/origin/pr-828\n",
+                encoding="utf-8",
+            )
+            padded_config_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify")
+                    + "; git -C "
+                    + shlex.quote(str(repo))
+                    + " fetch origin",
+                ],
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(padded_config_blocked.returncode, 126, padded_config_blocked.stderr)
+            self.assertIn("GitHub PR ref", padded_config_blocked.stderr)
+
+            home = Path(tmp) / "home"
+            home.mkdir()
+            (home / ".gitconfig").write_text(
+                "[remote \"origin\"]\n"
+                "\tfetch = +refs/pull/828/head:refs/remotes/origin/pr-828\n",
+                encoding="utf-8",
+            )
+            global_config_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify") + "; git fetch origin",
+                ],
+                env={**env, "HOME": str(home)},
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(global_config_blocked.returncode, 126, global_config_blocked.stderr)
+            self.assertIn("GitHub PR ref", global_config_blocked.stderr)
+
+            xdg_home = Path(tmp) / "xdg"
+            xdg_config = xdg_home / "git"
+            xdg_config.mkdir(parents=True)
+            (xdg_config / "config").write_text(
+                "[include]\n"
+                f"\tpath = {include_config}\n",
+                encoding="utf-8",
+            )
+            xdg_config_blocked = subprocess.run(
+                [
+                    "sh",
+                    "-c",
+                    guard_setup_command("PR #828: minify") + "; git fetch origin",
+                ],
+                env={**env, "HOME": str(Path(tmp) / "empty-home"), "XDG_CONFIG_HOME": str(xdg_home)},
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(xdg_config_blocked.returncode, 126, xdg_config_blocked.stderr)
+            self.assertIn("GitHub PR ref", xdg_config_blocked.stderr)
+
+    def test_guard_allows_ordinary_git_fetch_variants(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_bin = Path(tmp) / "fake-bin"
+            guard_bin = Path(tmp) / "guard-bin"
+            fake_bin.mkdir()
+            self._write_fake_tool(fake_bin / "git")
+            env = self._guard_env(fake_bin, guard_bin)
+            env["GITHUB_REF"] = "refs/pull/999/merge"
+            env["UNRELATED_REFSPEC"] = "+refs/pull/999/head:refs/remotes/origin/pr-999"
+
+            for command in (
+                "git fetch origin main",
+                "git fetch https://github.com/wundergraph/graphql-go-tools.git main",
+                "git fetch origin refs/heads/main:refs/remotes/origin/main",
+                "git ls-remote https://github.com/wundergraph/graphql-go-tools.git refs/heads/main",
+            ):
+                with self.subTest(command=command):
+                    allowed = subprocess.run(
+                        [
+                            "sh",
+                            "-c",
+                            guard_setup_command("PR #828: minify") + "; " + command,
+                        ],
+                        env=env,
+                        text=True,
+                        capture_output=True,
+                    )
+                    self.assertEqual(allowed.returncode, 0, allowed.stderr)
+                    self.assertIn("fake git ok", allowed.stdout)
+
     @staticmethod
     def _guard_env(fake_bin: Path, guard_bin: Path) -> dict[str, str]:
         env = dict(os.environ)

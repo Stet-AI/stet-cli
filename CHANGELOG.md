@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.4.3] - 2026-05-19
+
+Hardens Harbor eval isolation for candidate agents. Exported Harbor datasets no longer keep candidate-visible gold patches in fresh or cached task bundles, and the human-patch guard now blocks GitHub pull refs passed through direct git commands, config environment, and included config files.
+
+### Fixed
+- Prevent Harbor dataset exports and cache hits from leaving gold/reference patches visible to candidate agents ([f05f41c9])
+- Block GitHub pull refs in the human-patch guard so candidate agents cannot fetch target PR heads or merges directly ([3dad80bf])
+- Inspect Git config, config-env, and include paths for hidden GitHub pull refs before allowing guarded git operations ([693709b1])
+
+[v0.4.3]: https://github.com/benredmond/stet/releases/tag/v0.4.3
+[f05f41c9]: https://github.com/benredmond/stet/commit/f05f41c98595eb57ee5f405e2417a8aa1ffb9376
+[3dad80bf]: https://github.com/benredmond/stet/commit/3dad80bf92d545c31185447a1a789c39b40ae930
+[693709b1]: https://github.com/benredmond/stet/commit/693709b1179c6b7036fb2209883aaba224bb4546
+
 ## [v0.4.2] - 2026-05-18
 
 Blocks Harbor candidate agents from reading public human-patch artifacts during evals. Codex and Claude Code runs now install a guard that prevents direct PR diff/patch, GitHub API, raw head-commit, and downloaded PR-patch access while leaving ordinary package and source lookup available.
