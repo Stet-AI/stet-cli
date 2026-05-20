@@ -91,6 +91,14 @@ graders can review it for dimensions such as code review quality, equivalence,
 footprint risk, clarity, simplicity, coherence, intentionality, robustness,
 instruction adherence, scope discipline, and diff minimality.
 
+For cost control, use a smaller or cheaper independent model for grading by
+default. The grader model does not need to be the same model being evaluated; it
+only needs to be good enough to apply the rubric reliably. Configure it with
+`eval.grader_ai_cmd` and `eval.grader_ai_model_id` in `stet.suite.yaml`, or pass
+`--grader-ai-cmd` and `--grader-ai-model-id` for a one-off run. Keep the grader
+independent from the model under test so the candidate is not judging its own
+work.
+
 Footprint risk asks whether the patch touched more surface area than the task
 called for. A model can pass tests and still make a broad, fragile, or
 hard-to-review change. This is why pass rate alone is not enough for Stet's
