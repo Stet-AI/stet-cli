@@ -107,19 +107,25 @@ the right Stet workflow, preserve decision semantics, read canonical artifacts,
 and avoid treating directional checks as rollout evidence.
 
 ```sh
-npx skills add git@github.com:benredmond/stet-cli.git --skill stet
+npx skills add https://github.com/benredmond/stet-cli.git --skill stet --all
 ```
 
 To inspect the available skills before installing:
 
 ```sh
-npx skills add git@github.com:benredmond/stet-cli.git --list
+npx skills add https://github.com/benredmond/stet-cli.git --list
 ```
 
 Verify the skill is visible to the agent you will use for Stet work:
 
 ```sh
 npx skills list
+```
+
+Refresh the skill after updating the CLI:
+
+```sh
+npx skills update stet -y
 ```
 
 ### 5. Install Docker
@@ -233,8 +239,21 @@ stet update --prerelease           # latest release candidate
 stet update --version v0.1.0       # pin or roll back
 ```
 
-`stet update` verifies checksums and refreshes local Harbor support agents.
-Updates are pull-based only. Stet does not auto-update.
+`stet update` verifies checksums and refreshes the Stet-owned local Harbor
+support agents. It does not install or mutate agent skills; refresh the shipped
+Stet skill through the skill manager:
+
+```sh
+npx skills update stet -y
+```
+
+Normal CLI usage performs a cheap cached stale-version check. When a newer Stet
+CLI is available, Stet may auto-update before commands that are safe to launch
+fresh, such as new probes or eval launches. Reproducibility-sensitive commands
+that inspect, repair, resume, promote, roll back, or report existing evidence do
+not auto-update; they print the exact `stet update` command to run manually.
+Pass command-local `--no-auto-update` or set `STET_AUTO_UPDATE=0` in the
+environment for CI, air-gapped shells, or pinned toolchains.
 
 ## Troubleshooting
 

@@ -76,6 +76,12 @@ Canonical read path:
 5. Read top-level `quality`, `validity`, `evidence_quality`, `lifecycle`, and
    `arms` to interpret the verdict. A good score on degraded evidence is still
    degraded evidence.
+   Route on `evidence_quality.posture`:
+   `actionable` (= `decision_grade=true`) means act on the recommendation;
+   `directional` means the only failing factors are sample size or
+   sample adequacy, so use the run as iteration signal and widen the slice
+   before promoting; `inspect` means a non-small-n factor failed and the
+   evidence quality issue must be investigated before reasoning.
    When evidence is not decision-grade, check
    `evidence_quality.directional_read`. A `usable` or `limited` directional
    read can guide iteration or prefilter candidates, but should not be treated
@@ -134,6 +140,13 @@ Rules for the optimizer:
   evidence is not gold-valid yet. Treat it as a dataset/slice validity problem,
   not model-quality evidence or proof that current-checkout tests are broken;
   diagnose why the verifier failed before choosing a bounded next action.
+- Before rules launches from a built dataset, use
+  `stet suite select --suite-manifest <stet.suite.yaml> --target-valid N` when
+  the operator needs N launchable tasks. It oversamples historical candidates,
+  runs gold replay preflight, writes a yield receipt, and emits a derived suite
+  whose `selection.task_ids` are gold replay valid / launchable. Read
+  [dataset-build](references/dataset-build.md) for the build-side flow and
+  [rules-flow](references/rules-flow.md) for the launch-side handoff.
 - Distinguish release promotion from baseline refresh. Promotion changes
   rollout state; baseline refresh changes the frozen reference for future
   searches.
@@ -185,7 +198,12 @@ Rules for the optimizer:
 - For installed MVP binaries, use the private CLI repo update flow:
   `stet --version`, `stet update`, or `stet update --version <tag>`. Pilot
   users need access to `benredmond/stet-cli`.
-  `stet update` refreshes both the binary and local Harbor support agents.
+  `stet update` refreshes the binary and local Harbor support agents. Stet
+  performs a cached stale-version check during normal CLI use and may
+  auto-update before safe fresh launches; it warns instead of mutating the
+  toolchain for report/status/repair/resume/promote/rollback style commands.
+  Use command-local `--no-auto-update` or `STET_AUTO_UPDATE=0` for pinned CI,
+  air-gapped shells, or deliberately frozen toolchains.
 - Harbor-installed Codex/Claude support agents are baked into
   `.stet/harbor.Dockerfile` (`ARG BAKE_CLAUDE_CODE` / `ARG BAKE_CODEX`, both
   default on; both fetch the latest published version on each fresh build).
@@ -205,7 +223,9 @@ Rules for the optimizer:
   config; keep independent graders on `--grader-ai-cmd` so codex-lb does not
   judge itself.
 - For the shipped Stet agent skill, use the same private CLI repo:
-  `npx skills add git@github.com:benredmond/stet-cli.git --skill stet`.
+  `npx skills add https://github.com/benredmond/stet-cli.git --skill stet --all`.
+  Refresh it separately with `npx skills update stet -y`; `stet update`
+  will warn about this path but does not mutate agent-managed skills.
   Release automation syncs `skills/stet` into the distribution skill snapshot
   before publishing dist collateral.
 - On command failure, read status when possible, fail closed, and use the
@@ -243,6 +263,31 @@ Result interpretation:
   Follow `evidence_refs`, the rules runtime, and any persisted
   `eval_report.v1.json` / compare report, then explain the contradiction and
   fail closed to inspect when the evidence remains degraded.
+
+Post-run learning:
+  After interpreting a completed, failed, inspect-state, or optimization-loop
+  run, do bounded trajectory QA to learn what happened before proposing the
+  next change. Prefer subagents when available so trajectory inspection,
+  evidence diagnosis, and improvement synthesis can run independently.
+
+  Post-run QA is diagnostic, not the primary verdict. Start from the Trial
+  Result and status contract above, then inspect lower-level `task_detail.json`,
+  `trajectory.json`, logs, and patches only to explain observed wins,
+  regressions, no-patch cases, grader gaps, surprising ties, or runtime
+  artifacts.
+
+  For optimization loops, split subagent work into narrow questions: trajectory
+  QA over representative flips/failures/no-patch/strongest and weakest graded
+  examples; evidence QA over validity, grader coverage, sample adequacy,
+  runtime failures, stale or mixed provenance; and improvement synthesis over
+  the current Search Space. Synthesize the findings for the operator instead of
+  pasting raw subagent notes.
+
+  The learning summary must separate candidate behavior from dataset, grader,
+  runtime, or provenance artifacts; identify the most plausible one-lever next
+  change; and state what evidence on the next run would confirm or refute it.
+  Do not inspect every trajectory by default, and do not let post-run QA mutate
+  files unless the operator has approved an edit.
 
 HTML report:
   Every persisted `eval_report.v1.json` has a sibling `eval_report.v1.html` -
@@ -351,10 +396,17 @@ models, setting up a repo, improving a skill, or checking a release?"
 - For completed reads, prefer persisted `eval_report.v1.json`; read
   `decision_receipt`, then `trial_context`, then lower-level artifacts only for
   diagnosis. For active reads, prefer `stet eval status --json`.
+- `stet validate` truncates gold/agent patches in grader prompts at 50 KB by
+  default; use `--prompt-patch-bytes N` only for explicit benchmark/reporting
+  reruns. Raw diff guardrails still gate on gold patch size (`>25` files or
+  `>4000` lines); agent diff stats and footprint risk are diagnostic, not
+  default guardrail overrides.
 - For disk pressure, read `stet artifacts status --root <root>` before
   deleting anything manually. Compacted roots keep `patch_retention.v1.json`
   contracts and report `regrade_capability`; `bounded_only` means decision
   metadata remains but full raw-patch regrade requires a rerun or archive.
+  This compacts raw patch artifacts only; it does not evict datasets, repo
+  bundles, trajectories, Docker cache, APFS snapshots, or whole run roots.
 - If requested grader coverage is part of the decision, verify the expected
   grader IDs in `decision_receipt.compare.grader_coverage`,
   `experiment.json.graders`, or arm `decision_metrics.graders`. Missing or
@@ -445,7 +497,8 @@ Decision shortcuts:
   `model-workers * harbor-concurrency`; validation pressure is roughly
   `workers * command-workers`. Use `stet harbor cleanup` before broad Docker
   spelunking; apply with `--apply` only when no active run is using the listed
-  stale Harbor resources.
+  stale Harbor resources. Use `stet artifacts compact` separately for
+  metadata-preserving raw patch cleanup inside completed Stet roots.
 
 ## Read As Needed
 

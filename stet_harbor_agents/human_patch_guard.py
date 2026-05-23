@@ -7,6 +7,7 @@ import textwrap
 
 _PR_PATTERNS = (
     re.compile(r"\bPR\s*#\s*(\d+)\b", re.IGNORECASE),
+    re.compile(r"\bMR\s*!\s*(\d+)\b", re.IGNORECASE),
     re.compile(r"\bstet-pr-(\d+)\b", re.IGNORECASE),
 )
 
@@ -60,12 +61,6 @@ def guard_setup_command(instruction: str) -> str:
             def patch_arg_name(arg):
                 return arg.lower().rsplit("/", 1)[-1]
 
-            def looks_like_pr_patch_arg(arg):
-                return re.fullmatch(
-                    r"pr[-_]?\d+.*\.(?:diff|patch)",
-                    patch_arg_name(arg),
-                ) is not None
-
             def looks_like_github_pr_ref(arg):
                 return re.search(
                     r"(?:^|[=+:])(?:refs/)?pull/(?:\d+|\*)(?:/(?:head|merge|\*))?(?::|$)",
@@ -73,24 +68,30 @@ def guard_setup_command(instruction: str) -> str:
                     re.IGNORECASE,
                 ) is not None
 
-            def config_env_names(command_args):
-                names = []
-                i = 0
-                while i < len(command_args):
-                    arg = command_args[i]
-                    value = ""
-                    if arg == "--config-env" and i + 1 < len(command_args):
-                        value = command_args[i + 1]
-                        i += 2
-                    elif arg.startswith("--config-env="):
-                        value = arg.split("=", 1)[1]
-                        i += 1
-                    else:
-                        i += 1
-                        continue
-                    if "=" in value:
-                        names.append(value.rsplit("=", 1)[1])
-                return names
+            def looks_like_gitlab_mr_ref(arg):
+                return re.search(
+                    r"(?:^|[=+:])(?:refs/)?merge-requests/(?:\d+|\*)(?:/(?:head|\*))?(?::|$)",
+                    arg,
+                    re.IGNORECASE,
+                ) is not None
+
+            def blocked_review_ref_reason(arg):
+                if looks_like_github_pr_ref(arg):
+                    return "GitHub PR ref"
+                if looks_like_gitlab_mr_ref(arg):
+                    return "GitLab MR ref"
+                return ""
+
+            def downloaded_patch_arg_reason(arg):
+                name = patch_arg_name(arg)
+                if re.fullmatch(r"pr[-_]?\d+.*\.(?:diff|patch)", name):
+                    return "applying downloaded PR patch file"
+                if re.fullmatch(
+                    r"(?:mr[-_]?\d+|merge[-_]?requests?[-_]?\d+).*\.(?:diff|patch)",
+                    name,
+                ):
+                    return "applying downloaded review patch file"
+                return ""
 
             def split_config_assignment(value):
                 value = (value or "").strip().strip("'\"")
@@ -139,11 +140,12 @@ def guard_setup_command(instruction: str) -> str:
                         assignments.append((key, os.environ.get(env_name, "")))
                 return assignments
 
-            def git_config_env_contains_github_pr_ref(command_args):
+            def git_config_env_blocked_review_ref_reason(command_args):
                 for _, value in env_config_assignments(command_args):
-                    if looks_like_github_pr_ref(value or ""):
-                        return True
-                return False
+                    reason = blocked_review_ref_reason(value or "")
+                    if reason:
+                        return reason
+                return ""
 
             def config_include_paths_from_env(command_args):
                 paths = []
@@ -152,23 +154,24 @@ def guard_setup_command(instruction: str) -> str:
                         paths.append(value)
                 return paths
 
-            def config_file_contains_github_pr_ref(path):
-                return config_file_contains_github_pr_ref_seen(path, set())
+            def config_file_blocked_review_ref_reason(path):
+                return config_file_blocked_review_ref_reason_seen(path, set())
 
-            def config_file_contains_github_pr_ref_seen(path, seen):
+            def config_file_blocked_review_ref_reason_seen(path, seen):
                 if not path:
-                    return False
+                    return ""
                 path = os.path.abspath(os.path.expanduser(path))
                 if path in seen:
-                    return False
+                    return ""
                 seen.add(path)
                 try:
                     with open(path, "r", encoding="utf-8", errors="ignore") as handle:
                         content = handle.read()
                 except OSError:
-                    return False
-                if looks_like_github_pr_ref(content):
-                    return True
+                    return ""
+                reason = blocked_review_ref_reason(content)
+                if reason:
+                    return reason
                 base = os.path.dirname(path)
                 in_include = False
                 for line in content.splitlines():
@@ -187,9 +190,10 @@ def guard_setup_command(instruction: str) -> str:
                     include_path = value.strip().strip('"')
                     if not os.path.isabs(include_path):
                         include_path = os.path.join(base, include_path)
-                    if config_file_contains_github_pr_ref_seen(include_path, seen):
-                        return True
-                return False
+                    reason = config_file_blocked_review_ref_reason_seen(include_path, seen)
+                    if reason:
+                        return reason
+                return ""
 
             def config_include_paths_from_args(command_args):
                 paths = []
@@ -320,6 +324,8 @@ def guard_setup_command(instruction: str) -> str:
 
             if tool == "gh":
                 block("GitHub CLI is not available during candidate evals")
+            if tool == "glab":
+                block("GitLab CLI is not available during candidate evals")
             if has(r"\bapi\.github\.com\b"):
                 block("GitHub API access is not available during candidate evals")
             if has(r"github\.com/[^/\s'\"<>]+/[^/\s'\"<>]+/pull/\d+\.(?:diff|patch)\b"):
@@ -328,6 +334,12 @@ def guard_setup_command(instruction: str) -> str:
                 block("GitHub PR page is not available to candidate agents")
             if has(r"patch-diff\.githubusercontent\.com/raw/[^/\s'\"<>]+/[^/\s'\"<>]+/pull/\d+\.(?:diff|patch)\b"):
                 block("GitHub PR diff/patch redirect URL")
+            if has(r"(?:https?://)?[^/\s'\"<>]+/(?:[^\s'\"<>]+/)+-/merge_requests/\d+\.(?:diff|patch)\b"):
+                block("GitLab MR diff/patch URL")
+            if has(r"(?:https?://)?[^/\s'\"<>]+/(?:[^\s'\"<>]+/)+-/merge_requests/\d+(?:[/?#\s'\"<>]|$)"):
+                block("GitLab MR page is not available to candidate agents")
+            if has(r"(?:https?://)?[^/\s'\"<>]+/api/v4/projects/[^\s'\"<>]+/merge_requests/\d+(?:[/?#\s'\"<>]|$)"):
+                block("GitLab API merge request access is not available during candidate evals")
 
             if has(r"github\.com/[^/\s'\"<>]+/[^/\s'\"<>]+/commit/[0-9a-f]{40}\b"):
                 block("GitHub commit URL can expose the target human solution")
@@ -335,40 +347,53 @@ def guard_setup_command(instruction: str) -> str:
                 block("raw GitHub head-commit file URL")
             if has(r"raw\.githubusercontent\.com/[^/\s'\"<>]+/[^/\s'\"<>]+/[0-9a-f]{40}/"):
                 block("raw GitHub head-commit file URL")
+            if has(r"(?:https?://)?[^/\s'\"<>]+/(?:[^\s'\"<>]+/)+-/commit/[0-9a-f]{40}\b"):
+                block("GitLab commit URL can expose the target human solution")
+            if has(r"(?:https?://)?[^/\s'\"<>]+/(?:[^\s'\"<>]+/)+-/raw/[0-9a-f]{40}/"):
+                block("raw GitLab head-commit file URL")
+            if has(r"(?:https?://)?[^/\s'\"<>]+/api/v4/projects/[^\s'\"<>]+/repository/files/[^\s'\"<>]+/raw\?[^\s'\"<>]*\bref=[0-9a-f]{40}\b"):
+                block("raw GitLab head-commit file URL")
             if has(r"\b(?:diff_url|patch_url)\b") and has(r"\bgithub\b"):
                 block("GitHub API diff_url/patch_url fields")
 
             if tool == "git":
                 lowered = [arg.lower() for arg in args]
                 for arg in lowered:
-                    if looks_like_github_pr_ref(arg):
-                        block("GitHub PR ref")
-                if git_config_env_contains_github_pr_ref(args):
-                    block("GitHub PR ref")
+                    reason = blocked_review_ref_reason(arg)
+                    if reason:
+                        block(reason)
+                reason = git_config_env_blocked_review_ref_reason(args)
+                if reason:
+                    block(reason)
                 subcommand_index = git_subcommand_index(lowered)
                 if subcommand_index >= 0 and lowered[subcommand_index] in {"apply", "am"}:
                     file_args = command_file_args(lowered[subcommand_index + 1:])
                     for arg in file_args:
-                        if looks_like_pr_patch_arg(arg):
-                            block("applying downloaded PR patch file")
+                        reason = downloaded_patch_arg_reason(arg)
+                        if reason:
+                            block(reason)
                 if subcommand_index >= 0 and lowered[subcommand_index] in {"clone", "fetch", "pull", "ls-remote"}:
                     if "--stdin" in lowered[subcommand_index + 1:]:
                         block("GitHub PR ref")
                     for path in config_include_paths_from_env(args):
-                        if config_file_contains_github_pr_ref(path):
-                            block("GitHub PR ref")
+                        reason = config_file_blocked_review_ref_reason(path)
+                        if reason:
+                            block(reason)
                     for path in config_include_paths_from_args(args):
-                        if config_file_contains_github_pr_ref(path):
-                            block("GitHub PR ref")
+                        reason = config_file_blocked_review_ref_reason(path)
+                        if reason:
+                            block(reason)
                     for path in git_config_paths(args):
-                        if config_file_contains_github_pr_ref(path):
-                            block("GitHub PR ref")
+                        reason = config_file_blocked_review_ref_reason(path)
+                        if reason:
+                            block(reason)
                     for arg in lowered[subcommand_index + 1:]:
-                        if looks_like_github_pr_ref(arg):
-                            block("GitHub PR ref")
+                        reason = blocked_review_ref_reason(arg)
+                        if reason:
+                            block(reason)
             PY
             chmod +x "$stet_guard_dir/stet-human-patch-guard.py"
-            for _stet_guard_tool in curl wget git gh python python3 node; do
+            for _stet_guard_tool in curl wget git gh glab python python3 node; do
               cat > "$stet_guard_dir/$_stet_guard_tool" <<'SH'
             #!/bin/sh
             tool="$(basename "$0")"

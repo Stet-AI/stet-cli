@@ -13,6 +13,7 @@ from stet_harbor_agents.compat import ExecInput
 from stet_harbor_agents.human_patch_guard import guard_env, guard_setup_command
 from stet_harbor_agents.install_cache import setup_with_cli_cache
 from stet_harbor_agents.patch_capture import AgentPatchCaptureMixin
+from stet_harbor_agents.skill_activation import with_skill_activation_preamble
 
 
 def _claude_code_auth_cli_flags():
@@ -136,6 +137,7 @@ fi
 """.strip()
 
     def create_run_agent_commands(self, instruction: str) -> list[ExecInput]:
+        instruction = with_skill_activation_preamble(instruction)
         commands = super().create_run_agent_commands(instruction)
         credential_env = self._credential_env()
         reasoning_env = self._reasoning_env()
@@ -223,6 +225,7 @@ fi
         environment: BaseEnvironment,
         context: AgentContext,
     ) -> None:
+        instruction = with_skill_activation_preamble(instruction)
         previous_bootstrap_pending = getattr(
             self, "_stet_claude_bootstrap_pending", False
         )

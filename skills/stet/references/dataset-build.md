@@ -17,12 +17,22 @@ pre-screen ──► understand + draft ──► iterate to green ──► sca
 ## Pipeline Overview
 
 ```
-discover (fetch PRs -> prefilter -> LLM scoring -> manifest)
+discover (fetch change requests -> prefilter -> LLM scoring -> manifest)
   -> build (snapshots -> gold/F2P tests -> task dirs)
+    -> select (gold replay valid launchable slice)
     -> harbor run -> validate
 ```
 
 `discover` is cheap (no Docker). `build` is expensive (Docker containers).
+`suite select` is the bridge from historically merged / selected task
+candidates to a launchable rules slice: it oversamples built task dirs, runs
+gold replay preflight, drops replay-invalid or unchecked tasks, and writes a
+derived `stet.suite.yaml` with only gold replay valid `selection.task_ids`.
+PR/MR-backed flows keep the `prs` source vocabulary for compatibility. GitHub
+PRs use `gh`; GitLab MRs use `glab`. When an enterprise remote is ambiguous
+such as `code.company.com`, pass `--change-provider github|gitlab` and, if
+`origin` is not the right remote, `--change-remote <remote-or-url>`; use
+`--source commits` when PR/MR provider access is unavailable.
 
 ## Resumability
 
@@ -41,12 +51,13 @@ The task .md IS the state. On resume, read it to determine current phase:
 Fast reject before investing time.
 
 Checks:
-1. **PR depth**: >= 500 merged PRs
-2. **Recent activity**: PRs merged in last 6 months
+1. **Change-request depth**: >= 500 merged PRs/MRs
+2. **Recent activity**: change requests merged in last 6 months
 3. **License**: Permissive (MIT, Apache 2.0, BSD)
 4. **Test suite exists**: `tests/`, `test/`, `__tests__/`, `*_test.go`
-5. **CI exists**: `.github/workflows/` with test-related workflows
-6. **CI is green**: `gh run list --repo {owner}/{repo} --limit 5`
+5. **CI exists**: test-related GitHub Actions, GitLab CI, or equivalent CI
+6. **CI is green**: inspect the provider's CI status; for GitHub,
+   `gh run list --repo {owner}/{repo} --limit 5`
 7. **Language supported**: Python, TypeScript/JavaScript, or Go
 
 Run a discover probe to measure pipeline yield:
@@ -80,8 +91,9 @@ Goal: produce a working `.stet/harbor.Dockerfile` plus
 
 Launch 3 parallel subagents:
 
-1. **CI Miner**: Read `.github/workflows/*.yml`. Extract install steps, test
-   commands, runtime versions, env vars, services, conditional logic.
+1. **CI Miner**: Read `.github/workflows/*.yml`, `.gitlab-ci.yml`, or
+   equivalent CI config. Extract install steps, test commands, runtime
+   versions, env vars, services, conditional logic.
 2. **Ecosystem Analyzer**: Read package manager configs. Extract language,
    package manager, dependency groups, workspace structure, native deps.
 3. **Docs Reader**: Read README, CONTRIBUTING, DEVELOPMENT docs. Extract
@@ -179,6 +191,19 @@ patch, confirm test_cmd runs those files.
 
 **CHECKPOINT: Report iteration results. Proceed to scale on approval.**
 
+To find a launchable rules slice from a built dataset without manually splicing
+replacements:
+
+```bash
+stet suite select --suite-manifest .stet/rules/stet.suite.yaml \
+  --target-valid 5 --oversample 4 --out .stet/rules/replay-valid \
+  --change-manifest .stet/rules/stet.change.yaml --json
+```
+
+If the receipt is low-yield, treat it as historical replay attrition, not proof
+that the merged change request failed tests. Follow the receipt's dominant invalidity
+categories before widening the range or accepting a smaller exploratory slice.
+
 ## Docker Desktop Capacity Budget
 
 Before scaling Docker-heavy build batches, check for stale state:
@@ -200,6 +225,13 @@ Apply only the confirmed Stet-owned plan with `stet harbor cleanup --apply`.
 Add `--prune-buildkit` only when broad Docker BuildKit cache cleanup is
 acceptable. Do not delete `.stet` run roots or `~/.cache/stet` evidence
 artifacts.
+
+For completed Stet roots that are using disk because of retained raw patches,
+run `stet artifacts status --root <root>` before manual deletion, then
+`stet artifacts compact --root <root>` when bounded patch metadata is enough.
+This preserves `patch_retention.v1.json` contracts but does not remove
+datasets, repo bundles, trajectories, Docker cache, APFS snapshots, or whole
+run roots.
 
 When Docker Desktop cannot allocate more memory, tune concurrency instead of
 raising resource limits. Start with `--workers 2` for dataset builds. For eval
@@ -250,15 +282,23 @@ Update `agent_docs/datasets.md` with the finalized recipe.
 ## Prompt shape (`--prompt-shape`)
 
 `stet suite build` defaults to `--prompt-shape self-contained-natural`, which
-emits the manifest-enriched `ai_task` (imperative goal-first prose) verbatim and requires
-the manifest path. Without `ai_task`, the implicit default warns per task and
-falls back to the legacy chain (PR body → AI summary → title → commit
-messages); passing `--prompt-shape self-contained-natural` explicitly fails
-those tasks with skip reason `prompt_shape_requires_ai_task` instead of
-degrading silently. Pass `--prompt-shape legacy` to opt out entirely. Every
-task records the decision under `meta.prompt_provenance` in `task.yaml`, and
-`build-summary.json` reports `prompt_shape_fallbacks` plus
-`prompt_shape_explicit_failures`.
+emits the `ai_task` (imperative goal-first prose) verbatim. The manifest path
+(`stet suite discover`) carries `ai_task` from discover-time enrichment. For
+`--rev-range` and `--base/--head` paths, build generates `ai_task` after patch
+split by calling the configured `--ai-cmd` against the split gold patch plus
+PR/MR or commit context; the resulting provenance records `selected_source:
+ai_task_generated` (vs `ai_task` for manifest-carried). Without `--ai-cmd`
+under the default shape, rev-range tasks are skipped with reason
+`ai_task_generation_unavailable` and base/head builds fail with the same
+reason (single-task; no partial dataset is produced). If the AI call or the
+parse of its output fails, the reason is `ai_task_generation_failed`. Pass
+`--prompt-shape legacy` to opt out of natural-shape generation entirely.
+Explicit `--prompt-shape self-contained-natural` keeps the existing hard
+failure (`prompt_shape_requires_ai_task`) when `ai_task` cannot be produced.
+Every task records the decision under `meta.prompt_provenance` in `task.yaml`,
+and `build-summary.json` reports `prompt_shape_fallbacks`,
+`prompt_shape_explicit_failures`, plus the two `ai_task_generation_*`
+counters.
 
 ## Flow-Specific Actions
 

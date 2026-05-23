@@ -51,6 +51,11 @@ compare arm artifacts are `none`, `partial`, `running`, `complete`, or `failed`;
 `stet eval rules repair --change-manifest ... --json` when the launch exited or
 stalled; use `--restart` only to discard evidence.
 
+In `eval report --json`, `evidence_quality.factors[].signal=="compare_state"`
+means the compare artifacts reached a coherent terminal state. Missing grader
+coverage is reported separately as `grader_coverage`, and may still keep the
+report inspect-only.
+
 The envelope also carries a top-level `activity_state` of `running`, `stalled`,
 or `exited` so a polled receipt can disambiguate "no evidence yet because still
 running" from "no evidence yet because the run died." `activity_state` is
@@ -121,6 +126,13 @@ To iterate on a high-signal slice from an existing dataset, pass repeatable
 `--task-id <id>` to `eval rules plan` and `eval rules`, or put the stable slice
 in the suite manifest as `selection.task_ids`. Task IDs must match ready task
 directories in `eval.dataset`.
+
+When you need Stet to find N launchable tasks instead of hand-picking
+replacements, run `stet suite select --suite-manifest <stet.suite.yaml>
+--target-valid N --out <dir>` first. It treats suite candidates as historically
+merged / selected until gold replay proves them valid, writes a yield receipt,
+and emits a derived suite manifest whose `selection.task_ids` are gold replay
+valid / launchable.
 
 Put stable variance controls in the suite manifest under `eval:`:
 `task_order_seed`, `workers`, `model_workers`, `harbor_concurrency`, and
@@ -302,8 +314,8 @@ stet eval report --change-manifest .stet/skill-loops/planner/stet.change.yaml --
 Use the `--plan` form before launch when the operator needs a budget decision;
 it does not write the wrapper bundle, build the replay dataset, or launch
 `eval rules`. `--plan` runs a buildability preflight against the resolved
-rev-range and surfaces it as `tasks.rev_range` in the JSON output; if 0 PRs
-match, it exits non-zero with an error naming the rev-range and the
+rev-range and surfaces it as `tasks.rev_range` in the JSON output; if 0 change
+requests match, it exits non-zero with an error naming the rev-range and the
 fetched / not-in-range / missing-merge counts so the operator can pass
 `--rev-range` to widen the slice before charging the launch.
 For wrapper runs, put any `--ai-cmd` on the non-plan launch; the wrapper
@@ -314,7 +326,7 @@ access/preflight limitation rather than evidence that the manifest is invalid.
 Replay-task discovery defaults to rev-range `main~25..main` against `--repo`.
 On a checkout whose recent history is squash-merged, rebased, or otherwise not
 standard merge-commits-into-main (e.g. a fresh worktree branched off a recent
-tag), that default can yield 0 buildable PRs. Override with `--rev-range` to
+tag), that default can yield 0 buildable change requests. Override with `--rev-range` to
 widen or shift the slice — the wrapper passes the override through to the
 generated `stet.suite.yaml` so the delegated `stet eval rules` consumes the
 same range:
@@ -332,26 +344,31 @@ stet eval rules skill \
   --json
 ```
 
+For GitLab repos on ambiguous self-hosted remotes, also pass
+`--change-provider gitlab` and, when needed, `--change-remote <remote-or-url>`;
+the wrapper stores those provider hints in the generated suite manifest.
+
 Rule of thumb: pick a range whose merge-commit count is at least `--tasks`
-plus headroom for PRs that resolve to skipped/non-buildable. The buildability
-preflight samples up to 50 PRs from the resolved rev-range and refuses the
-launch (and the bundle write) when **none** of the sampled PRs are
-buildable; on that failure no half-set-up runtime is committed. The
+plus headroom for change requests that resolve to skipped/non-buildable. The
+buildability preflight samples up to 50 change requests from the resolved
+rev-range and refuses the launch (and the bundle write) when **none** of the
+sampled change requests are buildable; on that failure no half-set-up runtime
+is committed. The
 preflight does **not** protect against the narrower failure where buildable
-PRs exist in the rev-range but are outside the dataset build's `--tasks`
+change requests exist in the rev-range but are outside the dataset build's `--tasks`
 fetch window — see the next paragraph and the empty-dataset note further
 below.
 
 `--tasks N` is currently both the task target *and* the upper bound on how
-many merged PRs the dataset build fetches from the remote. The buildability
+many merged change requests the dataset build fetches from the remote. The buildability
 preflight applies its own minimum-fetch floor (50) so a small `--tasks` value
 does not silently mask a buildable range, but the downstream dataset build
-honors `--tasks` as a hard cap. If the most recent N merged PRs in your
+honors `--tasks` as a hard cap. If the most recent N merged change requests in your
 rev-range are not buildable (e.g. the most recent merge resolved to a
 documentation-only commit outside `main~N..main`), bump `--tasks` along with
-`--rev-range` so the fetch budget reaches the buildable PRs. An eventual
+`--rev-range` so the fetch budget reaches the buildable change requests. An eventual
 release will plumb fetch and task-count separately so `--tasks 1` can fetch
-many PRs and keep one — until then, treat `--tasks` as the fetch budget too.
+many change requests and keep one — until then, treat `--tasks` as the fetch budget too.
 
 The wrapper writes:
 - `.stet/skill-loops/<name>/stet.change.yaml` with a single `skill_diff` treatment
@@ -367,10 +384,10 @@ Two things to know about that bundle:
 - The `dataset/` directory is allowed to be empty when the **dataset
   build** (post-preflight) yields zero buildable replay tasks. This is
   distinct from the preflight refusal above: the preflight samples 50
-  PRs and proves the rev-range *can* produce at least one buildable
+  change requests and proves the rev-range *can* produce at least one buildable
   task, but the dataset build then honors `--tasks` as a hard fetch cap
-  and may not reach those PRs (e.g. `--tasks 1` against a rev-range
-  whose first sampled PR is doc-only or out-of-range). When that
+  and may not reach those change requests (e.g. `--tasks 1` against a rev-range
+  whose first sampled change request is doc-only or out-of-range). When that
   happens the wrapper writes the bundle (change/search-space/suite
   manifests + `dataset/build-summary.json` with `ready: 0`) and the
   subsequent `eval rules` exits non-zero on `no ready tasks`. Read
@@ -634,6 +651,29 @@ eval:
 candidate arm fresh, applies candidate-side treatments and overlays, records
 `frozen_baseline` provenance, and skips baseline phases.
 
+The same frozen-baseline reuse can also be declared in the change manifest, which
+keeps the run reproducible from the manifest alone (no `--baseline` side-channel
+flag needed):
+
+```yaml
+change:
+  kind: rules
+  rules:
+    frozen_baseline:
+      path: .stet/baselines/my-capability.json
+    context:
+      candidate:
+        source: working_tree
+    treatments:
+      - kind: agents_md
+```
+
+`change.rules.frozen_baseline` is mutually exclusive with
+`change.rules.context.baseline`, and conflicts with `suite.eval.baseline` at
+lowering time. The CLI `--baseline` flag is still accepted for backcompat but
+must resolve to the same absolute path as the manifest declaration; mismatched
+values fail with a field-specific error.
+
 #### Baseline freshness gate (STET-375)
 
 A frozen benchmark baseline is a snapshot of grader scores against a specific
@@ -714,6 +754,9 @@ For `agents_md` and `claude_md` treatments, Stet stages file overlays outside
 injection. For `skill_diff` treatments under `.agents/skills/...` or
 `.claude/skills/...`, Stet stages the baseline/candidate content through the
 repo-managed skills filesystem envelope so the agent sees a normal skill file.
+Rules/compare launches also require the agent to load the staged `/skills/...`
+copy before task work, and report/status evidence distinguishes activated
+skill use from mounted-or-listed-only packaging evidence.
 `docs_glob` remains prompt-template context for now because filesystem staging
 would need explicit add/delete semantics when glob match sets differ by arm.
 

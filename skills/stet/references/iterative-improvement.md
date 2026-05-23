@@ -74,20 +74,33 @@ If the grader is mushy, split or calibrate the rubric first with
    recommendation/confidence/readiness/next action and `trial_context` for task
    corpus, task selection, Harness Surface, Search Space, baseline/candidate,
    supporting evidence, freshness, and machine recommendation.
-5. Inspect lower-level evidence only for diagnosis. Use weakest-risk output,
-   `decision_receipt.tasks`, or direct artifact inspection to find the current
-   bottleneck. If the output is visual, use `view_image`.
-6. State a hypothesis before changing anything: "I believe ___ is causing this
+5. Run bounded post-run learning before choosing the next edit. Prefer
+   subagents when available: one inspects representative trajectories from
+   flips, failures, no-patch cases, surprising ties, and strongest/weakest
+   graded examples; one checks evidence validity, grader coverage, sample
+   adequacy, runtime failures, and stale or mixed provenance; one synthesizes
+   one-lever candidate improvements within the current Search Space. Do not
+   inspect every trajectory by default.
+6. Inspect lower-level evidence only for diagnosis. Use weakest-risk output,
+   `decision_receipt.tasks`, `task_detail.json`, `trajectory.json`, or direct
+   artifact inspection to find the current bottleneck. If the output is visual,
+   use `view_image`.
+7. Synthesize post-run learning for the operator before editing: what happened,
+   what trajectories suggest caused it, what is candidate behavior versus
+   dataset/grader/runtime/provenance artifact, the most plausible next lever,
+   and what evidence would confirm or refute it on the next run. Do not paste
+   raw subagent notes.
+8. State a hypothesis before changing anything: "I believe ___ is causing this
    bottleneck because ___. If I change ___, I expect ___ to happen." If you
    cannot fill this in, you are guessing, not searching.
-7. Make one focused change to one allowed lever that tests the hypothesis.
-8. Re-run the eval immediately and read the new Trial Result.
-9. Read the result against the hypothesis: confirmed, refuted, or inconclusive?
+9. Make one focused change to one allowed lever that tests the hypothesis.
+10. Re-run the eval immediately and read the new Trial Result.
+11. Read the result against the hypothesis: confirmed, refuted, or inconclusive?
    Log the implication — what does this result teach you about the next
    hypothesis?
-10. Keep the current best version. Revert only if the new result is clearly
+12. Keep the current best version. Revert only if the new result is clearly
     worse in scores or artifacts.
-11. Continue until thresholds are met, evidence quality blocks the decision, or
+13. Continue until thresholds are met, evidence quality blocks the decision, or
     the eval design itself is the blocker.
 
 Never end a loop update with scores alone. The user should always know whether
@@ -167,6 +180,19 @@ Minimum fields per cycle: `hypothesis`, `test`, `result`, `implication`,
 `scores`, `decision`. Without `implication`, the chain breaks and the next
 cycle starts from scratch instead of building on what you learned.
 
+Post-run learning receipt:
+
+```text
+POST-RUN LEARNING
+
+observed    candidate improved skill_actionability but regressed specificity
+cause       trajectories show agents followed broad guidance but guessed stack flow
+artifact    inspect-only evidence: partial grader coverage and small sample
+next lever  tighten skill instructions around report/status interpretation
+confirm     rerun same task slice; expect fewer missed decision-receipt obligations
+decision    iterate with one skill-text change
+```
+
 ## Stop Condition
 
 The loop is done when ALL three criteria are met:
@@ -195,6 +221,13 @@ If any criterion fails, keep iterating or calibrate.
   `evidence_quality.directional_read.status` is `limited`, use it for one
   hypothesis-backed iteration only when the operator requested optimization;
   record the caveat and do not make rollout or superiority claims.
+- When `evidence_quality.posture` is `directional`, treat the run as expected
+  small-sample iteration signal: read the per-arm dim deltas and weakest-risk
+  artifacts to pick one lever, then widen the task slice before any
+  release-grade run. When posture is `inspect`, stop iterating until the
+  non-small-n factor (grader_coverage, grader_profile, provenance, validity,
+  compare_state, skill_activation) is resolved — directional reads from an
+  inspect-posture run are not credible iteration signal.
 - If the candidate wins a baseline-first loop, refresh the baseline reference;
   do not describe that as release promotion.
 

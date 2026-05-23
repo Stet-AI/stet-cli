@@ -53,6 +53,15 @@ Follow `evidence_refs`, the rules runtime, and any persisted
 `eval_report.v1.json` / compare report, then explain the contradiction and fail
 closed to inspect when the evidence remains degraded.
 
+After the operator-facing judgment, use post-run learning when the user is
+debugging, improving, or optimizing behavior. Prefer subagents when available:
+one can inspect representative trajectories, one can check evidence validity
+and grader/provenance gaps, and one can synthesize candidate improvements
+within the current Search Space. Subagent findings are diagnosis, not graders;
+summarize them as causes, artifacts, one recommended next lever, and the
+evidence that would confirm or refute that lever on the next run. Skip this
+extra QA for healthy active runs unless the operator asks for diagnosis.
+
 ## Core Agent Loop
 
 ```

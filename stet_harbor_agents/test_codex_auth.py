@@ -63,6 +63,7 @@ def install_fake_harbor_modules(with_exec_input=True):
                 self._reasoning_effort = kwargs.get("reasoning_effort")
                 self._should_fail_setup = False
                 self._should_fail_run = False
+                self.last_instruction = None
 
             def _build_register_mcp_servers_command(self):
                 return ""
@@ -75,6 +76,7 @@ def install_fake_harbor_modules(with_exec_input=True):
             async def run(self, instruction: str, environment, context):
                 if self._should_fail_run:
                     raise RuntimeError("boom")
+                self.last_instruction = instruction
                 return None
 
         base.ExecInput = ExecInput
@@ -169,6 +171,7 @@ class CodexAuthAgentTests(unittest.TestCase):
             "CODEX_AUTH_FILE",
             "CODEX_LB_API_KEY",
             "CODEX_LB_BASE_URL",
+            "STET_SKILL_ACTIVATION_TARGETS_JSON",
         ):
             os.environ.pop(key, None)
 
@@ -331,6 +334,47 @@ class CodexAuthAgentTests(unittest.TestCase):
             module.EnvironmentPaths.agent_dir.as_posix(),
         )
         self.assertTrue(agent.populated_context)
+
+    def test_create_run_agent_commands_prepends_skill_activation_instruction(self):
+        os.environ["STET_SKILL_ACTIVATION_TARGETS_JSON"] = json.dumps([
+            {
+                "path": "/skills/capability-dogfood/SKILL.md",
+                "relative_path": "capability-dogfood/SKILL.md",
+                "sha256": "abc123",
+            }
+        ])
+        agent = self.module.CodexAuthAgent(
+            model_name="openai/gpt-5.4",
+            auth_path=str(self.auth_file),
+        )
+
+        commands = agent.create_run_agent_commands("fix the task")
+
+        run_command = commands[1]
+        self.assertIn("/skills/capability-dogfood/SKILL.md", run_command.command)
+        self.assertIn("abc123", run_command.command)
+        self.assertIn("Before doing any repository inspection or task work", run_command.command)
+
+    def test_run_with_exec_input_prepends_skill_activation_instruction(self):
+        os.environ["STET_SKILL_ACTIVATION_TARGETS_JSON"] = json.dumps([
+            {
+                "path": "/skills/capability-dogfood/SKILL.md",
+                "relative_path": "capability-dogfood/SKILL.md",
+                "sha256": "abc123",
+            }
+        ])
+        agent = self.module.CodexAuthAgent(
+            model_name="openai/gpt-5.4",
+            auth_path=str(self.auth_file),
+        )
+        environment = sys.modules["harbor.environments.base"].BaseEnvironment()
+        context = sys.modules["harbor.models.agent.context"].AgentContext()
+
+        asyncio.run(agent.run("fix it", environment, context))
+
+        self.assertIn("/skills/capability-dogfood/SKILL.md", agent.last_instruction)
+        self.assertIn("fix it", agent.last_instruction)
+        self.assertNotEqual(agent.last_instruction, "fix it")
 
 
 if __name__ == "__main__":

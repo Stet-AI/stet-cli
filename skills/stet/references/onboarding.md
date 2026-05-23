@@ -29,7 +29,8 @@ For most repos, the quick path is enough:
 
 ```bash
 # 1. Resolve test setup from CI evidence
-#    Read .github/workflows/*.yml, Makefile, package.json scripts, README.
+#    Read GitHub Actions, GitLab CI, or equivalent repo CI config, then
+#    Makefile, package.json scripts, README.
 #    Pick the real repo-level test command. CI is ground truth, not README.
 
 # 2. Author the Harbor environment
@@ -59,6 +60,9 @@ stet init --repo . --yes --test "<repo test cmd>"
 
 # 6. Mine candidate pool
 stet suite discover --repo . --rev-range main~50..main
+#    GitHub PR source uses `gh`; GitLab MR source uses `glab`.
+#    For ambiguous enterprise hosts, add `--change-provider github|gitlab`;
+#    use `--source commits` when provider auth/tooling is unavailable.
 
 # 7. Build dataset
 stet suite build --repo . --manifest .stet/discover-manifest.yaml

@@ -6,6 +6,67 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.5.0-rc.1] - 2026-05-23
+
+Expands Stet's operator surface for customer trials and multi-provider change requests. This release candidate adds GitLab change-request support, auto-update plumbing for installed CLIs, replay-valid suite selection, declarative frozen-baseline reuse in change manifests, and tighter report/plan diagnostics so eval outcomes fail closed instead of drifting into ambiguous states.
+
+### Added
+- Add GitLab change-request providers and thread provider identity through dataset and discovery flows ([9de6d051], [8c0f1fac], [a80b63c0])
+- Add CLI auto-update support for installed Stet binaries, including runtime identity and dist-update routing ([380fd72c])
+- Generate `ai_task` for rev-range and base-head build modes so generated task corpora carry executable task prose ([36e5b5f5])
+- Add replay-valid suite selection for rules evals so operators can select tasks whose replay evidence is trustworthy ([8bb784d0])
+- Add declarative frozen-baseline reuse in change manifests for rules evals ([e9ab7984])
+- Add posture-aware h2h evidence framing for capability-release reads (STET-397) ([73ce7573])
+- Add leaderboard AI crawl and private-eval FAQ schema surfaces for search and answer-engine ingestion ([e3fd6c91], [8a3055e1])
+
+### Changed
+- Publish beta/customer Stet guide updates and tighten shipped Stet agent guidance for report interpretation and post-run learning capture ([721ebd3f], [50fa0884], [95325017])
+- Clarify independent grader-model cost controls, completed compare adequacy caching, disk cleanup boundaries, and GitLab support closeout docs ([4aa8485d], [b6e280b6], [2ab39e06], [c084fa79])
+
+### Fixed
+- Detect repaired compare evidence in manifest-backed status and report flows ([6a0bd5a5])
+- Add mixed grader-profile diagnostics so compare/report output exposes profile disagreements instead of hiding them in aggregate state ([26cde721])
+- Preserve smoke-reuse behavior telemetry and staged-skill activation during `skill_diff` evals ([4c600bd3], [6040da19])
+- Tune validation patch guardrails without weakening release-gate semantics ([7ef15ca3])
+- Stabilize custom grader metric ordering and preserve custom graders when refreshing regrade decisions ([a44f7883], [f354b569])
+- Retry transient replay-validity failures so temporary verifier noise does not become durable eval state ([c879f140])
+- Block GitLab merge-request human-patch access in Harbor candidate runs ([cc6e81d8])
+- Preserve rules compare report binding and surface Harbor validator disagreement provenance ([b2e3e382], [3a1ec6ca])
+- Fail closed when `stet eval rules plan` sees unresolved baseline context ([1d382037])
+- Reconcile terminal compare state after finalized eval runs ([5b563f26])
+
+[v0.5.0-rc.1]: https://github.com/benredmond/stet/releases/tag/v0.5.0-rc.1
+[721ebd3f]: https://github.com/benredmond/stet/commit/721ebd3fedc7fc1f8819a5d865f9cd1863c25eac
+[e3fd6c91]: https://github.com/benredmond/stet/commit/e3fd6c91356cd8c939229716a73b612cca37f31c
+[50fa0884]: https://github.com/benredmond/stet/commit/50fa088468c299ede31fd4b73c6dd851ca870d16
+[8a3055e1]: https://github.com/benredmond/stet/commit/8a3055e18bc6a48c7f767146ee8e7b004d24740d
+[6a0bd5a5]: https://github.com/benredmond/stet/commit/6a0bd5a5b376c6fcfa0b4f2bcd362d01c22831e6
+[26cde721]: https://github.com/benredmond/stet/commit/26cde721a83889d7e2ffab3643f73d35879268f8
+[36e5b5f5]: https://github.com/benredmond/stet/commit/36e5b5f5ea8ad146728abdb0dd7c37cc40da6adb
+[4c600bd3]: https://github.com/benredmond/stet/commit/4c600bd350f064683a6c81480c6508c69c604740
+[6040da19]: https://github.com/benredmond/stet/commit/6040da19bc01f8e6e8f53bf578f7fb7911ca8665
+[b6e280b6]: https://github.com/benredmond/stet/commit/b6e280b65e980663576cdc59e53c60a38260a487
+[7ef15ca3]: https://github.com/benredmond/stet/commit/7ef15ca385679538fd17d2a05cf3d540499884a1
+[a44f7883]: https://github.com/benredmond/stet/commit/a44f7883609768e7a1adda5ce24841b98daaeef5
+[73ce7573]: https://github.com/benredmond/stet/commit/73ce7573e6921f35fa94031f8a33731c74a02374
+[f354b569]: https://github.com/benredmond/stet/commit/f354b569b64a8b35dee0eab147fa61bca417f1da
+[95325017]: https://github.com/benredmond/stet/commit/953250171ee3b8213db32330fa5e4dfdfc26b02d
+[4aa8485d]: https://github.com/benredmond/stet/commit/4aa8485dcb13a22ab4aeb15c8731075e3a93380a
+[8c0f1fac]: https://github.com/benredmond/stet/commit/8c0f1facfa933868b2e1463c637398c661627cd6
+[380fd72c]: https://github.com/benredmond/stet/commit/380fd72cdec2e545fb1a18bedae6c66d14aafd0e
+[9de6d051]: https://github.com/benredmond/stet/commit/9de6d0518879ec1ebf02f6e6f1a6873c6226c5ad
+[c879f140]: https://github.com/benredmond/stet/commit/c879f140c36bdb3f3d6ea3c0c8aa58a8d3a52738
+[a80b63c0]: https://github.com/benredmond/stet/commit/a80b63c0107b2b21dffa30ea63fb3899280a9eff
+[cc6e81d8]: https://github.com/benredmond/stet/commit/cc6e81d8bf4fc128515df03848123fd6d07eeb4b
+[8bb784d0]: https://github.com/benredmond/stet/commit/8bb784d01eaa5597d8829e44389c555332a3f81a
+[b2e3e382]: https://github.com/benredmond/stet/commit/b2e3e3826a34bb29786f32d6a5d42be95aa87aef
+[3a1ec6ca]: https://github.com/benredmond/stet/commit/3a1ec6caf262c4a75c44a7368e4f9eef8673a00a
+[c084fa79]: https://github.com/benredmond/stet/commit/c084fa7963a62caf41b874b85cb300cc9ba0fba0
+[2ab39e06]: https://github.com/benredmond/stet/commit/2ab39e0642c90eb2ff10143c2e5b2e5d140523dc
+[1d382037]: https://github.com/benredmond/stet/commit/1d38203704575b462dd0661781a3fe379a00b703
+[e9ab7984]: https://github.com/benredmond/stet/commit/e9ab79847aa457b1ea13347201f1e2a9d07f1d73
+[5b563f26]: https://github.com/benredmond/stet/commit/5b563f26c225bff818c05dbb9417835575607e5c
+
 ## [v0.4.3] - 2026-05-19
 
 Hardens Harbor eval isolation for candidate agents. Exported Harbor datasets no longer keep candidate-visible gold patches in fresh or cached task bundles, and the human-patch guard now blocks GitHub pull refs passed through direct git commands, config environment, and included config files.

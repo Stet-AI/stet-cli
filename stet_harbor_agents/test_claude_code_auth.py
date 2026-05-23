@@ -61,6 +61,7 @@ def install_fake_harbor_modules(with_exec_input=True):
                 self._init_kwargs = dict(kwargs)
                 self._extra_env = kwargs.get("extra_env", {})
                 self._should_fail_run = False
+                self.last_instruction = None
 
             def _setup_env(self):
                 return {}
@@ -74,6 +75,7 @@ def install_fake_harbor_modules(with_exec_input=True):
             async def run(self, instruction: str, environment, context):
                 if self._should_fail_run:
                     raise RuntimeError("boom")
+                self.last_instruction = instruction
                 return None
 
         base.ExecInput = ExecInput
@@ -156,6 +158,7 @@ class ClaudeCodeAuthAgentTests(unittest.TestCase):
             "CLAUDE_CODE_OAUTH_TOKEN",
             "ANTHROPIC_API_KEY",
             "ANTHROPIC_AUTH_TOKEN",
+            "STET_SKILL_ACTIVATION_TARGETS_JSON",
         ):
             os.environ.pop(key, None)
 
@@ -230,6 +233,40 @@ class ClaudeCodeAuthAgentTests(unittest.TestCase):
         self.assertEqual(commands[0].env["STET_TARGET_PR_NUMBER"], "1268")
         self.assertIn("stet-human-patch-guard.py", commands[0].command)
         self.assertIn("STET_TARGET_PR_NUMBER=1268", commands[0].command)
+
+    def test_create_run_agent_commands_prepends_skill_activation_instruction(self):
+        os.environ["STET_SKILL_ACTIVATION_TARGETS_JSON"] = json.dumps([
+            {
+                "path": "/skills/capability-dogfood/SKILL.md",
+                "relative_path": "capability-dogfood/SKILL.md",
+                "sha256": "abc123",
+            }
+        ])
+        agent = self.module.ClaudeCodeAuthAgent()
+
+        commands = agent.create_run_agent_commands("fix the task")
+
+        self.assertIn("/skills/capability-dogfood/SKILL.md", commands[0].command)
+        self.assertIn("abc123", commands[0].command)
+        self.assertIn("Before doing any repository inspection or task work", commands[0].command)
+
+    def test_run_prepends_skill_activation_instruction(self):
+        os.environ["STET_SKILL_ACTIVATION_TARGETS_JSON"] = json.dumps([
+            {
+                "path": "/skills/capability-dogfood/SKILL.md",
+                "relative_path": "capability-dogfood/SKILL.md",
+                "sha256": "abc123",
+            }
+        ])
+        agent = self.module.ClaudeCodeAuthAgent()
+        environment = sys.modules["harbor.environments.base"].BaseEnvironment()
+        context = sys.modules["harbor.models.agent.context"].AgentContext()
+
+        asyncio.run(agent.run("fix it", environment, context))
+
+        self.assertIn("/skills/capability-dogfood/SKILL.md", agent.last_instruction)
+        self.assertIn("fix it", agent.last_instruction)
+        self.assertNotEqual(agent.last_instruction, "fix it")
 
     def test_snapshot_command_uses_app_dot_copy(self):
         agent = self.module.ClaudeCodeAuthAgent()

@@ -15,6 +15,7 @@ from stet_harbor_agents.compat import ExecInput, HARBOR_HAS_EXEC_INPUT
 from stet_harbor_agents.human_patch_guard import guard_env, guard_setup_command
 from stet_harbor_agents.install_cache import setup_with_cli_cache
 from stet_harbor_agents.patch_capture import AgentPatchCaptureMixin
+from stet_harbor_agents.skill_activation import with_skill_activation_preamble
 
 
 class CodexAuthAgent(AgentPatchCaptureMixin, Codex):
@@ -88,6 +89,7 @@ class CodexAuthAgent(AgentPatchCaptureMixin, Codex):
         environment: BaseEnvironment,
         context: AgentContext,
     ) -> None:
+        instruction = with_skill_activation_preamble(instruction)
         if HARBOR_HAS_EXEC_INPUT:
             try:
                 await super().run(
@@ -126,6 +128,7 @@ class CodexAuthAgent(AgentPatchCaptureMixin, Codex):
             await self.capture_agent_patch(environment)
 
     def create_run_agent_commands(self, instruction: str) -> list[ExecInput]:
+        instruction = with_skill_activation_preamble(instruction)
         escaped_instruction = shlex.quote(instruction)
 
         if not self.model_name:
