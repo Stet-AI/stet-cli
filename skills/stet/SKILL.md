@@ -140,6 +140,9 @@ Rules for the optimizer:
   evidence is not gold-valid yet. Treat it as a dataset/slice validity problem,
   not model-quality evidence or proof that current-checkout tests are broken;
   diagnose why the verifier failed before choosing a bounded next action.
+- Rules plan/launch now emit `replay_validity` progress; launch may reuse a
+  recent matching plan receipt, and status/receipts expose charged/reused/final
+  task counts when smoke preflight evidence is reused.
 - Before rules launches from a built dataset, use
   `stet suite select --suite-manifest <stet.suite.yaml> --target-valid N` when
   the operator needs N launchable tasks. It oversamples historical candidates,
@@ -174,13 +177,14 @@ Rules for the optimizer:
   non-interactive init or the first smoke/probe/eval: recommended, standard, or
   custom. See [onboarding](references/onboarding.md).
 - When the suite manifest does not carry an `eval:` stanza (fixture suites,
-  read-only / shared repos, ad-hoc replays), pass `--grader-ai-cmd "<cmd>"
-  --grader-ai-model-id <id>` on `stet eval rules plan` / `launch` / `skill`
-  to supply the independent evaluator for LLM-backed graders (`equivalence`,
-  `code_review`, craft/discipline). Both flags must be set together. Note
-  that `--no-quality` only drops the auto-bundled craft/discipline graders;
-  the default `equivalence` and `code_review` graders remain LLM-backed and
-  still require an evaluator.
+  read-only / shared repos, ad-hoc replays), pass `--grader-ai-model-id <id>`
+  on `stet eval rules plan` / `launch` / `skill` to supply the independent
+  evaluator for LLM-backed graders (`equivalence`, `code_review`,
+  craft/discipline). Stet defaults to provider-native schema output through
+  the matching local CLI; add `--grader-ai-cmd` only when forcing the legacy
+  shell-text evaluator. Note that `--no-quality` only drops the auto-bundled
+  craft/discipline graders; the default `equivalence` and `code_review`
+  graders remain LLM-backed and still require an evaluator.
 - For compare-backed diagnosis, prefer `decision_receipt.tasks[*]` issue
   summaries, risks, grader coverage, and task flips before opening per-task
   artifacts by hand.
@@ -198,8 +202,8 @@ Rules for the optimizer:
 - For installed MVP binaries, use the private CLI repo update flow:
   `stet --version`, `stet update`, or `stet update --version <tag>`. Pilot
   users need access to `benredmond/stet-cli`.
-  `stet update` refreshes the binary and local Harbor support agents. Stet
-  performs a cached stale-version check during normal CLI use and may
+  `stet update` refreshes the binary. Stet performs a cached stale-version
+  check during normal CLI use and may
   auto-update before safe fresh launches; it warns instead of mutating the
   toolchain for report/status/repair/resume/promote/rollback style commands.
   Use command-local `--no-auto-update` or `STET_AUTO_UPDATE=0` for pinned CI,
@@ -207,6 +211,14 @@ Rules for the optimizer:
 - Harbor-installed Codex/Claude support agents are baked into
   `.stet/harbor.Dockerfile` (`ARG BAKE_CLAUDE_CODE` / `ARG BAKE_CODEX`, both
   default on; both fetch the latest published version on each fresh build).
+  Cursor-backed Stet Harbor exports bake Cursor Agent into the task image so
+  solve/verifier phases do not install it at runtime; direct Dockerfile use can
+  still opt in with `ARG BAKE_CURSOR=1`. Model-backed Harbor solve phases may
+  need provider API access. Cursor-backed candidate runs inject temporary CLI
+  policy and hooks as a best-effort tool deterrent, then fail closed in
+  reports when agent logs show WebFetch/WebSearch or shell network-command
+  contamination; keep dependency setup baked and verifier installs out of
+  runtime instead of relying on live fetches.
   `/logs/agent/harness_cli_cache.json` reports `status: skipped_image_baked`
   with `baked_binary_path` and `baked_binary_version` — that is the healthy
   default. The host `--harness-cli-cache auto` cache only kicks in for
@@ -215,13 +227,24 @@ Rules for the optimizer:
   apply unless overridden by `STET_HARNESS_CLI_CACHE_TTL_SEC`. Inspect
   `runner_runtime.v1.json` plus `harness_cli_cache.json` before treating
   setup time as model signal.
+- For Cursor model-under-test runs, use `agent.name: cursor` and
+  `Composer 2.5` / `composer-2.5`; do not use `composer-2.5-fast` unless the
+  fast tier is explicitly the treatment. Keep independent graders on
+  `--grader-ai-model-id` so Stet can use provider-native schema output. Stet
+  reuses local Cursor OAuth from `agent login` by exporting a narrow Harbor
+  auth blob; `CURSOR_API_KEY` remains supported but is not required. Pricing is
+  in the manifest: Composer 2.5 is $0.50 input, $0.20 cache read, and $2.50
+  output per 1M tokens; Fast is $3/$0.50/$15.
+- For Claude model-update or model-under-test selectors, `model:opus 4.8`
+  resolves to canonical `claude-opus-4-8`; pricing comes from Stet's bundled
+  pricing metadata and appears in rules/eval cost surfaces.
 - To run Codex model-under-test traffic through codex-lb, start codex-lb on a
   host address reachable from Harbor containers, export `CODEX_LB_API_KEY`,
   and optionally export `CODEX_LB_BASE_URL` (defaults to
   `http://host.docker.internal:2455/backend-api/codex` for Harbor). The Codex
   Harbor support agent automatically injects the transient Codex provider
-  config; keep independent graders on `--grader-ai-cmd` so codex-lb does not
-  judge itself.
+  config; keep independent graders on a separate `--grader-ai-model-id` so
+  codex-lb does not judge itself.
 - For the shipped Stet agent skill, use the same private CLI repo:
   `npx skills add https://github.com/benredmond/stet-cli.git --skill stet --all`.
   Refresh it separately with `npx skills update stet -y`; `stet update`
@@ -238,8 +261,9 @@ Multi-turn state:
 
 Human receipts:
   Terminal receipts are compact human-facing projections of the machine
-  contract. Use them to answer the operator and offer keyed actions, but do not
-  treat them as the primary agent API. See
+  contract. Use them to answer the operator and recommend one concrete next
+  step, but do not invent synthetic keypress actions or treat receipt text as
+  the primary agent API. See
   [operator-contract](references/operator-contract.md).
 
 Result interpretation:
@@ -258,6 +282,10 @@ Result interpretation:
   next. For completed or inspect-state runs, read or materialize the Trial
   Result, then read `decision_receipt`, `trial_context`, `quality`, `validity`,
   `evidence_quality`, `lifecycle`, and `arms` before summarizing.
+  Treat process or trace-efficiency claims as blocked unless behavior telemetry
+  coverage is admissible: check `behavior.arm.claim_posture` for run reports or
+  `behavior.compare.claim_posture` / `decision_receipt.compare.behavior_coverage`
+  for compare reports.
 
   If status and persisted evidence disagree, do not stop at the first payload.
   Follow `evidence_refs`, the rules runtime, and any persisted
@@ -276,18 +304,37 @@ Post-run learning:
   regressions, no-patch cases, grader gaps, surprising ties, or runtime
   artifacts.
 
-  For optimization loops, split subagent work into narrow questions: trajectory
-  QA over representative flips/failures/no-patch/strongest and weakest graded
-  examples; evidence QA over validity, grader coverage, sample adequacy,
-  runtime failures, stale or mixed provenance; and improvement synthesis over
-  the current Search Space. Synthesize the findings for the operator instead of
-  pasting raw subagent notes.
+  For optimization loops, split subagent work into narrow questions before
+  mutating anything: trajectory QA over representative weakest-dimension
+  tasks, flips, failures, no-patch cases, surprising ties, and strongest/weakest
+  graded examples; evidence QA over validity, grader coverage, sample adequacy,
+  runtime failures, stale or mixed provenance; and synthesis over exactly one
+  in-scope mutation to the current Search Space lever. Synthesize the findings
+  for the operator instead of pasting raw subagent notes.
 
   The learning summary must separate candidate behavior from dataset, grader,
   runtime, or provenance artifacts; identify the most plausible one-lever next
   change; and state what evidence on the next run would confirm or refute it.
-  Do not inspect every trajectory by default, and do not let post-run QA mutate
-  files unless the operator has approved an edit.
+  For GEPA-style reflective mutation, the synthesis subagent should return a
+  single `proposed_edit` block grounded in 1-3 trajectory references:
+
+  ```json
+  {
+    "path": "AGENTS.md",
+    "diff_or_rewrite": "diff --git ...",
+    "trajectory_refs": ["task-a trajectory.json", "task-b decision_receipt.tasks"],
+    "rationale": "Weakest traces show agents missed the report-read obligation before acting."
+  }
+  ```
+
+  Apply only that one focused mutation with normal editing tools, rerun the same
+  iteration lane immediately, and judge the next Trial Result against the stated
+  hypothesis. This applies to any allowed Search Space lever: skill text,
+  `AGENTS.md`, grader wording, cost instructions, harness settings, or similar
+  bounded surfaces. If no machine loop ledger exists, record the same block in
+  the durable loop log near the output root. Proposed edits are unreviewed
+  mutation candidates; commit, merge, promotion, and public claims still require
+  human review and decision-grade holdout evidence.
 
 HTML report:
   Every persisted `eval_report.v1.json` has a sibling `eval_report.v1.html` -
@@ -313,6 +360,7 @@ models, setting up a repo, improving a skill, or checking a release?"
 | "Compare baseline vs candidate" | `stet eval compare` | [compare-and-checkin](references/compare-and-checkin.md) |
 | "What is this run doing?" | `stet eval status` | [compare-and-checkin](references/compare-and-checkin.md) |
 | "Repair missing additive grader coverage on a finished run" | `stet runs repair-ai-coverage` or `stet runs regrade-graders` | [compare-and-checkin](references/compare-and-checkin.md) |
+| "A task failed the verifier for env reasons, not the patch" | `stet eval agent --retest-tests` (existing patch, corrected `--test`) then `stet runs repair-tests` -> `stet eval report` | [compare-and-checkin](references/compare-and-checkin.md) |
 | "Why is this root taking so much disk?" / "Can I reclaim raw artifacts?" | `stet artifacts status --root <root>` then `stet artifacts compact --root <root>` if not pinned | [compare-and-checkin](references/compare-and-checkin.md) |
 | "Repair or resume an incomplete rules compare" | `stet eval rules repair` (`resume` remains accepted) | [rules-flow](references/rules-flow.md) |
 | "Set up evals for this repo" | author `.stet/harbor.Dockerfile` + `.stet/stet.harness.yaml`, then `stet init` and `stet suite discover` | [onboarding](references/onboarding.md) |
@@ -337,6 +385,7 @@ models, setting up a repo, improving a skill, or checking a release?"
 | Artifact retention | Inspect or reclaim raw rescue artifacts | `stet artifacts status --root <root>` -> `stet artifacts compact --root <root>`; use `pin` / `unpin` for operator-retained roots |
 | Pairwise compare | Baseline vs candidate | `stet eval compare` -> `stet eval report` |
 | Baseline-first | Freeze reusable evidence, then compare candidates without rerunning the baseline arm | `stet baseline freeze` -> `stet eval compare --baseline` |
+| Matched A/A/B optimization | Incumbent A/A noise vs candidate B movement over existing Trial Results | `stet eval workbench aa-b --manifest <aa-b.yaml> --out <dir> --plan` |
 | New skill A/B | Check whether adding a skill changes agent behavior | baseline absent/effectively empty skill -> choose test posture -> custom behavior graders -> `stet eval rules` |
 | Rules skill loop | Replay-backed shared skill improvement on the canonical rules surface | `stet eval rules skill --plan` -> `stet eval rules skill` -> optional `stet eval rules checkpoint` -> finalist `stet eval rules holdout` -> `stet eval report`. Both plan and launch require `--skill`, `--repo`, `--model`, `--goal`, and `--out`; normal cycles remain iteration-only. |
 | Repo onboarding | New repo, no dataset yet | author harness Dockerfile -> `stet init` -> `stet suite discover` -> `stet suite build` |
@@ -427,13 +476,13 @@ models, setting up a repo, improving a skill, or checking a release?"
 - Treat `waiting_on_quota` as an intentional automatic pause. Do not delete
   artifacts or relaunch successful task evidence; wait for `retry_after`, or
   use the flow's resume command only if the active process has exited.
-- Treat auth, license, Claude `/login`, and Harbor setup-skew failures such as
-  missing `stet_harbor_agents.*` modules as infrastructure risk before
-  interpreting candidate quality. For Claude Code auth, prefer the Stet-private
+- Treat auth, license, Claude `/login`, and Harbor setup failures as
+  infrastructure risk before interpreting candidate quality. For Claude Code
+  auth, prefer the Stet-private
   `~/.config/stet/claude-oauth-token` file with `0600` permissions; avoid
   global shell exports and repo-local env files. Run `stet update` from
   prerelease builds, or use `stet update --prerelease` /
-  `stet update --version <tag>` to refresh the Harbor support files explicitly.
+  `stet update --version <tag>` to refresh the Stet binary explicitly.
   See [onboarding](references/onboarding.md) and
   [operator-contract](references/operator-contract.md) for exact recovery.
 - Preserve the release/baseline distinction. Release promotion changes rollout
@@ -505,7 +554,7 @@ Decision shortcuts:
 Only load the reference doc that matches the current routing decision:
 
 - [references/operator-contract.md](references/operator-contract.md)
-  Receipt format, keyed actions, reporting rules, error handling.
+  Receipt format, next-step recommendations, reporting rules, error handling.
 - [references/quick-probe.md](references/quick-probe.md)
   Probe, file-mode config checks, config-diff, quick smoke.
 - [references/full-evals.md](references/full-evals.md)

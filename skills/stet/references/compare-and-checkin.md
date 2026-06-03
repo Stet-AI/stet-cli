@@ -1,14 +1,14 @@
 # Compare And Check-In
 
 Inherits [operator-contract](operator-contract.md) for receipt format and
-shared keyed actions.
+next-step recommendations.
 
 ```
 compare ──► report ──► complete?
-                       ├─ yes, winner (release context) ──► [g] gate  [i] inspect  [s] stop
-                       ├─ yes, winner (baseline-first context) ──► [b] promote-baseline  [i] inspect  [s] stop
-                       ├─ yes, mixed ──► [i] inspect  [r] rerun  [s] stop
-                       └─ incomplete ──► [p] repair  [r] rerun  [s] stop
+                       ├─ yes, winner (release context) ──► gate / inspect / stop
+                       ├─ yes, winner (baseline-first context) ──► promote baseline / inspect / stop
+                       ├─ yes, mixed ──► inspect / rerun / stop
+                       └─ incomplete ──► repair / rerun / stop
 ```
 
 Use this for pairwise compare, active run status, inspect handoff, and recovery
@@ -50,7 +50,10 @@ stet eval compare \
 Compare-only staging hardlinks immutable `runs/**` artifacts and copies mutable
 metadata such as `reports/` and `validation/`. Put `--out` on the same
 filesystem as reused roots; if hardlinks fail, compare fails instead of copying
-large agent artifacts such as `agent.patch`.
+large agent artifacts such as `agent.patch`. Staging excludes agent runtime
+scratch (`agent/.tmp` and `agent/plugins` caches, reported as `compare:
+excluded N agent scratch path(s) ...`) and, on failure, removes its partial arm
+so you can retry the same `--out` without deleting `arms/` by hand.
 
 Harbor patch capture should honor the task repo's `.gitignore` before Stet's
 cache/build denylist runs. If ignored environment artifacts appear in
@@ -82,7 +85,8 @@ types (promote, hold, inspect), not just inspect.
 `delta_ci`, `win_loss_tie`, `bootstrap`) for `tests_pass_rate`,
 `leaderboard_eligible_pass_rate`, the derived `clean_pass_rate` (tests ∧
 equivalence ∧ code review), equivalence/code-review/footprint grader metrics,
-code-review rubric means, and custom grader metrics when paired values exist.
+code-review rubric means, continuous encodings of the binary equivalence and
+code-review graders, and custom grader metrics when paired values exist.
 Tune with `--bootstrap-iterations N` (default 10000), `--bootstrap-seed N`
 (default 1), `--ci-level F` (default 0.95); pass `--no-bootstrap` to skip the
 pass. CIs are percentile-method, repo-stratified by per-task
@@ -90,6 +94,56 @@ pass. CIs are percentile-method, repo-stratified by per-task
 then the selection `dataset_key` fallback. The receipt prints an
 `Uncertainty:` block with baseline/candidate/Δ ranges and direction-aware W/L/T
 counts; older reports without these fields keep loading unchanged.
+
+Alongside each `uncertainty` block, the same pass attaches an additive
+`aggregate.<metric>.reduced_estimators` block computed on the same paired
+deltas: `log_ratio` (geometric-mean candidate/baseline ratio + back-transformed
+CI) for multiplicative metrics, `cuped` (covariate-adjusted delta with `theta`
+and `covariate_source` — gold-patch size from `task_detail.json`, falling back
+with a reason when absent), `wilcoxon` (signed-rank p + method), `robust_means`
+(trimmed/Winsorized), and `mcnemar` (exact two-sided) for paired-binary metrics.
+Token/cost/duration get their own `aggregate.multiplicative_metrics.<name>`
+entries whose headline is the geometric ratio (never a raw mean of arms). All
+blocks are optional; reports without them load unchanged.
+
+Compare reports also emit diagnostic `aggregate.cost_attribution` and
+`behavior.cost_attribution` blocks. They include stable per-task driver keys,
+paired driver deltas when behavior traces are available, unavailable-driver
+reasons when traces or driver fields are missing, and top token-movement
+contributors. This is attribution only: overlapping driver counts must not be
+summed, and the block does not change
+`decision_receipt.cost_evidence.evidence_class`.
+
+The same pass also attaches a `calibration` tier label to each populated metric
+entry, including fixed aggregate metrics, nested `multiplicative_metrics`, custom
+graders, and binary-grader continuous encodings. Each label records paired delta
+`median`/`p75`/`p90`, a `minimum detectable effect` (`mde`/`mde_unit`), the
+small-n-appropriate interval (`delta_ci` + `ci_method` — a Beta-Binomial
+credible interval for pass-rate metrics below the small-n threshold, the
+log-ratio or percentile bootstrap otherwise), the backing estimator + `p_value`,
+and a `tier` of `decision-grade` / `directional` / `noise-band`. The tier is
+driven by graded/continuous metrics (Wilcoxon); binary metrics (tests /
+equivalence / code-review pass) carry `low_power_binary` and are read as the
+weakest layer at small n. `small_n: true` (default threshold 200, Bowyer 2025)
+means the CI is not well-calibrated — do not read it as tight. A metric pinned
+near-ceiling for both arms is flagged `saturated` and demoted to `noise-band`
+unless its estimator is itself significant. The compare-level roll-up is
+`aggregate.calibration`: it lists `decision_grade_metrics` /
+`directional_metrics` / `noise_band_metrics`, and fails closed with a `reason`
+and `next_action` when no metric had a paired subset. Treat a delta as
+optimization signal only when its metric labels `decision-grade` (or consistently
+`directional` across runs); never iterate on a `noise-band` movement.
+The same information is projected by default into `statistics` in
+`experiment.json`, `eval_report.v1.json`, and the sibling HTML report so readers
+do not need to reconstruct the panel from raw aggregate fields.
+
+When `delta_ci` is available, promotion is noise-aware: a candidate
+point-estimate win only counts as promotion-strength when the favorable delta is
+greater than `promote_noise_floor * (delta_ci.hi - delta_ci.lo)`. The default is
+`0.5`; set it with suite `eval.promote_noise_floor` or direct
+`--promote-noise-floor`. Missing CI keeps the legacy point-estimate behavior,
+while CI-backed wins below the floor produce inspect/inconclusive rather than
+promote.
 
 Compare task selection is canonical and sorted, while harness dispatch is
 shuffled by default with a generated seed recorded in arm manifests. For
@@ -114,10 +168,9 @@ driver      candidate wins on equivalence without introducing review regressions
 evidence    .tmp/stet-compare
 why         Gate is next because the candidate has a bounded win and this is
             where compare evidence becomes a release decision surface.
-
-next        > [g] gate      materialize trust and rollout state
-then        [i] inspect     review mixed or surprising task evidence first
-then        [s] stop        keep the pairwise verdict without lifecycle change
+recommend   gate release state
+command     stet eval workbench gate --from <compare-root>
+other       inspect mixed or surprising task evidence first; stop without lifecycle change
 ```
 
 When the compare is against a frozen baseline and the operator is running a
@@ -137,9 +190,9 @@ delta       tests +50pp  equiv +50pp  review +0pp  footprint -0.01
 driver      candidate beats the frozen baseline on the resolved comparison
             metrics and this workflow is baseline-first, not release-gated.
 
-next        > [b] promote-baseline   freeze this candidate as the new current baseline
-then        [i] inspect              review remaining quality misses before another loop
-then        [s] stop                 keep the compare verdict without updating the baseline
+recommend   freeze candidate as current baseline
+command     stet baseline freeze --from <winning-candidate-root> --name <baseline-id> --json
+other       inspect remaining quality misses before another loop; stop without updating baseline
 ```
 
 When this is the first completed model, reasoning, or harness-setting compare
@@ -160,9 +213,9 @@ delta       tests +0pp  equiv +0.69  review +0.69  cost lower
 driver      candidate leads across every requested quality dimension, but the
             sample is below the decision-grade threshold.
 
-next        > [b] baseline   freeze 4.7 as the repo's current Opus baseline
-then        [r] rerun        scale to the full slice for promote-grade evidence
-then        [s] stop         keep the directional verdict without baseline state
+recommend   freeze 4.7 as directional baseline
+command     stet baseline freeze --from <winning-candidate-root> --name <baseline-id> --json
+other       rerun at full slice for promote-grade evidence; stop without baseline state
 ```
 
 When the failure taxonomy shows `no_patch` or `infra` counts, surface them in the
@@ -173,6 +226,16 @@ outcomes, while `setup_failed_before_agent`, `agent_never_ran`, and
 `verifier_failed_before_patch_application` are invalidating infra blockers. The
 operator needs to know whether the delta is model/task signal or an artifact of
 broken setup or verification.
+
+Do not read `behavior_metrics.patch_calls: 0` (or `distinct_patched_files: 0`) as
+patchless — those count formal patch-tool calls the trajectory parser observed,
+not whether a diff exists. The canonical patch-presence signal is the
+`behavior_metrics.patch_artifact` block (`present` / `size_bytes`), resolved from
+the on-disk `agent.patch` and followed through stitched/retry runs to the
+aggregate path. A task can show zero patch calls beside a present, nonzero patch
+artifact. A Go `invalid toolchain … is a language version but not a toolchain
+version` verifier failure is classified as `infra_toolchain`, not an ordinary
+model failure.
 
 The report text now includes for all recommendation types:
 - A comparison table with baseline/candidate/delta columns
@@ -198,11 +261,35 @@ Machine-readable default:
 - Use `decision_receipt.metrics`, `decision_receipt.tasks`, and
   `decision_receipt.compare` instead of reconstructing the answer from
   `experiment.json`, arm summaries, and per-task validation files.
+- Treat cost deltas as decision-grade only when the cost metric row has
+  `comparability.comparable: true`. If `cost_per_task` or `total_cost` says
+  `delta_display: "incomparable"`, cite the raw costs only as audit data and
+  do not count them as a candidate advantage.
+- For cost comparability, read `comparability.reasons` and the baseline /
+  candidate provenance maps. `cache_artifact_missing`,
+  `smoke_reuse_cache_provenance_missing`, `legacy_pricing_used`,
+  `pricing_mode_mixed`, and `pricing_provenance_mismatch` are distinct
+  causes; the raw cost fields remain audit data when any of them blocks the
+  delta.
+- `decision_receipt.cost_evidence` rolls the per-metric cost/token verdicts
+  into one class: `decision_grade` (back a cost claim), `directional` (read the
+  delta as direction only — data present but provenance not comparable), or
+  `incomplete` (token coverage missing — cost is diagnostic only). It fails
+  closed to `directional`, lists the blocking `reasons`, and per arm separates
+  `raw_total_agent_tokens` from `billable_cost_usd` and `uncached_input_tokens`
+  and carries `cache_status` for frozen-baseline reuse. Read this single block
+  instead of re-deriving comparability from each cost/token row.
+- Conditional economics and footprint rows use the Go report definition of
+  clean pass: tests pass, equivalence is `equivalent`, and code review is
+  `pass`.
 - When bootstrap ran, `decision_receipt.metrics[*].uncertainty` may include
   `baseline_ci`, `candidate_ci`, `delta_ci`, `win_loss_tie`, and `bootstrap`.
   `decision_receipt.headline_uncertainty` repeats the headline metric's CI
   envelope for quick verdict reading; absence means bootstrap was skipped or no
   paired uncertainty was available.
+- Check `decision_receipt.recommendation_policy.promote_noise_floor` when
+  explaining a compare verdict; it records the resolved floor used to decide
+  whether CI-backed point-estimate wins were promotion-strength.
 - For LLM-as-a-judge provenance, read `evaluator_model` plus
   `evaluator_model_status` from
   `decision_receipt.tasks[*].{baseline,candidate}_graders.<grader_id>` for the
@@ -219,9 +306,18 @@ Machine-readable default:
 - For compare review means, prefer the explicit metric rows ending in
   `_publishable` or `_all_validated`; read their `population`,
   `population_label`, `baseline_task_count`, and `candidate_task_count`
-  fields before summarizing a winner.
+  fields before summarizing a winner. These are quality computed only on the
+  gradable (patch-producing) subset — read them together with the separate
+  `aggregate.patch_reliability` axis (`no_patch_rate`/`no_patch_count` per arm),
+  so a clean-but-unreliable arm with many no-patch tasks is never credited as
+  high quality. The two axes are distinct: quality-when-patched is not the same
+  as reliability-of-producing-a-patch.
 - Within `decision_receipt.compare`, prefer `failure_taxonomy`,
   `grader_coverage`, and `task_flips` before scraping per-task artifacts.
+- If built-in grader outcomes are missing or unknown, `grader_coverage` lists
+  the affected arm/task IDs. For equivalence, also read
+  `missing_equivalence`; it qualifies the headline metric and emits the exact
+  `stet runs repair-ai-coverage` command to refresh only those tasks.
 - For footprint reads, prefer the `surface_breakdown` block on
   `footprint_risk` (and the per-task `footprint_surface_breakdown` summary):
   it splits agent vs gold patches into `implementation` vs `test_fixture`
@@ -233,6 +329,14 @@ Machine-readable default:
   present on only one arm, missing on all tasks, or unavailable are excluded
   from comparison math and rollout recommendations, but remain visible in
   `grader_coverage` as asymmetric or missing evidence.
+- `--baseline-root`/`--candidate-root` compares warn at run time (default on)
+  when the candidate root is missing graders the baseline ran, naming the
+  missing graders and printing the exact `stet runs regrade-graders --out
+  <candidate-root> --model-key <candidate> --grader craft --grader discipline`
+  recovery command. `stet eval status` then surfaces this as active repair work
+  (`missing grader coverage: N/M`) on both in-flight and COMPLETE runs, so a
+  degraded candidate cannot read as finished. Pass `--match-baseline-graders=false`
+  to opt out for intentionally asymmetric compares.
 - For AGENTS.md, CLAUDE.md, skill, or policy compares where custom, bundled, or
   repo-configured quality graders are expected, verify those grader IDs survived
   into `grader_coverage`,
@@ -249,6 +353,22 @@ Machine-readable default:
   `stet runs regrade-graders --repo <repo> --from-repo-quality`; this preserves
   the completed harness/test evidence and regenerates run summaries from
   canonical task details.
+- For custom-grader timeout gaps, use the report/status `stet runs
+  regrade-graders ... --task-id ... --grading-timeout 45m` repair instead of a
+  full model rerun.
+- When a task failed the verifier for environment reasons (e.g. a snapshot
+  toolchain that needs `GOTOOLCHAIN=go1.25.1`) rather than the patch, re-run only
+  the verifier against the existing patch with `stet eval agent --retest-tests
+  --test '<corrected command>'`, then stitch the clean outcome back with `stet
+  runs repair-tests --out <root> --model-key <key> --task-id <id> --from-validation
+  <retest validation.json> --reason '<why>'`, then view with `stet eval report`.
+  This never mutates the original Harbor `results.json`: the original outcome
+  stays in an additive `tests.repair` block and a `repaired_tests.v1.json`
+  sidecar, while the repaired outcome supersedes it
+  (`canonical_source=harbor_retest_repair`) and is refreshed into the run-root
+  `summary.json` in place. `repair-tests` is a commercial command and fails
+  closed if entitlement, the run root, task record, retest validation, or reason
+  cannot be resolved.
 - LLM-backed grader repairs must carry evaluator provenance. When overriding
   the evaluator command, pass the true `--ai-model-id`; deterministic graders
   such as `footprint_risk` should not be treated as missing LLM provenance.
@@ -272,6 +392,23 @@ Machine-readable default:
   - `recommended_action="rerun_affected_arm"` means the leftover artifacts are
     not smoke-shaped; rerun or repair the arm before claiming results.
 
+On a frozen-baseline compare, read `decision_receipt.baseline_freshness` (also at
+`evidence.baseline_freshness`) before trusting the delta — the stale-digest
+verdict lives in the artifact, not just a stderr warning. Its `evidence_class` is
+the gate:
+- `valid`: the frozen baseline's harness surface matches the current run
+  (`cache_status=hit`); reuse it.
+- `directional`: the harness-surface digest drifted within the same kind; read
+  the delta as directional only and `refreeze` for a decision-grade compare.
+- `inspect_only`: freshness could not be proven (legacy baseline with no recorded
+  digest, or no current digest); `refreeze`/rerun before relying on it.
+- `invalid`: the harness-surface kind itself changed; the comparison frame is
+  broken — `abort`, or rerun a matched A/A on the current kind to re-establish.
+  `invalid`/`inspect_only` also fail `evidence_quality` closed (not decision-grade).
+The block also carries the exact `frozen_harness_surface_digest` /
+`current_harness_surface_digest` (and kinds) and the operator's `next_action`
+(`reuse | refreeze | rerun_matched_aa | abort`) with a human `next_command`.
+
 The `failure_taxonomy` field in compare JSON also carries these counts so
 programmatic consumers can distinguish `no_patch` from ordinary test failures.
 
@@ -281,10 +418,10 @@ as a finished win/loss verdict. Read:
 - `requested_grader_coverage` for the exact missing or unavailable grader/task work
 - `recommendation` as fail-closed context only, usually `inspect_mixed_results`
 
-Commands for shared actions in this flow:
-- `[g] gate`: `stet eval workbench gate --from <compare-root>`
-- `[b] promote-baseline`: `stet baseline freeze --from <winning-candidate-root> --name <baseline-id> --json`
-- `[i] inspect`: `task_detail.json`, `trajectory.json`, or local inspect bundle
+Common next steps in this flow:
+- `gate`: `stet eval workbench gate --from <compare-root>`
+- `promote baseline`: `stet baseline freeze --from <winning-candidate-root> --name <baseline-id> --json`
+- `inspect`: `task_detail.json`, `trajectory.json`, or local inspect bundle
 
 Baseline reference rules:
 - Prefer `--baseline <reference>` when the operator already froze benchmark
@@ -352,9 +489,9 @@ evidence    .tmp/stet-run
 why         Wait is next because artifacts are still arriving and the current
             idle window does not yet look like a stall.
 
-next        > [w] wait      keep the run going and check back later
-then        [i] inspect     open the latest task evidence if it stops moving
-then        [s] stop        keep this as an informational health read
+recommend   wait and check status again
+command     stet eval status --out <root> --json
+other       inspect latest task evidence if progress stops; stop with this status read
 ```
 
 State meanings:
@@ -370,13 +507,13 @@ Status reading rules:
 - If status is healthy and heartbeat/progress is advancing, do not recommend a
   rerun just because logs are quiet.
 
-Commands for shared actions in status checks:
-- `[w] wait`: `stet eval status --out <root>` (check in again)
-- `[i] inspect`: last task detail, trajectory, or runtime status artifact
+Common next steps in status checks:
+- `wait`: `stet eval status --out <root> --json` (check in again)
+- `inspect`: last task detail, trajectory, or runtime status artifact
 
 ## Inspect Handoff
 
-`[i] inspect` should not be vague.
+`inspect` should not be vague.
 
 Use it this way:
 - task-level anomaly: point to `task_detail.json` and `trajectory.json`
@@ -393,23 +530,23 @@ Inspect should tell the user:
 
 Use recovery when evidence is incomplete or partially degraded.
 
-Flow-specific recovery actions:
-- `[p] repair`: repair missing quality evidence without full rerun
-- `[c] repair compare`: recover an incomplete rules compare without
+Flow-specific recovery steps:
+- `repair`: repair missing quality evidence without full rerun
+- `repair compare`: recover an incomplete rules compare without
   recomputing completed baseline work; this can rerun a missing or partial
   candidate arm before repairing requested grader coverage
-- `[g] retry grader`: finish retryable artifact-graded task; checks
+- `retry grader`: finish retryable artifact-graded task; checks
   `validation/<model_key>/<task_id>/task_decision.json`
-- `[t] revalidate`: rerun tests only when that is the missing signal
+- `revalidate`: rerun tests only when that is the missing signal
   (`--revalidate-tests-only` can reuse existing artifacts without AI/model
   registry coverage when no discover/build work is requested)
 
 Recovery rules:
 - If the compare is blocked by invalid or partially valid evidence, explain that
   as a validity problem first, not as a model-quality regression.
-- When grader coverage is partial, prefer `[c] repair compare` or `[g] retry grader`
+- When grader coverage is partial, prefer `repair compare` or `retry grader`
   over a blind full rerun.
-- For rules-backed compares, `[c] repair compare` should start with
+- For rules-backed compares, `repair compare` should start with
   `stet eval rules repair --change-manifest <stet.change.yaml> --json` or
   `--rules-root <dir>` so Stet reuses the persisted runtime and arm artifacts.
 - If an arm is missing tasks or has retryable harness failures, resume reruns

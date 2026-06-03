@@ -39,12 +39,12 @@ evidence    .stet/rules/stet.change.yaml
 why         Promote is available because this is the formal rollout decision
             surface and the required graders are present.
 
-next        > [p] promote   persist this as the current release state
-then        [i] inspect     review task-level evidence
-then        [s] stop        keep the verdict without rollout mutation
+recommend   promote current release state
+command     stet promote --change-manifest .stet/rules/stet.change.yaml --reason "..."
+other       inspect task-level evidence; stop without rollout mutation
 ```
 
-**User:** `s`
+**User:** stop
 
 Agent acknowledges stop, names the change manifest and rules report path. Done
 in 2 turns.
@@ -81,12 +81,12 @@ evidence    .tmp/stet-config-diff
 why         This can prune a weak draft, but it is not release evidence for
             AGENTS.md and does not prove custom agents_* grader coverage.
 
-next        > [i] inspect   read task-level evidence
-then        [r] rerun       gather fresh evidence after a change
-then        [s] stop        keep the bounded verdict
+recommend   inspect task-level evidence
+command     <open task_detail.json, trajectory.json, or local inspect bundle>
+other       rerun after a change; stop with the bounded verdict
 ```
 
-**User:** `i`
+**User:** inspect
 
 Agent forms a hypothesis before inspecting:
 
@@ -108,9 +108,9 @@ Agent inspects `.tmp/stet-config-diff` task evidence and reports:
 > introduces rigidity on tasks that legitimately need multi-file changes.
 
 ```text
-next        > [v] revise    restore the constraint with tighter wording and rerun
-then        [r] rerun       rerun as-is to confirm the signal
-then        [s] stop        keep the current diagnosis
+recommend   revise the constraint and rerun
+command     <edit AGENTS.md, then rerun the same probe>
+other       rerun as-is to confirm the signal; stop with current diagnosis
 ```
 
 **User:** restores the constraint with clearer wording, says "try again"
@@ -143,9 +143,9 @@ delta       pass +0pp  equiv +2pp  review +1pp
 driver      equivalence recovered; revised constraint is working
 evidence    .tmp/stet-config-diff
 
-next        > [R] rules     run manifest-backed eval before claiming improvement
-then        [i] inspect     spot-check the recovered tasks
-then        [s] stop        keep only the directional read
+recommend   run manifest-backed rules eval
+command     stet eval rules --change-manifest .stet/rules/stet.change.yaml --json
+other       spot-check recovered tasks; stop with only the directional read
 ```
 
 **User:** `R`
@@ -200,10 +200,9 @@ gap         db migrations (no test co-changes found)
 why         Smoke is next because the slice is untested — a quick
             multi-model read will calibrate before you commit to a probe.
 
-next        > [m] smoke     calibrate on this slice
-then        [a] approve     freeze for probe without calibrating
-then        [p] probe       approve and launch first probe
-then        [s] stop        keep the recommendation only
+recommend   smoke this starter slice
+command     stet eval smoke --dataset .stet/dataset --models "..." --json
+other       approve for probe without calibrating; stop with recommendation only
 ```
 
 **User:** `m`
@@ -225,9 +224,9 @@ evidence    .tmp/stet-smoke
 why         Probe is next because smoke gave a directional signal but the
             sample is too small for a release decision.
 
-next        > [p] probe     launch full probe with this dataset
-then        [r] rerun       rerun smoke with more tasks
-then        [s] stop        keep the directional read
+recommend   launch full probe with this dataset
+command     stet probe --dataset .stet/dataset --model "..." --json
+other       rerun smoke with more tasks; stop with the directional read
 ```
 
 **User:** `p`
@@ -251,9 +250,9 @@ evidence    .tmp/stet-probe
 why         This is your first real evidence. Baseline freeze is the natural
             next step so you have a stable reference for future comparisons.
 
-next        > [b] baseline   freeze as the repo's first baseline
-then        [g] gate         skip to release state if shipping now
-then        [s] stop         keep as directional evidence
+recommend   freeze as the repo's first baseline
+command     stet baseline freeze --from <probe-root> --name <capability> --json
+other       gate only if shipping now; stop with directional evidence
 ```
 
 Done in 4 turns. The onboard → smoke → probe pipeline produced the repo's
@@ -274,9 +273,9 @@ sample      3 tasks (below promote-grade threshold)
 driver      opus 4.7 wins every requested quality dimension, with validity ok;
             the sample is useful for future reference but not for promotion.
 
-next        > [b] baseline   freeze opus 4.7 as the repo's current Opus baseline
-then        [r] rerun        scale to the full task slice for promote-grade evidence
-then        [s] stop         keep only the directional result
+recommend   freeze opus 4.7 as the current Opus baseline
+command     stet baseline freeze --from <winning-candidate-root> --name <baseline-id> --json
+other       scale to the full task slice for promote-grade evidence; stop with only the directional result
 ```
 
 ---
@@ -313,9 +312,9 @@ evidence    .tmp/stet-run
 why         Wait is next because the run still has fresh task heartbeat and a
             specific blocker, not a no-progress stall.
 
-next        > [w] wait      keep the run going and check back later
-then        [i] inspect     open the blocking task evidence if progress stops
-then        [s] stop        keep this as an informational health read
+recommend   wait and check status again
+command     stet eval status --out <root> --json
+other       inspect blocking task evidence if progress stops; stop with this status read
 ```
 
 Done in 1 turn. The agent reports liveness and lineage from status JSON rather
@@ -369,10 +368,9 @@ loop        skill_loop.v1.json
 why         Iterate is next because the weakest dimension points to one
             specific edit: make setup-heavy planning guidance concrete.
 
-next        > [v] revise    tighten the weakest skill dimension and rerun
-then        [i] inspect     read task-level risks before editing
-then        [p] promote     only after rules evidence is trusted
-then        [s] stop        keep the current best without rollout mutation
+recommend   revise one weakest-dimension lever and rerun
+command     <apply one proposed edit, then rerun the same iteration lane>
+other       inspect task-level risks before editing; promote only after rules evidence is trusted
 ```
 
 Done in 2 turns. The wrapper generated the change/search-space/suite bundle,

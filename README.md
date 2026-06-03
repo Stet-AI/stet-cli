@@ -48,8 +48,8 @@ model changes, or harness policy.
 ## Requirements
 
 - macOS or Linux, x86_64 or arm64
-- Access to the beta CLI repo, `benredmond/stet-cli`
-- [GitHub CLI](https://cli.github.com/) authenticated with that access
+- `curl` for the public installer
+- [GitHub CLI](https://cli.github.com/) for private release overrides or PR/MR-backed repo discovery
 - Node.js and `npx` for installing the Stet agent skill
 - Docker, either Docker Desktop on macOS or Docker Engine on Linux
 - Python 3.12+
@@ -57,32 +57,26 @@ model changes, or harness policy.
 
 ## Setup
 
-### 1. Verify GitHub access
+### 1. Install the Stet CLI
+
+The default installer downloads public release assets from `benredmond/stet-cli`
+and does not require GitHub authentication.
 
 ```sh
-gh auth status || gh auth login
-gh repo view benredmond/stet-cli --json visibility,url
-```
-
-### 2. Install the Stet CLI
-
-The beta installer and release assets live in `benredmond/stet-cli`.
-
-```sh
-gh api repos/benredmond/stet-cli/contents/install.sh --header "Accept: application/vnd.github.raw" | sh
+curl -fsSL https://raw.githubusercontent.com/benredmond/stet-cli/main/install.sh | sh
 ```
 
 Install a specific version:
 
 ```sh
-gh api repos/benredmond/stet-cli/contents/install.sh --header "Accept: application/vnd.github.raw" | sh -s -- --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/benredmond/stet-cli/main/install.sh | sh -s -- --version v0.1.0
 ```
 
 The default install directory is `$HOME/.local/bin`. To use a different
 directory:
 
 ```sh
-gh api repos/benredmond/stet-cli/contents/install.sh --header "Accept: application/vnd.github.raw" | sh -s -- --bin-dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/benredmond/stet-cli/main/install.sh | sh -s -- --bin-dir "$HOME/bin"
 ```
 
 Verify:
@@ -91,7 +85,15 @@ Verify:
 stet --version
 ```
 
-### 3. Sign in to Stet
+If Ben gives you a private or alternate release repo, keep using the explicit
+repo override. That path uses `gh` so GitHub can authenticate the download:
+
+```sh
+gh auth status || gh auth login
+curl -fsSL https://raw.githubusercontent.com/benredmond/stet-cli/main/install.sh | sh -s -- --repo owner/private-stet-cli
+```
+
+### 2. Sign in to Stet
 
 Commercial beta workflows require local Stet auth before eval execution starts.
 
@@ -100,7 +102,7 @@ stet auth login
 stet auth status
 ```
 
-### 4. Install the Stet agent skill
+### 3. Install the Stet agent skill
 
 This is a first-class part of setup. Agents need the skill to route questions to
 the right Stet workflow, preserve decision semantics, read canonical artifacts,
@@ -128,7 +130,7 @@ Refresh the skill after updating the CLI:
 npx skills update stet -y
 ```
 
-### 5. Install Docker
+### 4. Install Docker
 
 Check whether Docker is already running:
 
@@ -163,18 +165,17 @@ login shell:
 sudo usermod -aG docker "$USER"
 ```
 
-### 6. Install Harbor
+### 6. Install uv
 
-Harbor is Stet's default harness. It requires Python 3.12+ and Docker.
+Stet owns Harbor invocation through pinned PyPI packages. Install `uv`; Stet
+will fetch the pinned Harbor environment on first use.
 
 ```sh
 command -v uv >/dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install harbor
-harbor --version
 ```
 
-If `harbor` is not found after install, add the `uv` tool bin directory to
-`PATH`, usually `$HOME/.local/bin`.
+If `uv` is not found after install, add the `uv` bin directory to `PATH`,
+usually `$HOME/.local/bin`.
 
 ### 7. Set up model-provider auth
 
@@ -209,7 +210,7 @@ stet --version
 stet auth status
 npx skills list
 docker info
-harbor --version
+command -v uv
 ```
 
 ## First prompt
@@ -239,9 +240,9 @@ stet update --prerelease           # latest release candidate
 stet update --version v0.1.0       # pin or roll back
 ```
 
-`stet update` verifies checksums and refreshes the Stet-owned local Harbor
-support agents. It does not install or mutate agent skills; refresh the shipped
-Stet skill through the skill manager:
+`stet update` verifies checksums and refreshes the Stet CLI. It does not install
+or mutate agent skills; refresh the shipped Stet skill through the skill
+manager:
 
 ```sh
 npx skills update stet -y
@@ -263,7 +264,7 @@ Start with [TROUBLESHOOTING.md](TROUBLESHOOTING.md). The fastest checks are:
 gh auth status
 stet auth status
 docker info
-harbor --version
+command -v uv
 ```
 
 If a rules run is already in progress or has partial evidence, check status

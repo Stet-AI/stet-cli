@@ -1,9 +1,10 @@
 # Operator Contract
 
 Every Stet answer should be legible in one scan. This document defines the
-shared terminal receipt format, keyed actions, and error handling that all flows
-inherit. The top-level skill defines the agent-facing optimization interface;
-this file defines how to project that machine contract back to a human operator.
+shared terminal receipt format, next-step recommendations, and error handling
+that all flows inherit. The top-level skill defines the agent-facing
+optimization interface; this file defines how to project that machine contract
+back to a human operator.
 
 ## Machine Contract vs Human Receipt
 
@@ -80,7 +81,7 @@ read status or Trial Result JSON
 terminal receipt (human projection)
      │
      ▼
-keyed actions (user picks one)
+recommended next step
      │
      └──► next command ──► terminal receipt ──► ...
 ```
@@ -93,7 +94,8 @@ Always:
 - Name the current pipeline step
 - Show a tiny data view (delta, count, bar) so the user sees what changed
 - Explain why the recommended next action is next
-- End with keyed single-key actions so the user can reply with one keystroke
+- End with one recommended next step, including the exact command when there is
+  a concrete command to run
 
 Use compact instrument-style ASCII receipts. Prefer plain aligned lines over
 heavy box borders.
@@ -112,10 +114,9 @@ delta       <dimension deltas>
 driver      <dominant reason>
 evidence    <path to root>
 why         <why the recommended action is next>
-
-next        > [x] action    meaning
-then        [y] action      meaning
-then        [s] stop        end here
+recommend   <one next step>
+command     <exact command, if applicable>
+other       <material alternatives, if useful>
 ```
 
 ### Running Receipt
@@ -130,22 +131,22 @@ progress    <N/M tasks>
 idle        <time since last artifact>
 evidence    <path>
 why         <why wait/inspect/stop>
-
-next        > [w] wait     keep running
-then        [i] inspect    open evidence if stalled
-then        [s] stop       end here
+recommend   <wait | inspect | stop>
+command     <exact status or inspect command, if applicable>
+other       <material alternatives, if useful>
 ```
 
 ### Receipt Rules
 
 - ASCII only, instrument-grade: measured, aligned, signal-first
 - Minimum rows: `answer`, `confidence`, `step/state`, data/compare, `driver`,
-  `evidence`, `why`, `next`
-- Keyed actions imply meaning, not just a command
-- The recommended action comes first, marked with `>`
-- The agent accepts either the key or the word (`i` or `inspect`)
-- Every keyed action maps to: meaning, exact command, expected resulting state
-- If no real result exists yet, skip the terminal receipt but still offer keyed actions
+  `evidence`, `why`, `recommend`
+- The recommended next step is a real action the agent can take with normal
+  tools, not a synthetic menu item.
+- Include `command` only when the next step is a command. For edits, state the
+  target file and hypothesis instead of inventing a command.
+- If no real result exists yet, skip the terminal receipt but still name the
+  next useful command or wait/inspect step.
 - `STET_STATUS_SUMMARY ...` stderr lines are operator-facing mirrors of status,
   not the primary automation contract. For automation, read
   `stet eval status --json`.
@@ -161,46 +162,25 @@ then        [s] stop       end here
   evidence hook
 - Release / monitor: trust state, rollout state, freshness, rerun delta
 
-## Keyed Actions
+## Next-Step Recommendations
 
-### Shared (available in all flows)
+Recommend exactly one next step unless the user asks for options. Use ordinary
+verbs the agent can act on: `inspect`, `repair`, `rerun`, `revise`, `wait`,
+`baseline`, `promote`, `rollback`, or `stop`.
 
-| Key | Name | Meaning | Resulting state |
-|---|---|---|---|
-| `[i]` | inspect | Drill into task-level evidence | Grounded explanation of regression or win |
-| `[g]` | gate | Materialize release state from bounded win | Gated receipt with trust/rollout |
-| `[r]` | rerun | Re-execute current flow or return to earlier stage | Fresh bounded evidence |
-| `[v]` | revise | Change the candidate, then rerun | New evidence after candidate change |
-| `[w]` | wait | Keep current run going, check in later | Updated running receipt |
-| `[s]` | stop | End here with current evidence | No new execution |
+For command-backed steps, include the exact command. For edit-backed steps,
+name the file, the one-lever hypothesis, and the rerun command that will test
+it. For stateful release steps, name the release artifact or change manifest
+that the command will mutate.
 
-### Flow-Specific
+Alternatives are allowed when they change the operator's real choice, but keep
+them prose-first:
 
-Defined in their reference docs. Context disambiguates overloaded keys.
-
-| Key | Name | Flows | Meaning |
-|---|---|---|---|
-| `[a]` | approve | onboarding, full-evals | Accept proposed slice |
-| `[b]` | baseline | quick-probe | Freeze evidence as stable baseline |
-| `[c]` | calibrate | rubric-authoring, iterative-improvement | Tighten rubric against anchors |
-| `[m]` | monitor | release-lifecycle | Replay release contract for fresh signal |
-| `[m]` | smoke | full-evals, onboarding | Quick calibration pass |
-| `[p]` | promote | release-lifecycle, rules-flow | Persist gated win as release state |
-| `[p]` | probe | onboarding | Approve slice and launch first run |
-| `[p]` | repair | compare-and-checkin | Repair missing quality evidence |
-| `[c]` | repair compare | compare-and-checkin, rules-flow | Finish grader coverage for incomplete compare |
-| `[g]` | retry grader | compare-and-checkin | Finish retryable artifact-graded task |
-| `[t]` | revalidate | compare-and-checkin | Rerun tests only |
-| `[t]` | status | release-lifecycle | Read-only posture check |
-| `[w]` | weakest | compare-and-checkin | Inspect weakest-risk explanation |
-| `[x]` | rollback | release-lifecycle | Revoke trust, halt monitoring |
-
-### Convention
-
-- Recommended action comes first, marked with `>`
-- Agent accepts either the key or the word
-- Outcome-specific palettes (which keys for safe/inconclusive/not-safe) are
-  defined in each reference doc
+```text
+recommend   repair grader coverage
+command     stet eval rules repair --change-manifest .stet/rules/stet.change.yaml --json
+other       inspect task evidence before repairing; stop with current inspect verdict
+```
 
 ## Error Handling
 
@@ -212,12 +192,12 @@ recovery.
 | Command not found / CLI error | Check `stet` installed and on PATH. Report. |
 | Auth failure / 401 / 403 | Report credential issue. Do not retry. |
 | `waiting_on_quota` | Wait until `retry_after`; Stet will resume automatically and reuse completed artifacts. |
-| Timeout | `stet eval status --out <root>`. Offer `[w]` wait or `[r]` rerun. |
+| Timeout | Read `stet eval status --out <root>` first. Recommend wait when healthy, rerun only after a real stall or explicit discard. |
 | Docker / container failure | Run `stet harbor cleanup` first. If no run is active, offer `stet harbor cleanup --apply`; add `--prune-buildkit` only for explicit BuildKit cache cleanup. Then rerun with lower effective concurrency. |
 | Partial / incomplete compare | Read `compare_state.next_action`. Offer recovery. |
 | Invalid or degraded evidence | Read `validity` / `evidence_quality`. Lower confidence, explain the degradation, and fail closed to inspect when needed. |
-| Empty / zero-score grading | Check grader cmd. Offer `[r]` rerun or `[i]` inspect. |
-| `HOLD` / `INSPECT` state | Valid terminal states, not errors. Offer `[i]` inspect. |
+| Empty / zero-score grading | Check grader cmd. Recommend rerun only after fixing the grader path/config; otherwise inspect. |
+| `HOLD` / `INSPECT` state | Valid terminal states, not errors. Recommend the evidence inspection that resolves the uncertainty. |
 
 ### Error Receipt
 
@@ -228,8 +208,7 @@ step        <flow that failed>
 error       <one-line summary>
 evidence    <root or log path>
 why         <diagnosis and what to try>
-
-next        > [i] inspect   read error log or deepest evidence
-then        [r] rerun       retry after fixing input
-then        [s] stop        keep current state
+recommend   inspect error evidence
+command     <exact inspect/status command, if applicable>
+other       rerun only after fixing the input; stop with current state
 ```

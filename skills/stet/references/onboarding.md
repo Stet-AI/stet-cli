@@ -1,7 +1,7 @@
 # Onboarding
 
 Inherits [operator-contract](operator-contract.md) for receipt format and
-shared keyed actions.
+next-step recommendations.
 
 Use this when the user wants to set up a new repo for Stet evals, build a
 dataset, or get a starter task slice. For heavy dataset builds (50+ tasks,
@@ -12,7 +12,7 @@ read CI ──► init ──► discover ──► build ──► receipt
                                               │
                                 ┌─────────────┼─────────────┐
                                 ▼             ▼             ▼
-                          [m] smoke    [a] approve    [p] probe
+                            smoke       approve       probe
 ```
 
 ## When To Use
@@ -43,14 +43,14 @@ For most repos, the quick path is enough:
 #    it globally. Stet fails before launching Claude runs if auth is missing.
 
 # 4. Ask the operator which first-run quality posture to use
-#    [r] recommended: discipline bundle + intentionality
-#    [s] standard: repo tests plus default coding graders only
-#    [c] custom: inspect `stet graders --repo . --json`, then choose
+#    recommended: discipline bundle + intentionality
+#    standard: repo tests plus default coding graders only
+#    custom: inspect `stet graders --repo . --json`, then choose
 
 # 5. Persist config
 stet init --repo . --yes --test "<repo test cmd>"
 
-# If the operator chose [r] while using --yes automation, ensure .stet/stet.yaml
+# If the operator chose recommended while using --yes automation, ensure .stet/stet.yaml
 # contains:
 # quality:
 #   bundles:
@@ -89,9 +89,9 @@ Quality onboarding rules:
   `intentionality` as an extra grader. Accepting that prompt writes the repo
   `quality` selection into `.stet/stet.yaml`.
 - Before any automated setup that would use `stet init --yes`, ask the
-  operator for the first-run quality-grader posture: `[r] recommended`
-  `discipline` + `intentionality`, `[s] standard` with no repo quality bundle,
-  or `[c] custom` after inspecting `stet graders --repo <path> --json`.
+  operator for the first-run quality-grader posture: `recommended`
+  (`discipline` + `intentionality`), `standard` with no repo quality bundle,
+  or `custom` after inspecting `stet graders --repo <path> --json`.
 - `stet init --ai-provider claude` requires usable Claude auth. Prefer running
   `claude setup-token` and storing the printed token in
   `~/.config/stet/claude-oauth-token` with `0600` permissions; Stet reads that
@@ -136,11 +136,9 @@ build       9 materialized, 3 skipped
 coverage    workflow, validation, leaderboard, model routing, market context
 why         Breadth is good enough for a starter slice, but the slice is still
             exploratory, so smoke buys a quick calibration read before probe.
-
-next        > [m] smoke   quick calibration on this slice before locking it
-then        [a] approve   freeze these tasks for probe without running now
-then        [p] probe     approve and launch the first bounded run
-then        [s] stop      keep the recommendation only
+recommend   smoke this starter slice
+command     stet eval smoke --dataset .stet/dataset --models "..." --json
+other       approve the slice for probe without running now; stop with recommendation only
 ```
 
 ## Proposal Rules
@@ -153,12 +151,12 @@ then        [s] stop      keep the recommendation only
 - Include `confidence`, the funnel, what was excluded, and coverage gaps.
 - Show at most 5 representative tasks, then `+N more`.
 
-## Flow-Specific Actions
+## Common Next Steps
 
-- `[a] approve`: accept the proposed starter slice; slice is locked for probe.
-- `[m] smoke`: after quality posture is resolved, run
+- `approve`: accept the proposed starter slice; slice is locked for probe.
+- `smoke`: after quality posture is resolved, run
   `stet eval smoke --dataset .stet/dataset --models "..." --json`
-- `[p] probe`: approve and immediately launch
+- `probe`: approve and immediately launch
   `stet probe --dataset .stet/dataset --model "..." --json`
 
 ## Escalation Handoff

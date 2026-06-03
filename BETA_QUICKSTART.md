@@ -27,11 +27,12 @@ Use a repo with:
 - CI or documented test commands
 - a test suite that can run in Docker
 
-Then start Docker and confirm you have access to the beta CLI repo:
+Then start Docker. If your first run will discover tasks from GitHub PRs,
+confirm GitHub CLI auth as well:
 
 ```sh
 docker info
-gh repo view benredmond/stet-cli --json visibility,url
+gh auth status
 ```
 
 If you have not installed Stet yet, start with [README.md](README.md).
@@ -51,7 +52,7 @@ stet --version
 stet auth status
 gh auth status
 docker info
-harbor --version
+command -v uv
 npx skills list
 ```
 

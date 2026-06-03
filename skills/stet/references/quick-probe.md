@@ -1,13 +1,13 @@
 # Quick Probe
 
 Inherits [operator-contract](operator-contract.md) for receipt format and
-shared keyed actions.
+next-step recommendations.
 
 ```
 probe ──► report ──► safe?
-                     ├─ yes ──► [g] gate  [b] baseline  [s] stop
-                     ├─ uncertain ──► [i] inspect  [r] rerun  [s] stop
-                     └─ no ──► [i] inspect  [v] revise  [s] stop
+                     ├─ yes ──► gate / baseline / stop
+                     ├─ uncertain ──► inspect / rerun / stop
+                     └─ no ──► inspect / revise / stop
 ```
 
 Use this for the smallest repo-local answer.
@@ -141,20 +141,19 @@ delta       pass -0pp  equiv -6pp  review +3pp
 driver      review risk rose on 2/5 tasks
 why         Inspect is next because the regression signal is real, but still
             too small to treat as either a release block or a false alarm.
-
-next        > [i] inspect   read task-level evidence before rollout changes
-then        [r] rerun       gather fresh evidence after revising the candidate
-then        [s] stop        keep the current bounded verdict only
+recommend   inspect task-level evidence
+command     <open task_detail.json, trajectory.json, or local inspect bundle>
+other       rerun after revising the candidate; stop with current bounded verdict
 ```
 
-Outcome palettes:
-- safe with benchmark intent: `> [b] baseline [g] gate [s] stop`
-- safe: `> [g] gate [i] inspect [s] stop`
-- inconclusive: `> [i] inspect [r] rerun [s] stop`
-- not safe: `> [i] inspect [v] revise [s] stop`
+Outcome recommendations:
+- safe with benchmark intent: baseline, then gate only if shipping now
+- safe: gate or inspect before rollout mutation
+- inconclusive: inspect or rerun after a targeted change
+- not safe: inspect, revise, then rerun
 
-Flow-specific action:
-- `[b] baseline`
+Flow-specific step:
+- `baseline`
   command: `stet baseline freeze --from <probe-root> --name <capability> --json`
   use when the operator wants a trackable snapshot before gate or promotion
 

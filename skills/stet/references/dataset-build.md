@@ -1,7 +1,7 @@
 # Dataset Build (Heavy)
 
 Inherits [operator-contract](operator-contract.md) for receipt format and
-shared keyed actions.
+next-step recommendations.
 
 Use this when the quick onboarding path is insufficient — need 50+ tasks,
 complex CI, Docker debug loops, or multi-batch scaling.
@@ -116,6 +116,27 @@ Proactive gotcha handling:
 | Package manager network flakes | Add retry config in the Dockerfile |
 | Repo expects setup steps before tests | Encode them in the Dockerfile, keep `stet init --test` focused on test execution |
 
+Harbor task exports run agent solve and verifier test phases without live setup
+fetches by default. Keep package downloads, `go mod download`, `cargo fetch`,
+and equivalent dependency prewarming in the Dockerfile or install config so the
+runtime can execute from cached dependencies. When install steps are baked into
+the exported Dockerfile, Stet renders verifier commands without replaying
+`pre_install` / `install` at runtime. Use `env.allow_internet: true` in a
+specific `task.yaml` only for tasks whose actual tests legitimately require
+live internet. Cursor-backed Harbor exports also bake Cursor Agent into the task
+image, so agent phases do not depend on runtime installer access. Model-backed
+solve phases may need provider API access. Cursor-backed candidate runs inject
+temporary CLI policy and hooks as a best-effort tool deterrent, then fail closed
+in reports when agent logs show WebFetch/WebSearch or shell network-command
+contamination; do not treat `allow_internet = true` on those runs as permission
+to move dependency setup or verifier installs back into runtime.
+
+For Go tasks, build bakes the toolchain at the recipe's `runtime_version` and
+freezes it (`GOTOOLCHAIN=local`) so the offline run never auto-downloads a
+toolchain. A `go.mod`/`go.work` `toolchain goX.Y.Z` directive higher than
+`runtime_version` now fails the build instead of silently fetching — raise
+`runtime_version` to that patch level (a bare `1.25` resolves to `go1.25.0`).
+
 Minimal harness contract:
 
 ```yaml
@@ -171,6 +192,12 @@ stet suite build --repo /path/to/local/repo --manifest $MANIFEST_DIR/manifest.ya
   --out $OUT --workers 2 --require-f2p=false
 ```
 
+`--llm-install-config` defaults on (see the test_cmd-relevance note below), so
+build needs a model client. Like `discover`, it resolves one from
+`--ai-cmd`, `build.ai_cmd`, or `ai.default_provider` with a provider installed —
+no explicit `--ai-cmd` needed once a provider is configured. Pass
+`--llm-install-config=false` to build without one (lower-fidelity broad verifiers).
+
 Debug loop (up to 5 attempts). Ordered by frequency:
 
 | Failure pattern | Classification | Fix |
@@ -186,8 +213,18 @@ Debug loop (up to 5 attempts). Ordered by frequency:
 | Docker daemon/network errors | infra_error | Check daemon health, stale containers, and stale networks; if no run is active, prune stopped containers and unused networks, then retry with lower effective concurrency |
 | Lockfile version mismatch | lockfile_drift | Pin package manager version in `.stet/harbor.Dockerfile` |
 
+`--llm-install-config` is **on by default** (it generates the install recipe and
+narrows verifiers, both of which lift dataset quality), so `suite build` /
+`scenario generate` require `--ai-cmd` unless you pass `--llm-install-config=false`
+to opt out (not recommended; you get lower-fidelity broad verifiers).
+
 After >= 80% gold pass, verify test_cmd relevance: pick a task with test
-patch, confirm test_cmd runs those files.
+patch, confirm test_cmd runs those files. Under `--llm-install-config`, build
+auto-narrows a single broad whole-suite verifier (e.g. `go test ./...`, bare
+`pytest`, `pnpm test`) to the test packages/files covering the change and
+fail-closes to the broad command otherwise; each task's
+`build_logs/test_selection.json` records the outcome (`narrowed` / `left_broad`
+/ `abstained`).
 
 **CHECKPOINT: Report iteration results. Proceed to scale on approval.**
 
@@ -300,13 +337,13 @@ and `build-summary.json` reports `prompt_shape_fallbacks`,
 `prompt_shape_explicit_failures`, plus the two `ai_task_generation_*`
 counters.
 
-## Flow-Specific Actions
+## Common Next Steps
 
-Each phase checkpoint maps to keyed actions:
+Each phase checkpoint recommends one concrete next step:
 
-- `[a] approve`: proceed to next phase after reviewing checkpoint results
-- `[r] rerun`: retry the current phase after a config or toolchain fix
-- `[s] stop`: halt the pipeline at the current phase
+- `approve`: proceed to next phase after reviewing checkpoint results
+- `rerun`: retry the current phase after a config or toolchain fix
+- `stop`: halt the pipeline at the current phase
 
 ## Harbor Dockerfile Starting Points
 

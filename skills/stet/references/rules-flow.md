@@ -1,14 +1,14 @@
 # Rules Flow
 
 Inherits [operator-contract](operator-contract.md) for receipt format and
-shared keyed actions.
+next-step recommendations.
 
 ```
 manifest resolve ──► eval rules plan ──► eval rules ──► status ──► report
                                                         │          │
-                                                    [w] wait   [p] promote  [i] inspect  [s] stop
+                                                     wait     promote / inspect / stop
                                                         │
-                                                    [c] repair compare
+                                                  repair compare
 ```
 
 Use this for manifest-backed change control.
@@ -36,7 +36,7 @@ stet eval report --change-manifest .stet/rules/stet.change.yaml --json
 
 Roles:
 - `manifest resolve`: inspect normalized inputs before launch. Prints the canonical resolved change manifest as YAML (or JSON with `--json`); injected defaults (e.g. `context.baseline.source`, `context.candidate.source`, `policy.version`, `treatments[*].path`) are inlined silently — there is no separate validation verdict. On a malformed manifest, `manifest resolve` exits non-zero; without `--json` it emits a plain-text stderr line, and with `--json` it emits a structured `{"error": {"code", "message", "field"}}` envelope on stdout. A non-zero exit is the validation contract — treat it as "malformed manifest" and read `error.code` / `error.field` (or the stderr line) for the field-precise reason.
-- `eval rules plan`: preflight tasks, arms, graders, frozen-baseline reuse, cost confidence, missing pricing/cost data, and cheaper alternatives without writing runtime artifacts. It does not launch the charged compare, but it is not free: plan runs the Harbor `oracle`-agent gold-replay validation containers to populate `replay_validity` and runs the LLM-grader preflight, so under contention it routinely takes 8–10+ minutes. A future `--quick-plan` that skips replay validation does not exist yet; when an operator needs a sub-minute readiness check, reach for `stet manifest resolve` instead. The next command, `stet eval rules` without `--plan`, is the charged launch. The plan output's `task_selection_adequacy.verdict` is informational; values such as `insufficient_history` describe historical sample size for confidence calibration and do not block launch.
+- `eval rules plan`: preflight tasks, arms, graders, frozen-baseline reuse, cost confidence, missing pricing/cost data, and cheaper alternatives without launching compare evidence. It persists an `eval_rules_plan.v1.json` receipt with replay-validity identity that a matching launch can reuse. It is not free: plan runs the Harbor `oracle`-agent gold-replay validation containers to populate `replay_validity` and runs the LLM-grader preflight, so under contention it routinely takes 8–10+ minutes. A future `--quick-plan` that skips replay validation does not exist yet; when an operator needs a sub-minute readiness check, reach for `stet manifest resolve` instead. The next command, `stet eval rules` without `--plan`, is the charged launch. The plan output's `task_selection_adequacy.verdict` is informational; values such as `insufficient_history` describe historical sample size for confidence calibration and do not block launch.
 - `eval rules`: launch the bounded rules-backed run
 - `eval status`: explain the current phase or health
 - `eval rules repair`: recover an incomplete rules compare from the persisted runtime; when the surface is replayable, it can resume a baseline-phase compare or rerun a missing/partial candidate arm while preserving completed evidence, then repair/regrade missing coverage. `eval rules resume` remains accepted for compatibility. Pass `--parse-retries N` to forward grader JSON parse-repair attempts during regrade recovery. Pass `--report-mode separate_axes|strict_publishable_pass` to pin the reporting mode when the baseline and candidate arms were produced by Stet binaries whose default drifted; baseline mode is used automatically otherwise.
@@ -46,7 +46,10 @@ Roles:
 means metadata is `resolved`, `unresolved`, or `stale`; `arm_evidence` means
 compare arm artifacts are `none`, `partial`, `running`, `complete`, or `failed`;
 `compare_decision` means the decision is `reportable`, `missing_experiment`,
-`inconsistent`, or `blocked_until_report`. If arm evidence exists but
+`inconsistent`, `active`, or `blocked_until_report`. `active` means the arms are
+still running, so the report is legitimately not materialized yet — keep polling
+rather than repairing; `blocked_until_report` means the run reached a non-running
+state without an `experiment.json`. If arm evidence exists but
 `experiment.json` is missing, the decision remains inspect-only. Repair with
 `stet eval rules repair --change-manifest ... --json` when the launch exited or
 stalled; use `--restart` only to discard evidence.
@@ -113,14 +116,27 @@ The `code` field disambiguates structurally similar phases. Within
   Remediation points at the `repo:` field of the suite manifest.
 
 `--ai-cmd` is a launch-only override for `stet eval rules`; use an absolute
-script path when launching from scratch directories. `eval.grader_ai_cmd` and
-`eval.grader_ai_model_id` in `stet.suite.yaml` are required whenever the run
-will bundle LLM-backed graders (see Default Quality Graders below) and serve
-double duty as the independent evaluator for validation graders so the model
-under test does not grade its own work. `--grader-ai-cmd` plus
-`--grader-ai-model-id` are equivalent CLI overrides; both `plan` and the
-charged launch refuse pre-flight when neither the suite nor the CLI supplies
-them and the resolved grader set includes any LLM-backed grader.
+script path when launching from scratch directories. `eval.grader_ai_model_id`
+in `stet.suite.yaml` supplies the independent evaluator for LLM-backed graders
+so the model under test does not grade its own work. Stet defaults to
+provider-native schema output through the matching local CLI; set
+`eval.grader_runtime: shell_text` with `eval.grader_ai_cmd` only when forcing
+the legacy shell-text evaluator. `--grader-ai-model-id` is the matching CLI
+override, and `plan` / charged launch refuse pre-flight when neither the suite
+nor the CLI supplies an evaluator and the resolved grader set includes any
+LLM-backed grader.
+
+For Cursor-backed model-under-test runs, use `Composer 2.5` / `composer-2.5`
+and `agent.name: cursor`; do not use `composer-2.5-fast` unless the fast tier is
+the explicit treatment. Keep graders independent with `--grader-ai-model-id`;
+add `--grader-ai-cmd` only for legacy shell-text grading. A local `agent login`
+session is enough; Stet bridges the host Cursor OAuth credential into Harbor
+without requiring `CURSOR_API_KEY`.
+
+For Claude model-update selectors, `model:opus 4.8` is accepted as an alias for
+canonical `claude-opus-4-8`. Cost estimates use the bundled pricing table in
+`internal/h2h/pricing.v1.json`; if that metadata is missing for a future model,
+the plan/report cost surface must say so instead of implying priced evidence.
 
 To iterate on a high-signal slice from an existing dataset, pass repeatable
 `--task-id <id>` to `eval rules plan` and `eval rules`, or put the stable slice
@@ -149,11 +165,11 @@ recovery decision, then `stet eval rules repair --change-manifest ... --json`
 when the active process has exited or status is stalled. Use `--restart` only
 when intentionally discarding existing evidence and starting over.
 
-Fresh rules runs use the same bounded preflight policy as `stet eval run`: one
-representative smoke pre-pass before canonical work, not one smoke run per arm.
-Candidate arms are preferred over baseline arms for that single smoke. Successful
-smoke artifacts are seeded into the canonical root so smoked tasks count toward
-the full run.
+Fresh rules runs use `--smoke-policy auto` by default: Stet runs one candidate
+smoke only when the harness fingerprint needs proof, otherwise status/report
+explain the reuse or skip in `smoke_preflight`. Use `--smoke-policy always` to
+force smoke, or `--smoke-policy never` / legacy `--skip-smoke-preflight` for an
+explicit override.
 
 ## Replay-Invalid Smoke
 
@@ -218,14 +234,13 @@ manifests that predate the explicit `grader_profile` contract — treat it as
 The default quality bundle is LLM-backed (the `discipline` bundle covers
 `instruction_adherence`, `scope_discipline`, `diff_minimality`, and the
 recommended default adds `intentionality` alongside it), so
-`eval.grader_ai_cmd` and `eval.grader_ai_model_id` must be set in
-`stet.suite.yaml` (or supplied as `--grader-ai-cmd` / `--grader-ai-model-id`)
-for any non-skill treatment that auto-bundles them.
+`eval.grader_ai_model_id` must be set in `stet.suite.yaml` (or supplied as
+`--grader-ai-model-id`) for any non-skill treatment that auto-bundles them.
 `stet eval rules plan` and `stet eval rules` both refuse pre-flight when those
-fields are missing and any LLM-backed grader is bundled. Worked stanza:
+evaluator fields are missing and any LLM-backed grader is bundled. Worked
+stanza:
 
     eval:
-      grader_ai_cmd: "claude --output-format json --print"
       grader_ai_model_id: claude-sonnet-4-6
 
 Pick an evaluator distinct from the candidate model so the grader is not
@@ -291,7 +306,6 @@ stet eval rules skill --plan \
   --goal "improve planning specificity without increasing scope risk" \
   --out .stet/skill-loops/planner \
   --tasks 12 \
-  --grader-ai-cmd "claude --output-format json --print" \
   --grader-ai-model-id claude-sonnet-4-6 \
   --json
 
@@ -303,7 +317,6 @@ stet eval rules skill \
   --out .stet/skill-loops/planner \
   --tasks 12 \
   --test "go test ./..." \
-  --grader-ai-cmd "claude --output-format json --print" \
   --grader-ai-model-id claude-sonnet-4-6 \
   --json
 
@@ -436,11 +449,11 @@ Default graders are the normal coding-quality trio plus the bundled
 
 All wrapper default graders except `footprint_risk` are LLM-backed (this
 includes `equivalence`, `code_review`, and the entire `skill_workbench` pack),
-so the same `eval.grader_ai_cmd` / `eval.grader_ai_model_id` requirement
-applies. The wrapper writes a suite manifest from the `--model` flag; supply
-`--grader-ai-cmd` / `--grader-ai-model-id` on the wrapper invocation
-(both must be set together) and the wrapper writes them into the generated
-suite stanza and forwards them to the delegated `stet eval rules` invocation.
+so an independent `eval.grader_ai_model_id` is required. The wrapper writes a
+suite manifest from the `--model` flag; supply `--grader-ai-model-id` on the
+wrapper invocation and Stet defaults to provider-native structured output
+through the matching local CLI. Use `--grader-ai-cmd` with
+`--grader-ai-model-id` only when forcing the legacy shell-text evaluator path.
 `--no-quality` drops only the auto-bundled craft/discipline graders; the
 wrapper's default bundle still includes `equivalence`, `code_review`, and
 `skill_workbench` — all LLM-backed — so `--no-quality` alone does not bypass
@@ -469,8 +482,9 @@ Preflight before launching a skill compare:
 After the report materializes, read `evidence.skill_loop_path` and the linked
 `skill_loop.v1.json`. It persists the loop goal, task source, skill path, cycle,
 baseline/latest/best scores, weakest skill dimension, diagnosis, recommendation,
-and next recommended change. Re-running `stet eval report --change-manifest`
-over unchanged evidence is a read path: it must not advance the loop cycle.
+next recommended change, and any persisted `proposed_edit`. Re-running
+`stet eval report --change-manifest` over unchanged evidence is a read path: it
+must not advance the loop cycle.
 
 For harness-bundle guards, keep the public/private boundary straight:
 - `stet.harness/v1` is still the minimal public input manifest.
@@ -502,10 +516,9 @@ driver      candidate improves equivalence and cost without failing guardrails
 evidence    .stet/rules/stet.change.yaml
 why         Promote is next because this is already the formal rollout
             decision surface, and promotion persists that state.
-
-next        > [p] promote   record this decision as the current release state
-then        [i] inspect     review deeper evidence before rollout mutation
-then        [s] stop        keep the verdict without changing rollout state
+recommend   promote release state
+command     stet promote --change-manifest .stet/rules/stet.change.yaml --reason "..."
+other       inspect deeper evidence before rollout mutation; stop without changing rollout state
 ```
 
 Release warning codes carried in receipts include `default_branch_fallback`:
@@ -514,12 +527,12 @@ the rules launcher fell back to the repo's default branch. It is informational,
 not blocking; pin `context.baseline.source` explicitly in the change manifest
 to silence it.
 
-Flow-specific action:
-- `[p] promote`: `stet promote --change-manifest .stet/rules/stet.change.yaml --reason "..."`
-- `[P] promote override`: `stet promote --change-manifest .stet/rules/stet.change.yaml --reason "..." --allow-inspect` when trust remains `inspect` and the operator is intentionally overriding the gate
-- `[c] repair compare`: `stet eval rules repair --change-manifest .stet/rules/stet.change.yaml --json` when the persisted rules runtime exists but the canonical Trial Result is incomplete; use this for OOM/rate-limit interruptions before deleting the compare root, because repair reruns only missing/retryable arm tasks and can replay unchanged AGENTS.md/CLAUDE.md overlays from the change manifest. `resume` remains accepted as a compatibility alias. Repair cannot recover a terminal arm failure: when status/report emit a `repair` block with code `RULES_COMPARE_ARM_FAILED` or `RULES_ACTIVE_ARM_FAILED`, inspect the failed arm root, address the harness failure (auth, config, missing bundle, etc.), then relaunch instead of repairing
-- `[g] retry graders`: use the `repair-ai-coverage` or `regrade-graders` command emitted by report/status; add `--parse-retries N` for saved grader prompts that failed JSON/schema parsing
-- `[r] restart`: `stet eval rules --change-manifest .stet/rules/stet.change.yaml --suite-manifest .stet/rules/stet.suite.yaml --restart` only when the operator intentionally discards existing rules evidence for that change manifest
+Common next steps:
+- `promote`: `stet promote --change-manifest .stet/rules/stet.change.yaml --reason "..."`
+- `promote override`: `stet promote --change-manifest .stet/rules/stet.change.yaml --reason "..." --allow-inspect` when trust remains `inspect` and the operator is intentionally overriding the gate
+- `repair compare`: `stet eval rules repair --change-manifest .stet/rules/stet.change.yaml --json` when the persisted rules runtime exists but the canonical Trial Result is incomplete; use this for OOM/rate-limit interruptions before deleting the compare root, because repair reruns only missing/retryable arm tasks and can replay unchanged AGENTS.md/CLAUDE.md overlays from the change manifest. `resume` remains accepted as a compatibility alias. Repair cannot recover a terminal arm failure: when status/report emit a `repair` block with code `RULES_COMPARE_ARM_FAILED` or `RULES_ACTIVE_ARM_FAILED`, inspect the failed arm root, address the harness failure (auth, config, missing bundle, etc.), then relaunch instead of repairing
+- `retry graders`: use the `repair-ai-coverage` or `regrade-graders` command emitted by report/status; add `--parse-retries N` for saved grader prompts that failed JSON/schema parsing, and keep the emitted `--grading-timeout` for timeout-gapped custom graders
+- `restart`: `stet eval rules --change-manifest .stet/rules/stet.change.yaml --suite-manifest .stet/rules/stet.suite.yaml --restart` only when the operator intentionally discards existing rules evidence for that change manifest
 
 ## Running Rules Check-In
 
@@ -571,7 +584,6 @@ eval:
   dataset: ./dataset
   baseline_model: model:sonnet 4.6
   candidate_model: model:sonnet 4.6
-  grader_ai_cmd: "claude --output-format json --print"
   grader_ai_model_id: claude-sonnet-4-6
 ```
 
@@ -596,12 +608,13 @@ slice, use `selection.task_ids` (or repeated `--task-id` on plan/launch);
 changing the rev range in a manifest that also sets `eval.dataset` will not
 shift which tasks run.
 
-`eval.grader_ai_cmd` and `eval.grader_ai_model_id` are required for AGENTS.md /
-CLAUDE.md (and any other non-skill) rollouts: rules launches auto-bundle the
-craft + discipline LLM graders, and `stet eval rules plan` and the launch
-refuse pre-flight if those fields are missing. Pick a different model from the candidate so the grader is
-not grading its own work. Pass `--no-quality` (or set `no_quality: true` on
-`eval`) only when you intentionally want to drop the auto-bundled graders.
+`eval.grader_ai_model_id` is required for AGENTS.md / CLAUDE.md (and any other
+non-skill) rollouts: rules launches auto-bundle the craft + discipline LLM
+graders, and `stet eval rules plan` and the launch refuse pre-flight if the
+evaluator model is missing. Pick a different model from the candidate so the
+grader is not grading its own work. Pass `--no-quality` (or set
+`no_quality: true` on `eval`) only when you intentionally want to drop the
+auto-bundled graders.
 
 When Harbor needs runtime settings such as larger pod memory, put them in the
 repo's `.stet/stet.harness.yaml`; suite-backed rules runs apply that canonical

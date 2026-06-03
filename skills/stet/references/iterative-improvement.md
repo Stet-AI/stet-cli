@@ -1,13 +1,13 @@
 # Iterative Improvement
 
 Inherits [operator-contract](operator-contract.md) for receipt format and
-shared keyed actions.
+next-step recommendations.
 
 ```
 baseline eval ──► inspect ──► edit one thing ──► rerun ──► threshold?
-     ▲                                                     ├─ met ──► [g] gate
+     ▲                                                     ├─ met ──► gate
      │                                                     └─ not ──► ↺
-     └── [c] calibrate if grader trust is low ─────────────┘
+     └── calibrate if grader trust is low ─────────────────┘
 ```
 
 Use this when one-shot execution is weak and the task gets better through a
@@ -42,11 +42,9 @@ driver      recommendation_quality improved +0.6 but trust is medium
 evidence    summary.md:L42-L67
 why         Rerun is next because the gain needs confirmation as stable, not
             one noisy grade.
-
-next        > [r] rerun       confirm the gain is stable across 2 consecutive runs
-then        [c] calibrate     tighten the grader if trust stays medium
-then        [g] gate          materialize release state when thresholds are met
-then        [s] stop          end the loop with current best
+recommend   rerun same iteration lane
+command     <same eval command that produced this loop root>
+other       calibrate the grader if trust stays medium; gate only when thresholds are met
 ```
 
 ## Preconditions
@@ -75,12 +73,12 @@ If the grader is mushy, split or calibrate the rubric first with
    corpus, task selection, Harness Surface, Search Space, baseline/candidate,
    supporting evidence, freshness, and machine recommendation.
 5. Run bounded post-run learning before choosing the next edit. Prefer
-   subagents when available: one inspects representative trajectories from
-   flips, failures, no-patch cases, surprising ties, and strongest/weakest
-   graded examples; one checks evidence validity, grader coverage, sample
-   adequacy, runtime failures, and stale or mixed provenance; one synthesizes
-   one-lever candidate improvements within the current Search Space. Do not
-   inspect every trajectory by default.
+   subagents when available: one inspects representative weakest-dimension
+   trajectories from flips, failures, no-patch cases, surprising ties, and
+   strongest/weakest graded examples; one checks evidence validity, grader
+   coverage, sample adequacy, runtime failures, and stale or mixed provenance;
+   one synthesizes exactly one concrete mutation candidate within the current
+   Search Space. Do not inspect every trajectory by default.
 6. Inspect lower-level evidence only for diagnosis. Use weakest-risk output,
    `decision_receipt.tasks`, `task_detail.json`, `trajectory.json`, or direct
    artifact inspection to find the current bottleneck. If the output is visual,
@@ -88,12 +86,15 @@ If the grader is mushy, split or calibrate the rubric first with
 7. Synthesize post-run learning for the operator before editing: what happened,
    what trajectories suggest caused it, what is candidate behavior versus
    dataset/grader/runtime/provenance artifact, the most plausible next lever,
-   and what evidence would confirm or refute it on the next run. Do not paste
-   raw subagent notes.
+   a single `proposed_edit` block, and what evidence would confirm or refute it
+   on the next run. Do not paste raw subagent notes.
 8. State a hypothesis before changing anything: "I believe ___ is causing this
    bottleneck because ___. If I change ___, I expect ___ to happen." If you
    cannot fill this in, you are guessing, not searching.
-9. Make one focused change to one allowed lever that tests the hypothesis.
+9. Apply one focused mutation to one allowed lever that tests the hypothesis.
+   Use the proposed edit as the candidate, but treat it as unreviewed agent
+   output: inspect it, keep or narrow it to one lever, then edit with normal
+   tools. Do not add a separate CLI apply workflow.
 10. Re-run the eval immediately and read the new Trial Result.
 11. Read the result against the hypothesis: confirmed, refuted, or inconclusive?
    Log the implication — what does this result teach you about the next
@@ -145,10 +146,12 @@ promotion or public study claims.
 
 Read `decision_receipt` first, then `evidence.skill_loop_path`. The linked
 `skill_loop.v1.json` is the loop ledger: it carries cycle, best/latest scores,
-weakest dimension, diagnosis, and next recommended change. Use that weakest
-dimension to form the next one-change hypothesis. Do not infer a new cycle from a
-fresh report timestamp alone; only a substantively different candidate result
-should advance the cycle.
+weakest dimension, diagnosis, next recommended change, and any persisted
+`proposed_edit`. Use that weakest dimension to form the next one-change
+hypothesis. Do not infer a new cycle from a fresh report timestamp alone; only a
+substantively different candidate result should advance the cycle. If the loop
+is not a rules-skill run and has no machine ledger, write the same
+`proposed_edit` block into the durable loop log near the output root.
 
 For custom-rubric quality work:
 
@@ -191,7 +194,21 @@ artifact    inspect-only evidence: partial grader coverage and small sample
 next lever  tighten skill instructions around report/status interpretation
 confirm     rerun same task slice; expect fewer missed decision-receipt obligations
 decision    iterate with one skill-text change
+
+proposed_edit {
+  "path": "skills/stet/SKILL.md",
+  "diff_or_rewrite": "diff --git ...",
+  "trajectory_refs": ["task-18 trajectory.json", "task-25 decision_receipt.tasks"],
+  "rationale": "Weakest traces show agents read summary text before the receipt."
+}
 ```
+
+`proposed_edit.path` may target any allowed Search Space lever: skill text,
+`AGENTS.md`, cost instructions, grader wording, harness configuration, or a
+similar bounded surface. Keep it to one section or bullet group when possible.
+The block is a mutation candidate, not a reviewed diff; the operator owns the
+merge decision, and promotion or public claims still require the normal holdout
+and evidence-quality gates.
 
 ## Stop Condition
 
@@ -203,10 +220,10 @@ The loop is done when ALL three criteria are met:
 
 If any criterion fails, keep iterating or calibrate.
 
-## Flow-Specific Actions
+## Common Next Steps
 
-- `[c] calibrate`: `stet eval calibrate ...` — tighten weakest/noisiest rubric
-- `[g] gate`: `stet eval workbench gate --from <loop-root> --json` — only after
+- `calibrate`: `stet eval calibrate ...` — tighten weakest/noisiest rubric
+- `gate`: `stet eval workbench gate --from <loop-root> --json` — only after
   stop condition is met
 
 ## Decision Rules

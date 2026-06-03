@@ -7,6 +7,7 @@ DEFAULT_BIN_DIR="${STET_INSTALL_DIR:-$HOME/.local/bin}"
 repo="$DEFAULT_REPO"
 bin_dir="$DEFAULT_BIN_DIR"
 version=""
+repo_overridden=0
 
 die() {
   printf '%s\n' "stet install: $*" >&2
@@ -32,6 +33,7 @@ while [ "$#" -gt 0 ]; do
     --repo)
       [ "$#" -ge 2 ] || die "--repo requires a value"
       repo="$2"
+      repo_overridden=1
       shift 2
       ;;
     --bin-dir)
@@ -49,8 +51,18 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-command -v gh >/dev/null 2>&1 || die "gh is required; run: gh auth login"
 command -v tar >/dev/null 2>&1 || die "tar is required"
+
+use_public_download=0
+if [ "$repo" = "benredmond/stet-cli" ] && [ "$repo_overridden" = "0" ]; then
+  use_public_download=1
+fi
+
+if [ "$use_public_download" = "1" ]; then
+  command -v curl >/dev/null 2>&1 || die "curl is required"
+else
+  command -v gh >/dev/null 2>&1 || die "gh is required for --repo/private installs; run: gh auth login"
+fi
 
 if command -v sha256sum >/dev/null 2>&1; then
   sha256_file() { sha256sum "$1" | awk '{print $1}'; }
@@ -86,7 +98,11 @@ esac
 asset_name="stet_${os_name}_${arch_name}.tar.gz"
 
 if [ -z "$version" ]; then
-  version="$(gh api "repos/$repo/releases" --jq '.[] | select((.draft | not) and (.prerelease | not)) | .tag_name' | sed -n '1p')"
+  if [ "$use_public_download" = "1" ]; then
+    version="$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | tr -d '\r' | sed -n '1p')"
+  else
+    version="$(gh api "repos/$repo/releases" --jq '.[] | select((.draft | not) and (.prerelease | not)) | .tag_name' | sed -n '1p')"
+  fi
   [ -n "$version" ] || die "no stable release found in $repo"
 fi
 
@@ -96,16 +112,20 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-asset_url="$(gh api "repos/$repo/releases/tags/$version" --jq ".assets[] | select(.name == \"$asset_name\") | .url")"
-[ -n "$asset_url" ] || die "release $version is missing $asset_name"
-checksums_url="$(gh api "repos/$repo/releases/tags/$version" --jq '.assets[] | select(.name == "checksums.txt") | .url')"
-[ -n "$checksums_url" ] || die "release $version is missing checksums.txt"
-
 archive="$tmp_dir/$asset_name"
 checksums="$tmp_dir/checksums.txt"
 
-gh api "$asset_url" -H "Accept: application/octet-stream" > "$archive"
-gh api "$checksums_url" -H "Accept: application/octet-stream" > "$checksums"
+if [ "$use_public_download" = "1" ]; then
+  curl -fsSL "https://github.com/$repo/releases/download/$version/$asset_name" > "$archive"
+  curl -fsSL "https://github.com/$repo/releases/download/$version/checksums.txt" > "$checksums"
+else
+  asset_url="$(gh api "repos/$repo/releases/tags/$version" --jq ".assets[] | select(.name == \"$asset_name\") | .url")"
+  [ -n "$asset_url" ] || die "release $version is missing $asset_name"
+  checksums_url="$(gh api "repos/$repo/releases/tags/$version" --jq '.assets[] | select(.name == "checksums.txt") | .url')"
+  [ -n "$checksums_url" ] || die "release $version is missing checksums.txt"
+  gh api "$asset_url" -H "Accept: application/octet-stream" > "$archive"
+  gh api "$checksums_url" -H "Accept: application/octet-stream" > "$checksums"
+fi
 
 expected="$(awk -v name="$asset_name" '($2 == name || $2 == "*" name) { print $1; exit }' "$checksums")"
 [ -n "$expected" ] || die "checksums.txt has no entry for $asset_name"
@@ -127,29 +147,6 @@ tar -xzf "$archive" -C "$extract_dir"
 [ -f "$extract_dir/stet" ] || die "archive member stet must be a regular file"
 [ -x "$extract_dir/stet" ] || die "archive member stet must be executable"
 
-support_root="$HOME/.local/share/stet/harbor-agents"
-case "$support_root" in
-  ""|"/"|"$HOME"|"$HOME/")
-    die "unsafe Stet support install directory: $support_root"
-    ;;
-esac
-support_tmp="$tmp_dir/harbor-agents"
-mkdir -p "$support_tmp/stet_harbor_agents"
-
-for support_file in \
-  stet_harbor_agents/__init__.py \
-  stet_harbor_agents/compat.py \
-  stet_harbor_agents/claude_code_auth.py \
-  stet_harbor_agents/codex_auth.py \
-  stet_harbor_agents/install_cache.py \
-  stet_harbor_agents/patch_capture.py \
-  stet_harbor_agents/install-claude-code-auth.sh.j2
-do
-  support_dest="$support_tmp/$support_file"
-  mkdir -p "$(dirname "$support_dest")"
-  gh api "repos/$repo/contents/$support_file?ref=$version" --header "Accept: application/vnd.github.raw" > "$support_dest"
-done
-
 mkdir -p "$bin_dir"
 bin_dir_abs="$(cd "$bin_dir" && pwd -P)"
 target="$bin_dir_abs/stet"
@@ -169,13 +166,17 @@ if [ -L "$target" ]; then
   esac
 fi
 
-mkdir -p "$(dirname "$support_root")"
-rm -rf "$support_root"
-mv "$support_tmp" "$support_root"
+	legacy_support_root="$HOME/.local/share/stet/harbor-agents"
+	case "$legacy_support_root" in
+	  ""|"/"|"$HOME"|"$HOME/")
+	    die "unsafe legacy Stet support directory: $legacy_support_root"
+	    ;;
+	esac
+	rm -rf "$legacy_support_root"
 
-tmp_target="$(mktemp "$bin_dir_abs/.stet-update.XXXXXX")"
-cp "$extract_dir/stet" "$tmp_target"
-chmod 0755 "$tmp_target"
-mv -f "$tmp_target" "$target"
+	tmp_target="$(mktemp "$bin_dir_abs/.stet-update.XXXXXX")"
+	cp "$extract_dir/stet" "$tmp_target"
+	chmod 0755 "$tmp_target"
+	mv -f "$tmp_target" "$target"
 
-printf 'installed %s to %s\n' "$version" "$target"
+	printf 'installed %s to %s\n' "$version" "$target"

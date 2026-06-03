@@ -1,11 +1,11 @@
 # Rubric Authoring
 
 Inherits [operator-contract](operator-contract.md) for receipt format and
-shared keyed actions.
+next-step recommendations.
 
 ```
 design rubric ──► calibrate ──► discriminates?
-                     ▲          ├─ yes ──► [p] probe (live eval)
+                     ▲          ├─ yes ──► probe (live eval)
                      │          └─ no ──► tighten anchors ──► ↺
                      └──────────────────────────────────────┘
 ```
@@ -38,10 +38,9 @@ driver      weak discrimination — grader cannot separate good from bad
 evidence    rubrics/research_specificity.yaml
 why         Calibrate is next because the grader overlaps on good and bad
             anchors, so scores are not trustworthy yet.
-
-next        > [c] calibrate   tighten the rubric against known anchors
-then        [p] probe         run a live eval after calibration
-then        [s] stop          keep the current rubric draft only
+recommend   calibrate against known anchors
+command     stet eval calibrate --rubric <path> ...
+other       run a live probe after calibration; stop with the current rubric draft
 ```
 
 ## Workflow
@@ -110,9 +109,9 @@ stet eval calibrate \
 
 Use anchors instead of `known-good` / `known-bad` for scored rubrics.
 
-Flow-specific actions:
-- `[c] calibrate`: `stet eval calibrate --rubric <path> ...`
-- `[p] probe`: `stet eval workbench probe ... --grader <path>`
+Common next steps:
+- `calibrate`: `stet eval calibrate --rubric <path> ...`
+- `probe`: `stet eval workbench probe ... --grader <path>`
 
 Path preservation rule:
 - Treat the rubric file path as the stable operator handle. When a custom

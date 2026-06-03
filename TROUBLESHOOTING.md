@@ -11,7 +11,7 @@ gh auth status
 stet --version
 stet auth status
 docker info
-harbor --version
+command -v uv
 npx skills list
 ```
 
@@ -27,10 +27,17 @@ export PATH="$HOME/.local/bin:$PATH"
 stet --version
 ```
 
-If the binary is old or missing support files, update:
+If the binary is old, update:
 
 ```sh
 stet update
+```
+
+`stet update` refreshes the CLI. It does not mutate the separately installed
+Stet agent skill. Refresh the skill through the skill manager:
+
+```sh
+npx skills update stet -y
 ```
 
 For a prerelease or exact beta tag:
@@ -40,17 +47,18 @@ stet update --prerelease
 stet update --version v0.1.0-rc.3
 ```
 
-## GitHub auth or beta repo access
+## GitHub auth or private repo access
 
-The installer and skill require access to `benredmond/stet-cli`.
+The default installer and skill use the public `benredmond/stet-cli` repo. You
+only need GitHub CLI auth for private release overrides or PR/MR-backed repo
+discovery.
 
 ```sh
 gh auth status || gh auth login
-gh repo view benredmond/stet-cli --json visibility,url
 ```
 
-If repo access fails, ask for access to the beta CLI repo before
-debugging Stet itself.
+If a private override repo fails, confirm the account has access to that repo
+before debugging Stet itself.
 
 ## Stet commercial auth missing
 
@@ -94,18 +102,16 @@ cleanup:
 stet harbor cleanup --apply --prune-buildkit
 ```
 
-## Harbor not found
+## `uv` not found
 
-Install Harbor with `uv`:
+Stet owns Harbor invocation through `uv tool run`. Install `uv`:
 
 ```sh
 command -v uv >/dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install harbor
-harbor --version
 ```
 
-If `harbor` is still not found, add the `uv` tool bin directory to `PATH`,
-usually `$HOME/.local/bin`.
+If `uv` is still not found, add the `uv` bin directory to `PATH`, usually
+`$HOME/.local/bin`.
 
 ## Claude Code auth failure
 
@@ -124,12 +130,18 @@ Stet reads `~/.config/stet/claude-oauth-token` and forwards
 `CLAUDE_CODE_OAUTH_TOKEN` only to Stet-managed Claude runs. Do not commit the
 token, put it in repo `.env` files, or export it broadly from shell profiles.
 
-If Harbor reports a missing `stet_harbor_agents.*` module or Claude still asks
-for `/login` inside a Stet run, refresh the binary and local Harbor support
-agents:
+If Claude still asks for `/login` inside a Stet run, refresh the binary:
 
 ```sh
 stet update
+```
+
+If Stet warns that the agent skill is missing or cannot be inspected, refresh
+or install it separately:
+
+```sh
+npx skills update stet -y
+npx skills add https://github.com/benredmond/stet-cli.git --skill stet --all
 ```
 
 ## Rules plan seems slow
@@ -249,8 +261,8 @@ the gate and understand the risk.
 
 Contact Ben when:
 
-- your GitHub account should have beta repo access but does not
+- Ben gave you a private release repo and your GitHub account cannot access it
 - `stet auth status` says your account lacks commercial access
-- a fresh install repeatedly lacks Harbor support files
+- a fresh install repeatedly cannot fetch the pinned Harbor packages through `uv`
 - a normal repo with working CI cannot produce a viable starter slice
 - a reproducible Harbor setup failure blocks the first evaluation

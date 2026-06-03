@@ -1,18 +1,18 @@
 # Release Lifecycle
 
 Inherits [operator-contract](operator-contract.md) for receipt format and
-shared keyed actions.
+next-step recommendations.
 
 ```
 gate ──► promote ──► monitor
   ▲        │           │
   │        │       ┌───┴────┐
   │        ▼       ▼        ▼
-  │    promoted  [t] status  [m] monitor
+  │    promoted  status    monitor
   │        │
-  │        └── [x] rollback ──► revoked
+  │        └── rollback ──► revoked
   │                               │
-  └────── [r] rerun ──────────────┘
+  └────── rerun ─────────────────┘
 ```
 
 Use this for gate, promote, monitor, and rollback after a compare or workbench
@@ -58,10 +58,9 @@ freshness   fresh
 evidence    .tmp/stet-compare
 why         Promote is next because gate has already established trust, and
             promotion is what turns that bounded win into current release state.
-
-next        > [p] promote   persist the gated win as release state
-then        [i] inspect     review release evidence before mutating rollout
-then        [s] stop        keep the gated result without promoting
+recommend   promote gated release state
+command     stet promote --out <compare-gate-root> --reason "..." --json
+other       inspect release evidence before mutating rollout; stop without promoting
 ```
 
 State vocabulary:
@@ -70,11 +69,11 @@ State vocabulary:
   `monitoring`, `rolled_back`
 - `freshness`: `fresh`, `aging`, `stale`
 
-Flow-specific actions:
-- `[p] promote`: `stet promote --out <compare-gate-root> --reason "..."`
-- `[m] monitor`: `stet monitor run --release release.v1.json --out ./monitor-rerun`
-- `[x] rollback`: `stet rollback --out <compare-gate-root> --reason "..."`
-- `[t] status`: `stet monitor status --release release.v1.json --json`
+Common next steps:
+- `promote`: `stet promote --out <compare-gate-root> --reason "..."`
+- `monitor`: `stet monitor run --release release.v1.json --out ./monitor-rerun`
+- `rollback`: `stet rollback --out <compare-gate-root> --reason "..."`
+- `status`: `stet monitor status --release release.v1.json --json`
 
 ## Promote
 
@@ -111,10 +110,9 @@ freshness   aging
 data        monitor 5/5 green  last delta +0.04
 why         Monitor is next because the candidate is unchanged and the only
             missing thing is fresh evidence, not a new compare decision.
-
-next        > [m] monitor   replay the frozen release contract for fresh signal
-then        [r] rerun       return to probe if the candidate or policy changed
-then        [x] rollback    revoke trust if new risk outweighs confidence
+recommend   monitor frozen release contract
+command     stet monitor run --release release.v1.json --out ./monitor-rerun
+other       rerun if the candidate or policy changed; rollback if new risk outweighs confidence
 ```
 
 ## Monitor
@@ -204,10 +202,10 @@ Rollback postconditions:
   again and merges fresh evidence back into that release record.
 - When a release regresses, the next step is usually re-probe or re-run after
   fixing the candidate, not repeated promote attempts.
-- Always end lifecycle answers with keyed next actions so the operator knows
-  whether to monitor, re-probe, or roll back.
-- Use state-conditioned action palettes:
-  `hold|inspect` -> `> [i] inspect [r] rerun [s] stop`
-  `promoted+fresh` -> `> [t] status [m] monitor [x] rollback`
-  `promoted+stale` -> `> [m] monitor [r] rerun [x] rollback`
-  `rolled_back` -> `> [i] inspect [r] rerun [s] stop`
+- Always end lifecycle answers with one recommended next step so the operator
+  knows whether to monitor, re-probe, roll back, or stop.
+- Use state-conditioned recommendations:
+  `hold|inspect` -> inspect, rerun after a targeted fix, or stop
+  `promoted+fresh` -> read status, monitor, or rollback if new risk appears
+  `promoted+stale` -> monitor, rerun after a policy change, or rollback
+  `rolled_back` -> inspect, rerun after a targeted fix, or stop

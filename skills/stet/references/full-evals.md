@@ -1,15 +1,15 @@
 # Full Evals
 
 Inherits [operator-contract](operator-contract.md) for receipt format and
-shared keyed actions.
+next-step recommendations.
 
 ```
 discover ──► build ──► eval run ──► status ──► report
                                       │          │
-                                  [w] wait   verdict
-                                              ├─ winner ──► [g] gate
-                                              ├─ mixed ──► [i] inspect
-                                              └─ rerun ──► [r] rerun
+                                    wait     verdict
+                                              ├─ winner ──► gate
+                                              ├─ mixed ──► inspect
+                                              └─ rerun ──► rerun
 ```
 
 Use this when the user needs a reusable benchmark, explicit task selection, or
@@ -24,7 +24,7 @@ This reference covers the terminal receipt patterns and commands used in onboard
 also appear in dataset and full eval flows.
 
 When onboarding produces a real artifact, report it with a compact
-instrument-style summary and keyed next actions, for example:
+instrument-style summary and one recommended next step, for example:
 
 ```text
 STET :: DATASET
@@ -41,17 +41,15 @@ coverage    auth, cli, config
 gap         db
 why         Smoke is next because the slice is broad enough to calibrate, but
             still exploratory evidence rather than a locked benchmark.
-
-next        > [m] smoke   quick calibration on this slice before locking it
-then        [a] approve   freeze these tasks for probe without running now
-then        [p] probe     approve and launch the first bounded run
-then        [s] stop      keep the recommendation only
+recommend   smoke this starter slice
+command     stet eval smoke --dataset ... --models "..." --json
+other       approve tasks for probe without running now; stop with recommendation only
 ```
 
-Flow-specific actions:
-- `[a] approve`: accept the proposed starter slice; locked for next run
-- `[m] smoke`: `stet eval smoke --dataset ... --models "..." --json`
-- `[p] probe`: approve and launch `stet probe --dataset ... --model "..." --json`
+Common next steps:
+- `approve`: accept the proposed starter slice; locked for next run
+- `smoke`: `stet eval smoke --dataset ... --models "..." --json`
+- `probe`: approve and launch `stet probe --dataset ... --model "..." --json`
 
 When the flow is active but not finished, use a running terminal receipt:
 
@@ -67,10 +65,9 @@ eta         unknown
 confidence  medium
 why         Wait is next because build is still materializing valid tasks and
             has not crossed into a no-progress state.
-
-next        > [w] wait      keep the build running and check again later
-then        [i] inspect     open build artifacts if progress flattens
-then        [s] stop        keep this as a status read only
+recommend   wait and check build status again
+command     <same status command for this build root>
+other       inspect build artifacts if progress flattens; stop with this status read
 ```
 
 ## Quickest Larger-Scale Entry
@@ -138,16 +135,29 @@ root and add `--task-id ... --stitch-rerun`. This preserves the original slice,
 refreshes only the selected task artifacts, and regenerates one merged summary.
 
 When comparing a model whose outputs will be judged by LLM-backed graders,
-persist the evaluator in the suite manifest so reruns keep the same provenance:
+persist the evaluator model in the suite manifest so reruns keep the same
+provenance:
 
 ```yaml
 eval:
+  grader_ai_model_id: gpt-5.4
+```
+
+Provider-native structured custom grader output is the default. Use the
+shell-text evaluator only when you need a legacy explicit command:
+
+```yaml
+eval:
+  grader_runtime: shell_text
   grader_ai_cmd: CODEX_MODEL=gpt-5.4 codex exec --skip-git-repo-check --sandbox read-only -
   grader_ai_model_id: gpt-5.4
 ```
 
-Use `--grader-ai-cmd` and `--grader-ai-model-id` only for one-off overrides.
-`grader_ai_model_id` is required when `grader_ai_cmd` is configured.
+Stet infers `codex_cli` or `claude_code` from the grader model; set
+`eval.grader_provider` only when inference is ambiguous. Use
+`eval.grader_runtime: shell_text` with `eval.grader_ai_cmd` only when forcing
+the legacy shell-text evaluator. Provider-schema mode records the
+runtime/provider separately instead of falling back to the arm model command.
 
 Before `stet init`, the agent should inspect repo evidence and decide the test
 commands itself. Treat `stet init` as config persistence, not as the authority
@@ -193,11 +203,11 @@ flags override suite values for a temporary launch.
   `stet runs regrade-graders`: omitting `--grader` preserves prior repo
   quality-config behavior; supplying `--grader` overrides the repo config for
   this run.
-- Fresh `stet eval run` performs one representative smoke pre-pass before
-  canonical work; it does not multiply smoke runs by model or reasoning arm.
-  Successful smoke artifacts are seeded into the canonical root so smoked tasks
-  count toward the full run. Pass `--skip-smoke-preflight` only when the dataset
-  has already been smoked (mirrors the same flag on `stet eval rules`).
+- Fresh `stet eval rules` defaults to `--smoke-policy auto`: smoke runs only
+  when the candidate harness fingerprint needs proof, and status/report expose
+  `smoke_preflight` receipts for run/reuse/skip decisions. Use
+  `--smoke-policy always` to force smoke, or `--smoke-policy never` / legacy
+  `--skip-smoke-preflight` for an explicit override.
 - To compare reasoning levels, keep the model fixed and use first-class
   reasoning arms: `stet eval run --dataset <dataset> --model <model> --reasoning-efforts max,xhigh,high,low --out <out>`.
   Add `--pinned-task-source` and `--pinned-dataset-key` when reusing prior Stet
