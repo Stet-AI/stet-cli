@@ -77,9 +77,14 @@ Test-setup rules:
 - Priority order: CI workflow steps (highest trust) > Makefile/justfile targets
   > package.json scripts > README (lowest trust).
 - Avoid placeholder commands (`echo`, `true`, lint-only, build-only).
-- `stet suite build` now requires a repo harness manifest with
-  `environment.dockerfile`; the agent should author that Dockerfile explicitly
-  from repo setup knowledge instead of relying on generated install recipes.
+- For monorepos or build-system-driven repos, preserve the real CI runner and
+  repo-level flags, then prefer one broad positive target pattern that Stet can
+  narrow or keep broad. Do not substitute a package-manager install or test
+  command merely because a leaf package file exists.
+- `stet init` writes `.stet/stet.harness.yaml` and `.stet/harbor.Dockerfile`
+  when they are missing. Treat the generated harness as starter setup only;
+  edit the repo harness when CI requires pinned runtimes, build tools, private
+  dependencies, or repo-specific setup scripts.
 - If the repo rarely co-locates test edits with code changes, use
   `stet suite discover --allow-no-test-changes ...` to admit repo-tests-only
   tasks.
@@ -117,8 +122,18 @@ Build writes `onboarding_receipt.v1.json` to the dataset root with:
 - `task_selection`: frozen `TaskSelectionRecord` with requested/realized IDs
 - `task_rationale`: per-task selected/rejected with reasons
 - `test_setup`: commands and source
+- `test_selector`: selector status, reason-code, proof-strength, runner,
+  target-kind, fallback, and legacy-v1 counts when selection was attempted
 - `confidence`: `high`/`medium`/`low` with reasons
 - `lifecycle`: `journey_kind: "onboard"`, `decision_grade: "exploratory"`
+
+If `candidate_pool.build_ready` is zero, the lifecycle phase is
+`setup_required` and the next action is setup/install-config repair, not
+starter-slice approval.
+
+Keep selector yield distinct from dataset confidence: it describes verifier
+target proof for the task corpus, not model quality, F2P validity, gold replay,
+flake status, task ambiguity, or representativeness.
 
 ## Reporting
 

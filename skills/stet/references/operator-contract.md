@@ -164,14 +164,45 @@ other       <material alternatives, if useful>
 
 ## Next-Step Recommendations
 
-Recommend exactly one next step unless the user asks for options. Use ordinary
-verbs the agent can act on: `inspect`, `repair`, `rerun`, `revise`, `wait`,
-`baseline`, `promote`, `rollback`, or `stop`.
+Name exactly one next step unless the user asks for options. When the operator
+has already asked for an eval, repair, resume, optimization, or iteration loop,
+execute the next step by default if it is inside the approved Search Space,
+preserves evidence, does not mutate lifecycle/release state, and does not exceed
+the approved spend posture. Stop and ask only when the next step crosses a stop
+rule. Use ordinary verbs the agent can act on: `inspect`, `repair`, `rerun`,
+`revise`, `wait`, `baseline`, `promote`, `rollback`, or `stop`.
 
 For command-backed steps, include the exact command. For edit-backed steps,
 name the file, the one-lever hypothesis, and the rerun command that will test
-it. For stateful release steps, name the release artifact or change manifest
-that the command will mutate.
+it. If the edit will be delegated, name the subagent experiment handoff, but
+keep the receipt's verdict grounded in canonical Stet artifacts. For stateful
+release steps, name the release artifact or change manifest that the command
+will mutate.
+
+Receipts should make the continuation state explicit:
+
+```text
+action_taken   inspected the two regressed tasks and weakest-dimension deltas
+lever          skill instruction / report-reading obligation
+hypothesis     agents skipped decision_receipt because the skill over-emphasized
+               summary output before the canonical Trial Result
+test           move the Trial Result read obligation earlier and rerun the lane
+result         pending
+implication    if receipt obligations recover, continue to checkpoint; if the
+               same miss repeats, pivot to grader/report design
+check          pending; result will decide whether this lever class is viable
+next           revise the skill text once and rerun the same lane
+stop_if        new spend, changed Search Space, lifecycle mutation,
+               destructive repair, auth blocker, or invalid/inspect-posture
+               evidence
+```
+
+When the operator asks for history ("how did we get here?", "what did we try?",
+or "why is this next?"), answer from the loop ledger and canonical artifacts
+first. If the history exists only in chat, automation text, or memory,
+reconstruct it best-effort, say the ledger was missing, and write the compact
+history before spending or launching another candidate. Include the rejected
+lever classes and the contradiction check that justifies the next move.
 
 Alternatives are allowed when they change the operator's real choice, but keep
 them prose-first:
@@ -184,8 +215,11 @@ other       inspect task evidence before repairing; stop with current inspect ve
 
 ## Error Handling
 
-When a `stet` command fails, do not silently retry. Report, diagnose, offer
-recovery.
+When a `stet` command fails, do not blindly retry. Report and diagnose. If
+status/report emits a deterministic recovery command that preserves evidence,
+run it automatically when the operator has already asked for evaluation,
+repair, resume, or improvement. Do not auto-retry auth failures, destructive
+restarts, lifecycle mutations, or commands that discard evidence.
 
 | Error pattern | Agent action |
 |---|---|
@@ -194,7 +228,7 @@ recovery.
 | `waiting_on_quota` | Wait until `retry_after`; Stet will resume automatically and reuse completed artifacts. |
 | Timeout | Read `stet eval status --out <root>` first. Recommend wait when healthy, rerun only after a real stall or explicit discard. |
 | Docker / container failure | Run `stet harbor cleanup` first. If no run is active, offer `stet harbor cleanup --apply`; add `--prune-buildkit` only for explicit BuildKit cache cleanup. Then rerun with lower effective concurrency. |
-| Partial / incomplete compare | Read `compare_state.next_action`. Offer recovery. |
+| Partial / incomplete compare | Read `compare_state.next_action`. Run deterministic evidence-preserving recovery when already authorized; otherwise ask. |
 | Invalid or degraded evidence | Read `validity` / `evidence_quality`. Lower confidence, explain the degradation, and fail closed to inspect when needed. |
 | Empty / zero-score grading | Check grader cmd. Recommend rerun only after fixing the grader path/config; otherwise inspect. |
 | `HOLD` / `INSPECT` state | Valid terminal states, not errors. Recommend the evidence inspection that resolves the uncertainty. |

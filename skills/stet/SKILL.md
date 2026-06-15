@@ -1,577 +1,336 @@
 ---
 name: stet
 description: >-
-  Use Stet to measure whether an AI coding change is safe to ship. Triggers
-  whenever a developer asks about model comparison, config safety, shared
-  instruction or policy rollout decisions, AGENTS.md or CLAUDE.md
-  effectiveness, skill quality, repo eval setup, dataset building, repo
-  onboarding, regression detection, benchmarking, or promote/rollback
-  decisions. Also use when the user says things like "is this helping",
-  "compare models on my repo", "set up evals", "onboard this repo", "build a
-  dataset", "test this change", "what regressed", "keep improving until it
-  passes", "which model should I use", "is it safe to ship", or "should this
-  become the default". Even if the user does not mention Stet by name, use this
-  skill whenever the question is about measuring, comparing, or gating AI
-  coding behavior on real repo work.
+  Use Stet to measure whether an AI coding change is safe to ship. Trigger on
+  model comparisons, AGENTS.md or CLAUDE.md effectiveness, shared instruction,
+  policy, skill, harness, tool-policy, reasoning, or runtime rollouts, repo eval
+  setup, dataset building, regression detection, benchmarking, promote/rollback
+  decisions, and questions like "is this helping", "compare models on my repo",
+  "test this change", "what regressed", "keep improving until it passes",
+  "which model should I use", or "should this become the default".
 ---
 
 # Stet
 
-Stet is change control for AI coding behavior. It tells you whether a model,
-config, skill, or workflow change is safe to ship by replaying real repo work
-and scoring the output on correctness and quality.
+Stet is change control for AI coding behavior. It replays real repo work and
+scores agent output on correctness, quality, cost, provenance, validity, and
+confidence so an operator can decide whether a model, instruction, skill,
+harness, or workflow change is safe to keep rolling out.
 
-Use this skill as the single entry point and treat it as the agent-facing
-optimization interface. Use the object model and canonical read path, then pick
-the cheapest flow that preserves the decision semantics the operator needs.
-Default to the manifest-backed rules flow when the change is a shared
-instruction, policy, harness, docs, or model rollout rather than a throwaway
-directional check.
+Use this skill as the agent-facing optimization interface. The coding agent is
+the optimizer; Stet is the Evaluation Function. Pick the cheapest flow that
+preserves the decision the operator needs. Shared behavior changes such as
+`AGENTS.md`, `CLAUDE.md`, skills, policies, model choices, harness bundles, and
+tool policies need manifest-backed rules evidence before they are kept,
+recommended, baselined, promoted, or described as improvements.
 
-## Agent-Facing Optimization Interface
+## Root Contract
 
-Stet is the Evaluation Function plus the context that teaches the agent how to
-use it effectively. The coding agent is the optimizer. The skill's job is to
-keep that optimizer inside a bounded search loop over real repo work.
+Keep these constraints in the hot path:
 
-Primitive model:
+- Keep planes separate. The measured agent is inside a Stet Trial; the
+  measuring or driver agent is outside the Trial and owns synthesis, branch
+  choice, loop state, approvals, and evidence interpretation. Driver-plane
+  subagent notes are not Trial Results, graders, or decision-grade evidence.
+- Declare or read the Harness Surface, Search Space, and decision subject before
+  interpreting optimization results. The optimized metric is not the decision
+  subject: token, latency, or quality movement is usable only for the declared
+  harness surface and only when receipts show no invalid adjacent-surface drift.
+- Mutate one allowed lever at a time unless the operator explicitly changes the
+  Search Space.
+- Missing, stale, partial, inspect-only, invalid, under-graded, or degraded
+  evidence fails closed for promotion, rollback, superiority, default, and
+  public claims. A good score on degraded evidence is still degraded evidence.
+- Baseline refresh is not promotion. Baseline refresh updates the frozen
+  reference for future compares; promotion mutates rollout state and requires
+  promotion-grade Trial Result evidence.
+- `screen_passed_holdout_required` is blocked from promotion. Only
+  `promotion_status=ready_to_promote` with linked decision-grade holdout
+  evidence can support promotion, default, or public claims.
+- The agent owns eval, repair, resume, optimization, and "keep improving" loops
+  until a stop rule is reached. Execute the next in-scope, non-lifecycle,
+  approved-spend action by default; ask only when the next action crosses
+  Search Space, spend, lifecycle, destructive recovery, auth, or invalid
+  evidence boundaries.
+- Optimize for the declared objective, not for the smallest plausible edit. In
+  shared-behavior loops such as `AGENTS.md`, do not shrink a candidate merely
+  because it has nonfatal regressions or feels safer. If a broader candidate
+  improves the primary metric, weighted quality target, or operator-stated goal,
+  keep it in contention and classify the regressions as tradeoffs unless they
+  violate hard gates, Search Space, required graders, or promotion criteria.
+- Use iteration evidence to synthesize the strongest in-scope candidate, not the
+  least controversial one. A final candidate may combine multiple learned
+  patterns from prior iterations when each pattern is supported by evidence and
+  remains inside the declared Search Space. Treat "one concise bullet" or
+  "minimal diff" as a tactic, not a default selection rule.
+- When the operator states that a regression is acceptable because the candidate
+  improves higher-priority outcomes, record that preference in loop state and
+  continue from that tradeoff posture. Do not keep re-litigating the same
+  acceptable regression unless new evidence shows a hard gate failure or a worse
+  regression class.
+- Use `loop_state.v1.json` and native `stet optimize` commands as the durable
+  reasoning state. Do not create parallel Markdown ledgers, launch scripts,
+  health receipts, or adjudicators as control planes.
+- Treat `optimize`, `iterate`, `keep improving`, or max-iteration prompts as
+  native optimization-loop requests even when the target is `AGENTS.md`,
+  `CLAUDE.md`, a skill, model, harness bundle, tool policy, or other shared
+  behavior surface. The rules flow is the replay workbench; `stet optimize` is
+  the loop control plane. Do not satisfy these prompts with standalone
+  `stet eval rules` plus a Markdown ledger.
+- Keep `SKILL.md` as the router. When the native optimization route triggers,
+  load [iterative-improvement](references/iterative-improvement.md) before
+  charged work. Ordinary one-shot rules runs, model comparisons,
+  reasoning-effort comparisons, status reads, and direct rollout checks stay on
+  their normal routes unless the operator asks for iterative optimization or a
+  promotion/default claim.
+- For nontrivial optimization loops, use available subagents for bounded scan,
+  candidate, patch, or review work; do not reserve them only for final review.
+  The driver still owns artifact authority, loop state, approvals, and final
+  interpretation. Subagents must not create research files.
+- Invoking this skill authorizes Stet-scoped subagent use for eval setup,
+  trajectory inspection, candidate experiments, repair diagnosis, and review.
+  Ask before subagents cross the declared Search Space, mutate lifecycle state,
+  exceed approved spend, or touch unrelated repo surfaces.
+- The operator-facing answer must include the verdict, confidence or readiness,
+  decisive deltas, evidence quality, grader coverage, main risks, and one next
+  action before report paths, HTML paths, commands, or raw status output.
 
-| Primitive | Agent-facing meaning |
-|---|---|
-| Harness Surface | Repo-local levers that affect coding-agent behavior: instructions, model, harness, tool access, skills, prompt, reasoning, and runtime context. |
-| Task Corpus | Replayable real repo work used to measure behavior. |
-| Evaluation Function | Tests as the gate, plus quality dimensions, cost, provenance, validity, and confidence. |
-| Search Space | The subset of Harness Surface levers allowed to change. It is both tractability bound and trust boundary. |
-| Trial | One candidate harness configuration evaluated against the Task Corpus. |
-| Trial Result | Canonical machine-readable outcome for one Trial, persisted as `eval_report.v1.json` in v1. |
-| Decision Policy | Read from lifecycle and receipt fields such as `trust_state`, `gateable`, `promotable`, freshness, confidence, and `next_action`. Do not invent a separate policy object. |
-
-Canonical read path:
+## Canonical Read Path
 
 1. For active work, read `stet eval status --json`.
-   Prefer `activity_state`, `active_work`, `blocking_tasks`,
-   `last_artifact`, and `lifecycle`. If `activity_state` is
-   `waiting_on_quota`, read `retry_after`, `completed_tasks`,
-   `remaining_tasks`, and `next_action`; the active Stet process is waiting and
-   will resume missing retryable work automatically. Treat
-   `STET_STATUS_SUMMARY ...` stderr lines as human-facing mirrors, not
-   automation truth.
-2. For completed work, read the persisted `eval_report.v1.json` for that flow
-   when it exists. Ordinary output roots commonly persist it at
-   `<root>/.stet/eval-report/eval_report.v1.json`; change-manifest rules flows
-   persist it next to the resolved rules runtime under `.stet/eval-rules/...`.
-   If it is not present or the locator is unclear, run
-   `stet eval report --out <root> --json` or the matching
-   `stet eval report --change-manifest <stet.change.yaml> --json` command to
-   locate or materialize it.
-3. Inside the Trial Result, read `decision_receipt` first for recommendation,
-   confidence, readiness, grader coverage, task issue digests, and next
-   action. The verdict string lives on `decision_receipt.recommendation`
-   (and is mirrored on the top-level `lifecycle.decision` sibling);
-   `decision_receipt` does not
-   carry a top-level `decision` field.
-4. Read top-level `trial_context` next for Task Corpus, task selection,
-   Harness Surface, Search Space, baseline, candidate, supporting evidence,
-   freshness, and raw machine-recommendation refs.
-5. Read top-level `quality`, `validity`, `evidence_quality`, `lifecycle`, and
-   `arms` to interpret the verdict. A good score on degraded evidence is still
-   degraded evidence.
-   Route on `evidence_quality.posture`:
-   `actionable` (= `decision_grade=true`) means act on the recommendation;
-   `directional` means the only failing factors are sample size or
-   sample adequacy, so use the run as iteration signal and widen the slice
-   before promoting; `inspect` means a non-small-n factor failed and the
-   evidence quality issue must be investigated before reasoning.
-   When evidence is not decision-grade, check
-   `evidence_quality.directional_read`. A `usable` or `limited` directional
-   read can guide iteration or prefilter candidates, but should not be treated
-   as a promote, rollback, or superiority decision without more tasks or clean
-   validity.
-6. Drill into lower-level artifacts only for diagnosis:
-   `experiment.json` for compare evidence authority, `release.v1.json` for
-   lifecycle authority, `task_decision.json` for task authority,
-   `task_detail.json` / `trajectory.json` for inspectability, and logs for
-   runtime failures. Do not reconstruct the primary verdict from summaries or
-   pass rates when a Trial Result is available.
+   Prefer `activity_state`, `active_work`, `blocking_tasks`, `last_artifact`,
+   and `lifecycle`. Treat `waiting_on_quota` as an intentional automatic pause:
+   read `retry_after`, `completed_tasks`, `remaining_tasks`, and `next_action`
+   instead of deleting artifacts or relaunching completed task evidence. Treat
+   `STET_STATUS_SUMMARY ...` stderr lines as human mirrors, not automation
+   truth.
+2. For completed work, read the persisted `eval_report.v1.json` when it exists.
+   Common locations are `<root>/.stet/eval-report/eval_report.v1.json` and the
+   resolved rules runtime under `.stet/eval-rules/...`. If the locator is
+   unclear, materialize or locate it with `stet eval report --out <root> --json`
+   or `stet eval report --change-manifest <stet.change.yaml> --json`.
+3. Inside the Trial Result, read `decision_receipt` first. The verdict string is
+   `decision_receipt.recommendation`; the top-level `lifecycle.decision` mirrors
+   it. `decision_receipt` does not have a top-level `decision` field.
+4. For optimization loops, also read
+   `decision_receipt.optimization_decision`, `decision_subject`,
+   `candidate_identity`, objective profile fields, grader policy, uncertainty
+   posture, lane eligibility, and holdout state. Near-miss acceptance is valid
+   only when encoded by the objective profile and supported by uncertainty and
+   quality evidence; it remains iteration evidence until holdout is ready.
+5. Read `trial_context` for Task Corpus, task selection, Harness Surface, Search
+   Space, baseline, candidate, supporting evidence, freshness, and raw
+   machine-recommendation refs.
+6. Read `quality`, `validity`, `evidence_quality`, `lifecycle`, and `arms`.
+   Route on `evidence_quality.posture`: `actionable` means act on the
+   recommendation, `directional` means iterate or widen the slice before
+   promotion, and `inspect` means investigate the non-small-n evidence issue
+   before reasoning from the result. `evidence_quality.directional_read` can
+   guide iteration, not promotion.
+7. Before external claims, read `claim_readiness` or
+   `decision_receipt.claim_readiness`. It separates claim types as `ready`,
+   `directional`, or `blocked` and carries grader admissibility, evaluator
+   provenance, judge-noise status, and blockers.
+8. Drill into lower-level artifacts only for diagnosis: `experiment.json`,
+   `release.v1.json`, `task_decision.json`, `task_detail.json`,
+   `trajectory.json`, logs, patches, and per-task artifacts. Do not reconstruct
+   the primary verdict from summaries, pass rates, or raw p-values when a Trial
+   Result exists.
 
-Legal optimization loop:
-
-```
-operator question
-  -> identify Harness Surface and Search Space
-  -> choose the cheapest valid Trial
-  -> execute or resume the Stet flow
-  -> read status or the persisted Trial Result
-  -> state what you believe is causing the current bottleneck and what change would test it
-  -> choose exactly one next action
-  -> mutate one allowed lever, refresh baseline, gate/promote, inspect, or stop
-```
-
-Rules for the optimizer:
-
-- Treat harness optimization as bounded search. If the desired edit is outside
-  the current Search Space, stop and explain that the search boundary changed.
-- Mutate one allowed lever at a time unless the operator explicitly asks to
-  change the Search Space.
-- Trust the Trial Result's `next_action` and lifecycle posture unless there is
-  clear contradictory evidence. Mixed, stale, missing, or partial evidence
-  fails closed for promotion and rollback: do not call it safe to ship. If the
-  operator requested optimization and `evidence_quality.directional_read.status`
-  is `usable` or `limited`, treat `inspect` as a caveated iteration signal:
-  explain the evidence limit, choose one bounded next lever or scale-up rerun,
-  and continue the loop. If status or report exposes
-  `repair.code=GRADE_CUSTOM_REPAIRABLE`, run the emitted
-  `stet eval rules repair ... --json` command; it reuses validation artifacts
-  and reruns only the affected custom grader coverage. Typed grader-failure
-  counters (`malformed_count`, `parse_attempt_count`, `repairable_count`, and
-  `public_failure_kind_counts`) are surfaced per arm on
-  `eval status`/`eval report` grader coverage and per grader on the
-  decision-receipt `compare.graders`/`run.graders` entries; canonical kinds
-  are `malformed_json`, `schema_invalid`, `range_invalid`,
-  `unsupported_signal`, `timeout`, `auth`, `config`, `unknown`.
-- When a rules change declares `change.rules.checkpoint_suite` or
-  `change.rules.holdout_suite`, keep normal optimization on the iteration suite.
-  Use checkpoint sparingly as validation feedback, not the target. Run holdout
-  only for the finalist; read `study.readiness` in `eval_report.v1.json`.
-  A declared holdout must pass before the result is decision-grade or promotable.
-- For rules and rules-skill runs, `no_gold_pass_commands`,
-  `all_commands_ignored_gold_failure_mode_unset`, or a candidate smoke
-  preflight failure before `experiment.json` means the selected replay
-  evidence is not gold-valid yet. Treat it as a dataset/slice validity problem,
-  not model-quality evidence or proof that current-checkout tests are broken;
-  diagnose why the verifier failed before choosing a bounded next action.
-- Rules plan/launch now emit `replay_validity` progress; launch may reuse a
-  recent matching plan receipt, and status/receipts expose charged/reused/final
-  task counts when smoke preflight evidence is reused.
-- Before rules launches from a built dataset, use
-  `stet suite select --suite-manifest <stet.suite.yaml> --target-valid N` when
-  the operator needs N launchable tasks. It oversamples historical candidates,
-  runs gold replay preflight, writes a yield receipt, and emits a derived suite
-  whose `selection.task_ids` are gold replay valid / launchable. Read
-  [dataset-build](references/dataset-build.md) for the build-side flow and
-  [rules-flow](references/rules-flow.md) for the launch-side handoff.
-- Distinguish release promotion from baseline refresh. Promotion changes
-  rollout state; baseline refresh changes the frozen reference for future
-  searches.
-- Freeze baseline evidence when it will be reused. If a completed probe, smoke,
-  or eval root is the stable reference for future candidate work, prefer
-  `stet baseline freeze --from <root> --name <capability> --json` and later
-  compare with `--baseline <reference>` instead of rerunning the baseline arm.
-  This saves model/evaluator tokens and constrains the task slice, provenance,
-  and Search Space for the next iteration. Skip only when the baseline evidence
-  is stale, invalid, unrepresentative, or the operator needs fresh release-gate
-  evidence. For first-in-repo model, reasoning, or harness-setting results,
-  make baseline freeze an explicit next action whenever validity is ok and the
-  run is likely to anchor future comparisons, even if the evidence is only
-  directional; label the frozen baseline's sample size and confidence, and do
-  not equate baseline refresh with promote-grade evidence.
-- When pass rates tie, use quality dimensions above the gate: equivalence,
-  code review, footprint/risk, cost, and custom graders.
-- To discover common coding-outcome grader IDs, run
-  `stet graders --repo <path> --json`. It lists built-in coding graders,
-  bundled `craft` / `discipline` bundles, repo `quality:` config, and
-  repo-local `rubrics/*.yaml` graders. For plan/research grading, write or
-  select a custom rubric first; read
-  [rubric-authoring](references/rubric-authoring.md).
-- For first-time repo setup, ask once for the quality-grader posture before
-  non-interactive init or the first smoke/probe/eval: recommended, standard, or
-  custom. See [onboarding](references/onboarding.md).
-- When the suite manifest does not carry an `eval:` stanza (fixture suites,
-  read-only / shared repos, ad-hoc replays), pass `--grader-ai-model-id <id>`
-  on `stet eval rules plan` / `launch` / `skill` to supply the independent
-  evaluator for LLM-backed graders (`equivalence`, `code_review`,
-  craft/discipline). Stet defaults to provider-native schema output through
-  the matching local CLI; add `--grader-ai-cmd` only when forcing the legacy
-  shell-text evaluator. Note that `--no-quality` only drops the auto-bundled
-  craft/discipline graders; the default `equivalence` and `code_review`
-  graders remain LLM-backed and still require an evaluator.
-- For compare-backed diagnosis, prefer `decision_receipt.tasks[*]` issue
-  summaries, risks, grader coverage, and task flips before opening per-task
-  artifacts by hand.
-- For LLM-as-a-judge provenance, read both `evaluator_model` and
-  `evaluator_model_status` from
-  `decision_receipt.tasks[*].{baseline,candidate}_graders.<grader_id>`, and
-  read aggregate model sets plus status from `decision_receipt.graders`. Also
-  check `decision_receipt.graders.profile_status` and `grader_profile`; treat
-  `mixed` or `missing_legacy` profile status as inspect-only evidence.
-- For custom graders, verify expected grader IDs are present in
-  `decision_receipt.compare.grader_coverage`, `experiment.json.graders`, or arm
-  `decision_metrics.graders` before issuing a verdict. Explicitly requested
-  grader coverage that is missing or asymmetric should fail closed to
-  `inspect`; one-sided graders are coverage evidence, not comparison math.
-- For installed MVP binaries, use the private CLI repo update flow:
-  `stet --version`, `stet update`, or `stet update --version <tag>`. Pilot
-  users need access to `benredmond/stet-cli`.
-  `stet update` refreshes the binary. Stet performs a cached stale-version
-  check during normal CLI use and may
-  auto-update before safe fresh launches; it warns instead of mutating the
-  toolchain for report/status/repair/resume/promote/rollback style commands.
-  Use command-local `--no-auto-update` or `STET_AUTO_UPDATE=0` for pinned CI,
-  air-gapped shells, or deliberately frozen toolchains.
-- Harbor-installed Codex/Claude support agents are baked into
-  `.stet/harbor.Dockerfile` (`ARG BAKE_CLAUDE_CODE` / `ARG BAKE_CODEX`, both
-  default on; both fetch the latest published version on each fresh build).
-  Cursor-backed Stet Harbor exports bake Cursor Agent into the task image so
-  solve/verifier phases do not install it at runtime; direct Dockerfile use can
-  still opt in with `ARG BAKE_CURSOR=1`. Model-backed Harbor solve phases may
-  need provider API access. Cursor-backed candidate runs inject temporary CLI
-  policy and hooks as a best-effort tool deterrent, then fail closed in
-  reports when agent logs show WebFetch/WebSearch or shell network-command
-  contamination; keep dependency setup baked and verifier installs out of
-  runtime instead of relying on live fetches.
-  `/logs/agent/harness_cli_cache.json` reports `status: skipped_image_baked`
-  with `baked_binary_path` and `baked_binary_version` — that is the healthy
-  default. The host `--harness-cli-cache auto` cache only kicks in for
-  unbaked Dockerfiles or operator-pinned versions; `--harness-cli-cache off`
-  is for cold-start probes against unbaked images, and 24h TTL refreshes
-  apply unless overridden by `STET_HARNESS_CLI_CACHE_TTL_SEC`. Inspect
-  `runner_runtime.v1.json` plus `harness_cli_cache.json` before treating
-  setup time as model signal.
-- For Cursor model-under-test runs, use `agent.name: cursor` and
-  `Composer 2.5` / `composer-2.5`; do not use `composer-2.5-fast` unless the
-  fast tier is explicitly the treatment. Keep independent graders on
-  `--grader-ai-model-id` so Stet can use provider-native schema output. Stet
-  reuses local Cursor OAuth from `agent login` by exporting a narrow Harbor
-  auth blob; `CURSOR_API_KEY` remains supported but is not required. Pricing is
-  in the manifest: Composer 2.5 is $0.50 input, $0.20 cache read, and $2.50
-  output per 1M tokens; Fast is $3/$0.50/$15.
-- For Claude model-update or model-under-test selectors, `model:opus 4.8`
-  resolves to canonical `claude-opus-4-8`; pricing comes from Stet's bundled
-  pricing metadata and appears in rules/eval cost surfaces.
-- To run Codex model-under-test traffic through codex-lb, start codex-lb on a
-  host address reachable from Harbor containers, export `CODEX_LB_API_KEY`,
-  and optionally export `CODEX_LB_BASE_URL` (defaults to
-  `http://host.docker.internal:2455/backend-api/codex` for Harbor). The Codex
-  Harbor support agent automatically injects the transient Codex provider
-  config; keep independent graders on a separate `--grader-ai-model-id` so
-  codex-lb does not judge itself.
-- For the shipped Stet agent skill, use the same private CLI repo:
-  `npx skills add https://github.com/benredmond/stet-cli.git --skill stet --all`.
-  Refresh it separately with `npx skills update stet -y`; `stet update`
-  will warn about this path but does not mutate agent-managed skills.
-  Release automation syncs `skills/stet` into the distribution skill snapshot
-  before publishing dist collateral.
-- On command failure, read status when possible, fail closed, and use the
-  recovery patterns in [operator-contract](references/operator-contract.md).
-
-Multi-turn state:
-  Track the current output root path or change manifest across turns. The root
-  or manifest is the anchor for every later status, report, repair, rerun, or
-  lifecycle command.
-
-Human receipts:
-  Terminal receipts are compact human-facing projections of the machine
-  contract. Use them to answer the operator and recommend one concrete next
-  step, but do not invent synthetic keypress actions or treat receipt text as
-  the primary agent API. See
-  [operator-contract](references/operator-contract.md).
-
-Result interpretation:
-  The agent owns interpretation. A completed eval, failed eval, inspect-state
-  eval, or check-in is not finished until the agent has read the relevant JSON
-  evidence and translated it into an operator-facing judgment.
-
-  Do not respond with only report paths, HTML paths, commands to run, or raw
-  status output. First answer the operator's question with the verdict,
-  confidence, lifecycle/readiness state, decisive metric deltas, evidence
-  quality, effective grader coverage, main risks, and one recommended next
-  action. Surface JSON/HTML paths only as supporting evidence.
-
-  For active runs, read status JSON and explain liveness, phase, progress,
-  blockers, latest artifact, and whether wait, inspect, resume, or repair is
-  next. For completed or inspect-state runs, read or materialize the Trial
-  Result, then read `decision_receipt`, `trial_context`, `quality`, `validity`,
-  `evidence_quality`, `lifecycle`, and `arms` before summarizing.
-  Treat process or trace-efficiency claims as blocked unless behavior telemetry
-  coverage is admissible: check `behavior.arm.claim_posture` for run reports or
-  `behavior.compare.claim_posture` / `decision_receipt.compare.behavior_coverage`
-  for compare reports.
-
-  If status and persisted evidence disagree, do not stop at the first payload.
-  Follow `evidence_refs`, the rules runtime, and any persisted
-  `eval_report.v1.json` / compare report, then explain the contradiction and
-  fail closed to inspect when the evidence remains degraded.
-
-Post-run learning:
-  After interpreting a completed, failed, inspect-state, or optimization-loop
-  run, do bounded trajectory QA to learn what happened before proposing the
-  next change. Prefer subagents when available so trajectory inspection,
-  evidence diagnosis, and improvement synthesis can run independently.
-
-  Post-run QA is diagnostic, not the primary verdict. Start from the Trial
-  Result and status contract above, then inspect lower-level `task_detail.json`,
-  `trajectory.json`, logs, and patches only to explain observed wins,
-  regressions, no-patch cases, grader gaps, surprising ties, or runtime
-  artifacts.
-
-  For optimization loops, split subagent work into narrow questions before
-  mutating anything: trajectory QA over representative weakest-dimension
-  tasks, flips, failures, no-patch cases, surprising ties, and strongest/weakest
-  graded examples; evidence QA over validity, grader coverage, sample adequacy,
-  runtime failures, stale or mixed provenance; and synthesis over exactly one
-  in-scope mutation to the current Search Space lever. Synthesize the findings
-  for the operator instead of pasting raw subagent notes.
-
-  The learning summary must separate candidate behavior from dataset, grader,
-  runtime, or provenance artifacts; identify the most plausible one-lever next
-  change; and state what evidence on the next run would confirm or refute it.
-  For GEPA-style reflective mutation, the synthesis subagent should return a
-  single `proposed_edit` block grounded in 1-3 trajectory references:
-
-  ```json
-  {
-    "path": "AGENTS.md",
-    "diff_or_rewrite": "diff --git ...",
-    "trajectory_refs": ["task-a trajectory.json", "task-b decision_receipt.tasks"],
-    "rationale": "Weakest traces show agents missed the report-read obligation before acting."
-  }
-  ```
-
-  Apply only that one focused mutation with normal editing tools, rerun the same
-  iteration lane immediately, and judge the next Trial Result against the stated
-  hypothesis. This applies to any allowed Search Space lever: skill text,
-  `AGENTS.md`, grader wording, cost instructions, harness settings, or similar
-  bounded surfaces. If no machine loop ledger exists, record the same block in
-  the durable loop log near the output root. Proposed edits are unreviewed
-  mutation candidates; commit, merge, promotion, and public claims still require
-  human review and decision-grade holdout evidence.
-
-HTML report:
-  Every persisted `eval_report.v1.json` has a sibling `eval_report.v1.html` -
-  a self-contained page the operator can open in a browser for a visual
-  breakdown of the verdict, metrics, evidence quality, and per-task results.
-  After interpreting any completed eval flow, surface the HTML path as
-  supporting evidence so the operator can review the results visually. The HTML
-  file lives in the same directory as the JSON artifact.
-
-## Route by Intent
+## Route By Intent
 
 When ambiguous, ask one question: "Are you testing a config change, comparing
 models, setting up a repo, improving a skill, or checking a release?"
 
-| What the user is asking | Start here | Read next |
+| User intent | Start here | Load |
 |---|---|---|
-| "Is this AGENTS.md / CLAUDE.md / policy helping?" | `stet manifest resolve`, `stet eval rules plan`, then `stet eval rules` | [rules-flow](references/rules-flow.md) |
-| "Does adding this new skill help?" / "with skill vs without skill" | New-skill A/B: keep baseline skill-absent or effectively empty, use behavior graders, then `stet eval rules` or a frozen-baseline compare | [rules-flow](references/rules-flow.md) |
-| "I want the fastest local directional read on a file change" | `stet probe --file` or `stet eval config-diff` | [quick-probe](references/quick-probe.md) |
-| "Try this candidate on my repo" | `stet probe` | [quick-probe](references/quick-probe.md) |
-| "Is this change safe to ship?" | `stet manifest resolve`, `stet eval rules plan`, then `stet eval rules` for shared behavior changes; otherwise `stet probe` | [rules-flow](references/rules-flow.md), [quick-probe](references/quick-probe.md) |
-| "Compare models / reasoning levels / harness settings on my codebase" | `stet context --repo <repo> --json`, then reuse/report or pinned `stet eval run`; use `stet eval smoke` only for first-run/no-history cases | [full-evals](references/full-evals.md), [compare-and-checkin](references/compare-and-checkin.md) |
-| "Compare baseline vs candidate" | `stet eval compare` | [compare-and-checkin](references/compare-and-checkin.md) |
-| "What is this run doing?" | `stet eval status` | [compare-and-checkin](references/compare-and-checkin.md) |
-| "Repair missing additive grader coverage on a finished run" | `stet runs repair-ai-coverage` or `stet runs regrade-graders` | [compare-and-checkin](references/compare-and-checkin.md) |
-| "A task failed the verifier for env reasons, not the patch" | `stet eval agent --retest-tests` (existing patch, corrected `--test`) then `stet runs repair-tests` -> `stet eval report` | [compare-and-checkin](references/compare-and-checkin.md) |
-| "Why is this root taking so much disk?" / "Can I reclaim raw artifacts?" | `stet artifacts status --root <root>` then `stet artifacts compact --root <root>` if not pinned | [compare-and-checkin](references/compare-and-checkin.md) |
-| "Repair or resume an incomplete rules compare" | `stet eval rules repair` (`resume` remains accepted) | [rules-flow](references/rules-flow.md) |
-| "Set up evals for this repo" | author `.stet/harbor.Dockerfile` + `.stet/stet.harness.yaml`, then `stet init` and `stet suite discover` | [onboarding](references/onboarding.md) |
-| "Build a large dataset (50+ tasks)" | `stet suite discover` + `stet suite build` | [dataset-build](references/dataset-build.md) |
-| "Is my shared skill revision better?" | `stet eval rules skill --plan --skill <path> --repo <path> --model <id> --goal "<...>" --out <dir>`, then `stet eval rules skill` against the committed prior skill | [rules-flow](references/rules-flow.md), [iterative-improvement](references/iterative-improvement.md) |
-| "Is my research / plan better?" | choose or write custom rubrics | [rubric-authoring](references/rubric-authoring.md) |
-| "Help me write a custom grader" | rubric design + calibrate | [rubric-authoring](references/rubric-authoring.md) |
-| "Keep improving until it passes" | scored improve-eval loop | [iterative-improvement](references/iterative-improvement.md) |
-| "Promote / monitor / roll back" | lifecycle commands | [release-lifecycle](references/release-lifecycle.md) |
-| "I need a manifest-backed rollout" | `stet manifest resolve`, `stet eval rules plan`, then `stet eval rules` | [rules-flow](references/rules-flow.md) |
+| `$stet optimize ...`, "optimize", "iterate", "keep improving", or max-iteration request on `AGENTS.md`, `CLAUDE.md`, a skill, model, harness, tool-policy, or rollout surface | Read or create native loop state, then use `stet optimize status`, `checkin`, `select`, and `launch`; use rules only as the replay lane under that control plane; select candidates by declared objective and evidence-weighted tradeoffs, not by minimal diff size; surface holdout approval for promising mixed finalists | [iterative-improvement](references/iterative-improvement.md), [rules-flow](references/rules-flow.md) |
+| Shared `AGENTS.md`, `CLAUDE.md`, policy, model, harness, tool-policy, or rollout question that is not an optimization loop | `stet context --repo <repo> --json`, then reusable baseline check, `stet manifest resolve`, `stet eval rules plan`, `stet eval rules` | [rules-flow](references/rules-flow.md) |
+| Fast local directional read or throwaway candidate check | `stet probe`, `stet probe --file`, or `stet eval config-diff` | [quick-probe](references/quick-probe.md) |
+| Model, reasoning, CLI version, or harness-setting comparison | `stet context --repo <repo> --json`, then reuse/report comparable roots or run a pinned eval; use smoke only for first-run bootstrap | [full-evals](references/full-evals.md), [compare-and-checkin](references/compare-and-checkin.md) |
+| Baseline vs candidate compare | `stet eval compare`, preferably against a frozen baseline when compatible | [compare-and-checkin](references/compare-and-checkin.md) |
+| Active run status, stuckness, waiting, heartbeat, or blocker check | `stet eval status --json` | [status-checkin](references/status-checkin.md) |
+| Repair incomplete or under-graded evidence | Follow emitted status/report repair commands before rerun or restart | [status-checkin](references/status-checkin.md), [compare-and-checkin](references/compare-and-checkin.md), [rules-flow](references/rules-flow.md) |
+| Shared skill addition or skill revision | Classify new-skill A/B vs revision, choose test posture, then use rules evidence or `stet eval rules skill` | [rules-skill-loop](references/rules-skill-loop.md), [iterative-improvement](references/iterative-improvement.md) |
+| Optimization loop or "keep improving" | Read native loop state, update check-in, select/launch one allowed next action | [iterative-improvement](references/iterative-improvement.md) |
+| Repo eval setup | Author harness config, ask once for the quality-grader posture (recommended, standard, or custom), then init/discover/build | [onboarding](references/onboarding.md) |
+| Large reusable dataset | `stet suite discover` and `stet suite build` | [dataset-build](references/dataset-build.md) |
+| Research, plan, or custom artifact quality | Choose or write custom rubrics first | [rubric-authoring](references/rubric-authoring.md) |
+| Promote, monitor, or roll back | Lifecycle commands after canonical Trial Result evidence | [release-lifecycle](references/release-lifecycle.md) |
 
-## Golden Paths
+## Eval Rules Workbench
 
-| Path | When to use | Flow |
-|---|---|---|
-| Rules rollout | Shared instruction/policy/docs/harness/model change control | `stet manifest resolve` -> `stet eval rules plan` -> `stet eval rules` -> `stet eval status` -> `stet eval report` -> `stet promote` -> `stet baseline freeze` |
-| Quick probe | Fastest repo-local answer | `stet probe` -> `stet eval report` |
-| Repair a finished run | Recover additive grader coverage without rerunning the harness | `stet runs repair-ai-coverage` / `stet runs regrade-graders` -> `stet eval status` -> `stet eval report` |
-| Config A/B (prefilter only) | Fast file-level directional read without rollout state | `stet probe --file` / `stet eval config-diff` |
-| Context-first selection | Model, reasoning-level, or harness-setting choice on a repo with Stet history | `stet context --repo <repo> --json` -> reuse/report or pinned `stet eval run` |
-| Quick smoke | First multi-model read with no usable Stet history | `stet eval smoke` |
-| Artifact retention | Inspect or reclaim raw rescue artifacts | `stet artifacts status --root <root>` -> `stet artifacts compact --root <root>`; use `pin` / `unpin` for operator-retained roots |
-| Pairwise compare | Baseline vs candidate | `stet eval compare` -> `stet eval report` |
-| Baseline-first | Freeze reusable evidence, then compare candidates without rerunning the baseline arm | `stet baseline freeze` -> `stet eval compare --baseline` |
-| Matched A/A/B optimization | Incumbent A/A noise vs candidate B movement over existing Trial Results | `stet eval workbench aa-b --manifest <aa-b.yaml> --out <dir> --plan` |
-| New skill A/B | Check whether adding a skill changes agent behavior | baseline absent/effectively empty skill -> choose test posture -> custom behavior graders -> `stet eval rules` |
-| Rules skill loop | Replay-backed shared skill improvement on the canonical rules surface | `stet eval rules skill --plan` -> `stet eval rules skill` -> optional `stet eval rules checkpoint` -> finalist `stet eval rules holdout` -> `stet eval report`. Both plan and launch require `--skill`, `--repo`, `--model`, `--goal`, and `--out`; normal cycles remain iteration-only. |
-| Repo onboarding | New repo, no dataset yet | author harness Dockerfile -> `stet init` -> `stet suite discover` -> `stet suite build` |
-| Dataset eval | Reusable benchmark | `stet suite build` -> `stet eval run` -> `stet eval report` |
-| Workbench probe | Iterative artifact improvement | `stet eval workbench probe` -> `stet eval report` -> `stet eval workbench gate` |
-| Release lifecycle | Promote, monitor, rollback | gate -> `stet promote` / `stet monitor run` / `stet rollback` |
+Use `stet eval rules` as the main replay-backed workbench for shared behavior
+changes. `stet optimize` is the loop-state and launch-control layer on top of
+rules work; it is not a substitute for reading rules status, rules reports, or
+the Trial Result.
 
-## Routing Rules
+Black-box routing invariant: if the operator prompt says `$stet optimize` or
+otherwise asks for an optimization loop, create or read native loop state before
+launching charged work. `stet eval rules plan` may inspect readiness, but the
+real iteration launch should go through `stet optimize launch` so the loop has
+`loop_state.v1.json`, `optimize_launch_receipt.v1.json`, frontier selection, and
+check-in evidence. A direct `stet eval rules` launch is the one-shot rollout
+path, not the optimization-loop control plane.
 
-- Before fresh Stet work on a repo, orient with:
+Default rules path:
 
-  ```bash
-  stet context --repo <repo> --json
-  ```
+```text
+stet context --repo <repo> --json
+-> resolve or author stet.change.yaml / stet.suite.yaml
+-> check compatible frozen baseline or freeze-eligible completed evidence
+-> stet manifest resolve --change-manifest <stet.change.yaml> --json
+-> stet eval rules plan --change-manifest <stet.change.yaml> --json
+-> stet eval rules --change-manifest <stet.change.yaml> --json
+-> stet eval status --change-manifest <stet.change.yaml> --json
+-> stet eval report --change-manifest <stet.change.yaml> --json
+```
 
-- Treat context as the current map of config, dataset/eval history, reusable
-  artifacts, baselines, task selection, Harness Surface, and recommended next
-  actions. Skip it only for an already-known active run, a specific completed
-  root/report, or setup evidence that must be inspected directly.
-- Start with the cheapest surface that preserves the operator's decision
-  semantics. Use `stet probe` for quick safety reads. Use manifest-backed
-  rules flows for shared behavior changes that may become rollout state.
-  Treatments split by mechanism: file overlays (`agents_md`, `claude_md`,
-  `skill_diff`, `harness_bundle`), prompt-template context (`docs_glob`),
-  and runtime selector (`model_update`). See
-  [rules-flow](references/rules-flow.md) ("How file overlays work") for why.
-- Cheap `stet probe --file` or `stet eval config-diff` runs may discard bad
-  AGENTS.md, CLAUDE.md, skill, or policy drafts, but any candidate you keep,
-  recommend, baseline, promote, or call an improvement needs rules evidence.
-- For raw file A/B without manifests, use `--baseline-file`,
-  `--candidate-file`, and `--logical-path`. For non-code outputs such as
-  research or plans, choose or write custom rubric YAML before comparing.
-- For repo-managed skills under `.agents/skills` or `.claude/skills`, treat the
-  changed skill as the target and the full managed skills tree as the frozen
-  runtime envelope. Precedence is `.agents/skills` over `.claude/skills`.
-- Split skill comparisons by baseline semantics. For a new skill, answer
-  "with skill vs without skill": the baseline should have no usable skill
-  guidance, and `skill_workbench` is secondary because it grades the skill text,
-  not the agent's task output. For a skill revision, answer "candidate skill vs
-  committed prior skill" and prefer `stet eval rules skill`.
-- Decide test posture before launching a skill A/B. If repo tests are not part
-  of the question, do not use `tests_gated` rubrics as the primary signal; use
-  `quality_only` behavior rubrics or an existing-details quality-only path, and
-  say explicitly whether Harbor repo tests will run.
-- For model, reasoning-level, or harness-setting selection, prefer exact
-  comparable roots from `stet context --repo <repo> --json`, then pinned reuse
-  of prior task selection, then a fresh dataset-backed run. Treat `stet eval
-  smoke` as first-run bootstrap, not the default for repos with history.
-- Treat reasoning level, sandbox, tool access, prompt profile, and agent kwargs
-  as Harness Surface levers. Keep the task slice fixed when comparing those
-  levers, especially when both arms use the same model id.
-- For reusable evidence, freeze completed comparable roots with
-  `stet baseline freeze --from <root> --name <capability> --json`. Reuse
-  `task_selection.dataset_key` as `--pinned-dataset-key` when available. In
-  baseline-first compare, `--task-id` narrowing works for benchmark baselines
-  but not replayable baseline snapshots.
-- For completed reads, prefer persisted `eval_report.v1.json`; read
-  `decision_receipt`, then `trial_context`, then lower-level artifacts only for
-  diagnosis. For active reads, prefer `stet eval status --json`.
-- `stet validate` truncates gold/agent patches in grader prompts at 50 KB by
-  default; use `--prompt-patch-bytes N` only for explicit benchmark/reporting
-  reruns. Raw diff guardrails still gate on gold patch size (`>25` files or
-  `>4000` lines); agent diff stats and footprint risk are diagnostic, not
-  default guardrail overrides.
-- For disk pressure, read `stet artifacts status --root <root>` before
-  deleting anything manually. Compacted roots keep `patch_retention.v1.json`
-  contracts and report `regrade_capability`; `bounded_only` means decision
-  metadata remains but full raw-patch regrade requires a rerun or archive.
-  This compacts raw patch artifacts only; it does not evict datasets, repo
-  bundles, trajectories, Docker cache, APFS snapshots, or whole run roots.
-- If requested grader coverage is part of the decision, verify the expected
-  grader IDs in `decision_receipt.compare.grader_coverage`,
-  `experiment.json.graders`, or arm `decision_metrics.graders`. Missing or
-  asymmetric explicit coverage should fail closed to `inspect`; one-sided
-  graders are excluded from rollout recommendations.
-- If LLM grader provenance is part of the decision, read
-  `decision_receipt.graders.profile_status` and `grader_profile`. `mixed` or
-  `missing_legacy` means the report is inspect-only until rerun or repaired
-  with resolved profile evidence.
-- Recover incomplete or under-graded roots with the ordered commands emitted by
-  `stet eval status` or `stet eval report`: usually
-  `stet runs repair-ai-coverage ...`, then `stet runs regrade-graders ...`.
-  Add `--parse-retries N` for saved grader prompts that failed parsing.
-- For incomplete rules-backed compares, prefer
-  `stet eval rules repair --change-manifest <stet.change.yaml>` or
-  `--rules-root <dir>`. Do not rerun `stet eval rules` to recover partial
-  evidence; use `--restart` only when intentionally discarding it.
-- Treat `waiting_on_quota` as an intentional automatic pause. Do not delete
-  artifacts or relaunch successful task evidence; wait for `retry_after`, or
-  use the flow's resume command only if the active process has exited.
-- Treat auth, license, Claude `/login`, and Harbor setup failures as
-  infrastructure risk before interpreting candidate quality. For Claude Code
-  auth, prefer the Stet-private
-  `~/.config/stet/claude-oauth-token` file with `0600` permissions; avoid
-  global shell exports and repo-local env files. Run `stet update` from
-  prerelease builds, or use `stet update --prerelease` /
-  `stet update --version <tag>` to refresh the Stet binary explicitly.
-  See [onboarding](references/onboarding.md) and
-  [operator-contract](references/operator-contract.md) for exact recovery.
-- Preserve the release/baseline distinction. Release promotion changes rollout
-  state; baseline refresh changes the frozen reference for future compares.
-- Prefer `--json` when output feeds another agent step. When a command finishes
-  in a non-terminal state, offer keyed next actions.
+Rules workbench obligations:
 
-## Lifecycle and Decisions
+- Use rules evidence for any shared behavior candidate the operator might keep,
+  recommend, baseline, promote, or call an improvement. Probes and config-diff
+  runs are prefilters only.
+- Keep the treatment mechanism explicit: file overlays for `agents_md`,
+  `claude_md`, `skill_diff`, and `harness_bundle`; prompt-template context for
+  `docs_glob`; runtime selector for `model_update`.
+- Plan before charging meaningful work. Read plan output for arms, task count,
+  graders, evaluator requirements, baseline reuse, replay validity, and budget
+  posture.
+- If status/report emits a repair command, prefer that evidence-preserving
+  repair before a rerun. Use `--restart` only when intentionally discarding
+  partial rules evidence.
+- For skill loops, use `stet eval rules skill` and
+  [rules-skill-loop](references/rules-skill-loop.md). For ordinary rollout
+  manifests, keep detailed commands in [rules-flow](references/rules-flow.md).
 
-Lifecycle: onboard -> probe/compare -> gate -> promote -> monitor or rollback.
-Each step produces evidence the next step requires.
+## Baselines And Freshness
 
-| Step | Decision grade | Produces |
-|---|---|---|
-| Onboard | `exploratory` | dataset + onboarding receipt |
-| Probe | `exploratory` to `gateable` | bounded compare verdict |
-| Compare | `exploratory` | pairwise experiment |
-| Gate | `gated` | release record with trust/rollout |
-| Promote | `promoted` to `monitorable` | promoted release |
+- Before fresh Stet work on a repo, orient with `stet context --repo <repo>
+  --json` unless you are already anchored on a specific active run, completed
+  root, report, or setup artifact.
+- Before any launch that would spend a baseline arm, check for an exact reusable
+  frozen baseline or a complete arm/root that can be frozen. Use `--baseline
+  <reference>` when task slice, Harness Surface, Search Space, grader set, and
+  evidence validity match.
+- Do not spend a fresh baseline arm to paper over a wrong slice, invalid frame,
+  stale evidence, missing coverage, or provenance mismatch. Use
+  `--force-fresh-baseline` only when the operator intentionally needs fresh
+  matched baseline evidence for a compatible slice and harness surface.
+- Partial arms are not freeze-eligible. Let running or incomplete baseline arms
+  finish or repair first, then freeze before A/A repeats, candidate reruns, or
+  the next optimization cycle.
+- First valid model, reasoning, or harness-setting results are often worth
+  freezing as directional baselines for future compares. Label sample size and
+  confidence, and do not call the frozen baseline promote-grade evidence.
 
-Decision shortcuts:
+## Optimization Loops
 
-- Fast answer wanted: `stet probe` or first-run `stet eval smoke`.
-- Baseline vs candidate: `stet eval compare`.
-- New repo: `stet suite discover`, `stet suite build`, then propose a starter slice.
-- Shared skill improvement: `stet eval rules skill --plan`, then `stet eval rules skill`.
-- Custom artifact, research, or plan quality: use workbench or custom rubrics.
-- Noisy rubric: read [rubric-authoring](references/rubric-authoring.md).
-- Incomplete compare: read status/report `next_action`, not summary prose.
-- Clear baseline-first winner: recommend baseline promotion before another iteration.
+Legal loop:
+
+```text
+operator question -> identify Harness Surface and Search Space
+-> choose the cheapest valid Trial -> execute or resume Stet
+-> read status or Trial Result -> state hypothesis/test
+-> update loop_state.v1.json with stet optimize checkin
+-> execute one authorized diagnostic or iteration action
+-> read evidence -> continue, refresh baseline, inspect, repair, scale, or stop
+```
+
+Use native loop commands:
+
+- `stet optimize status --loop-state <path> --json`
+- `stet optimize status --change-manifest <path> --json`
+- `stet optimize status --workbench`
+- `stet optimize checkin`
+- `stet optimize select --loop-state <path> --next-intent "<intent>"`
+- `stet optimize launch --change-manifest <path> --probe --json`
+- `stet optimize launch --change-manifest <path> --lane holdout --json`
+
+If these commands are missing or the installed skill copy does not mention them,
+fail closed and say the Stet skill or CLI is stale. Do not silently downgrade an
+optimization prompt to a standalone rules run with an ad hoc ledger.
+
+For check-ins, use the fields the command actually accepts:
+`--from-report`, `--candidate-id`, `--hypothesis`, `--lever`, `--axis`,
+`--summary`, `--next`, `--next-command`, `--blocked`, `--reject-lever`,
+`--rejection-reason`, `--revisit-rationale`, `--reason`, `--trajectory-scan`,
+and `--finding-ref`. Put richer implication and contradiction detail in
+`--summary`, the operator response, and canonical receipts; do not invent a
+second durable row schema.
+
+Before another Trial, answer whether the previous result confirmed the
+hypothesis, refuted the hypothesis or lever class, merely calibrated the lever,
+or exposed an eval-design blocker. If a secondary metric improved while the
+primary objective or quality gate regressed, record the candidate as rejected
+and pivot or stop. Do not keep tuning a rejected lever class unless native loop
+state records a new rationale.
+
+Checkpoint is validation feedback, not the optimization target. Run holdout
+only for the finalist. Promotion, default, and public claims require canonical
+Trial Result and decision-grade holdout evidence.
+
+## Operator Output
+
+The agent owns interpretation. A completed eval, failed eval, inspect-state
+eval, or check-in is not done until the agent has read the relevant JSON
+evidence and translated it into an operator-facing judgment.
+
+For active runs, explain liveness, phase, progress, blockers, latest artifact,
+and whether wait, inspect, resume, or repair is next. For completed or
+inspect-state runs, answer with verdict, confidence/readiness, lifecycle state,
+decisive metric deltas, evidence quality, effective grader coverage, main risks,
+and one concrete next action. Surface JSON and sibling `eval_report.v1.html`
+paths only as supporting evidence.
+
+If status and persisted evidence disagree, follow `evidence_refs`, the rules
+runtime, and persisted reports; explain the contradiction and fail closed to
+inspect when evidence remains degraded.
 
 ## Gotchas
 
-- `probe` answers the question directly. Gate is optional, not the default.
+- `probe` answers quick safety questions directly. Gate is optional, not the
+  default.
 - `INSPECT` and `HOLD` are completed decision states, not broken runs.
-- Quiet logs are normal, and Stet runs can take a while. Use
-  `stet eval status` before assuming a stall.
-- If `stet eval status --json` and `stet eval report --json` disagree on a
-  compare root, fail closed to inspect instead of inventing a clean verdict.
-- Tests are the gate, not the source of truth. Binary pass rate cannot
-  differentiate strong models. Quality dimensions above the gate are where
-  differentiation lives.
-- AGENTS.md/CLAUDE.md treatments are disk overlays, not prompt injection. Harbor
-  stages them outside `/app`, installs through existing symlink targets, and
-  commits the overlay baseline so captured patches exclude treatment churn.
-- Historical tasks default to the repo's current root `AGENTS.md` and
-  `CLAUDE.md` at materialize time. These convention files replace any
-  historical copies after `repo.tar.gz`, are committed into the task baseline
-  when git history is available, and are excluded from captured agent patches;
-  explicit rules/config-diff overlays still apply later and take precedence for
-  the selected arm.
-- Dataset images ship with `install_config.pre_install` and `install` baked in
-  at build time, so the agent's first turn can run the project test command
-  directly (`pnpm vitest`, `cargo test`, `go test ./...`, `pytest`, etc.)
-  without `pnpm install` / `cargo fetch` / `go mod download` / `bundle install`
-  / `uv sync` first. Missing or wrong install steps surface deterministically
-  at `docker build` rather than as silent first-turn flakes.
-- Docker capacity is shared across Harbor task concurrency, model workers,
-  validation workers, and command workers. When Docker Desktop cannot allocate
-  more memory, keep effective concurrency explicit: harness pressure is roughly
-  `model-workers * harbor-concurrency`; validation pressure is roughly
-  `workers * command-workers`. Use `stet harbor cleanup` before broad Docker
-  spelunking; apply with `--apply` only when no active run is using the listed
-  stale Harbor resources. Use `stet artifacts compact` separately for
-  metadata-preserving raw patch cleanup inside completed Stet roots.
+- Quiet logs are normal. Read status JSON before assuming a stall.
+- Tests are the gate, not the whole source of truth. Quality dimensions above
+  the gate are where strong models, skills, and instructions differentiate.
+- Cheap `probe --file` or `config-diff` runs can discard weak drafts, but kept
+  or promoted shared behavior needs rules evidence.
+- Required grader coverage that is missing, asymmetric, unavailable, or
+  provenance-mismatched fails closed. Use emitted repair commands instead of
+  rerunning clean evidence by hand.
+- Auth, license, Claude `/login`, Harbor setup, Docker capacity, and runtime
+  setup failures are infrastructure risk before they are candidate quality
+  evidence. Read the relevant reference before spending again.
 
 ## Read As Needed
 
-Only load the reference doc that matches the current routing decision:
+Only load the reference doc that matches the current route:
 
-- [references/operator-contract.md](references/operator-contract.md)
-  Receipt format, next-step recommendations, reporting rules, error handling.
-- [references/quick-probe.md](references/quick-probe.md)
-  Probe, file-mode config checks, config-diff, quick smoke.
-- [references/full-evals.md](references/full-evals.md)
-  Eval run, eval smoke, suite discover/build, rules-backed rollout.
-- [references/compare-and-checkin.md](references/compare-and-checkin.md)
-  Pairwise compare, eval status, inspect handoff, recovery.
-- [references/rules-flow.md](references/rules-flow.md)
-  Manifest resolve, eval rules, manifest-backed decisions.
-- [references/release-lifecycle.md](references/release-lifecycle.md)
-  Gate, promote, monitor, rollback.
-- [references/onboarding.md](references/onboarding.md)
-  First-run repo setup, dataset building, starter-slice approval.
-- [references/dataset-build.md](references/dataset-build.md)
-  Heavy dataset builds, Docker debug loops, ecosystem templates, scaling.
-- [references/rubric-authoring.md](references/rubric-authoring.md)
-  Custom grader design, calibration, scored rubric templates.
-- [references/iterative-improvement.md](references/iterative-improvement.md)
-  Scored improve-eval-log-repeat loop, loop log, stop rules.
-- [references/examples.md](references/examples.md)
-  Complete multi-turn interaction traces showing the agent protocol.
+- [references/operator-contract.md](references/operator-contract.md): receipt
+  format, reporting rules, next-step execution, and error handling.
+- [references/status-checkin.md](references/status-checkin.md): active status,
+  heartbeat, waiting, blockers, and inspect-or-wait check-ins.
+- [references/quick-probe.md](references/quick-probe.md): probes, file-mode
+  config checks, config-diff, and quick smoke.
+- [references/full-evals.md](references/full-evals.md): eval run, eval smoke,
+  suite discover/build, and larger reusable benchmarks.
+- [references/compare-and-checkin.md](references/compare-and-checkin.md):
+  pairwise compare, machine-readable compare fields, inspect handoff, recovery.
+- [references/rules-flow.md](references/rules-flow.md): manifest resolve,
+  eval rules, manifest-backed rollout decisions, repair, restart, overlays.
+- [references/rules-skill-loop.md](references/rules-skill-loop.md): skill A/B,
+  skill revision, shared skill wrapper, and rules-skill loop specifics.
+- [references/iterative-improvement.md](references/iterative-improvement.md):
+  native optimize-loop state, check-ins, frontier selection, holdout, stop rules.
+- [references/release-lifecycle.md](references/release-lifecycle.md): gate,
+  promote, monitor, rollback.
+- [references/onboarding.md](references/onboarding.md): first-run repo setup,
+  quality posture, dataset building, starter-slice approval.
+- [references/dataset-build.md](references/dataset-build.md): heavy dataset
+  builds, Docker debug loops, ecosystem templates, scaling.
+- [references/rubric-authoring.md](references/rubric-authoring.md): custom
+  grader design, calibration, scored rubric templates.
+- [references/examples.md](references/examples.md): examples only; do not load
+  for ordinary routing unless a concrete trace would resolve ambiguity.

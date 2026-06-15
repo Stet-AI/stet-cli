@@ -58,7 +58,10 @@ Checks:
 5. **CI exists**: test-related GitHub Actions, GitLab CI, or equivalent CI
 6. **CI is green**: inspect the provider's CI status; for GitHub,
    `gh run list --repo {owner}/{repo} --limit 5`
-7. **Language supported**: Python, TypeScript/JavaScript, or Go
+7. **Runnable test stack**: CI exposes deterministic test commands that can be
+   reproduced in a Harbor Dockerfile. Stet is not limited to a fixed language
+   list, but opaque, hosted-only, or unreproducible stacks may need harness work
+   before they are viable.
 
 Run a discover probe to measure pipeline yield:
 
@@ -94,8 +97,9 @@ Launch 3 parallel subagents:
 1. **CI Miner**: Read `.github/workflows/*.yml`, `.gitlab-ci.yml`, or
    equivalent CI config. Extract install steps, test commands, runtime
    versions, env vars, services, conditional logic.
-2. **Ecosystem Analyzer**: Read package manager configs. Extract language,
-   package manager, dependency groups, workspace structure, native deps.
+2. **Ecosystem Analyzer**: Read package manager and build-system configs.
+   Extract language/runtime constraints, package manager, dependency groups,
+   workspace structure, native deps, and repo-level test runners.
 3. **Docs Reader**: Read README, CONTRIBUTING, DEVELOPMENT docs. Extract
    setup instructions, test commands, gotchas, system deps.
 
@@ -106,30 +110,52 @@ Synthesize into:
 
 **The test command must run the repo's actual test suite, not a smoke test.**
 Priority: CI workflow > Makefile target > package.json script > README.
+For monorepos or build-system-driven repos, preserve CI's runner and repo-level
+flags, then prefer a broad positive target pattern that covers the changed area
+and can be narrowed or kept broad by Stet. Avoid package-local commands, shard
+wrappers, negative target filters, or leaf package-manager commands unless CI
+shows that they are the real repo-level verifier.
 
 Proactive gotcha handling:
 
 | Issue | Prevention |
 |---|---|
 | Missing system tools | Install them in the Harbor Dockerfile |
-| Wrong Node/Python version | Pin to CI matrix version in the Dockerfile |
-| Package manager network flakes | Add retry config in the Dockerfile |
+| Wrong runtime or build tool version | Pin to CI matrix or repo config in the Dockerfile |
+| Package manager or build-system network flakes | Add retry config and dependency prewarming in the Dockerfile |
 | Repo expects setup steps before tests | Encode them in the Dockerfile, keep `stet init --test` focused on test execution |
+| Monorepo command drift | Use CI's repo-level runner command; do not infer setup from unrelated leaf package files |
 
-Harbor task exports run agent solve and verifier test phases without live setup
-fetches by default. Keep package downloads, `go mod download`, `cargo fetch`,
-and equivalent dependency prewarming in the Dockerfile or install config so the
-runtime can execute from cached dependencies. When install steps are baked into
-the exported Dockerfile, Stet renders verifier commands without replaying
-`pre_install` / `install` at runtime. Use `env.allow_internet: true` in a
-specific `task.yaml` only for tasks whose actual tests legitimately require
-live internet. Cursor-backed Harbor exports also bake Cursor Agent into the task
-image, so agent phases do not depend on runtime installer access. Model-backed
-solve phases may need provider API access. Cursor-backed candidate runs inject
+Harbor task exports default to runtime internet enabled. Keep package downloads
+and equivalent dependency prewarming in the Dockerfile or install config anyway
+so runtime execution does not depend on live setup fetches. Use the dependency
+surface the selected test runner actually uses; for example, do not add
+npm/pnpm/yarn installs just because a monorepo contains `package.json` when CI's
+verifier is owned by another build system. When install steps are baked into the
+exported Dockerfile, Stet renders verifier commands without replaying
+`pre_install` / `install` at runtime. Use `env.allow_internet: false` in a
+specific `task.yaml`, or `--harbor-disable-network` for an offline-only run,
+only when the actual agent and verifier phases must run without network.
+Cursor-backed Harbor exports also bake Cursor Agent into the task image, so
+agent phases do not depend on runtime installer access. Model-backed solve
+phases may need provider API access. Cursor-backed candidate runs inject
 temporary CLI policy and hooks as a best-effort tool deterrent, then fail closed
-in reports when agent logs show WebFetch/WebSearch or shell network-command
-contamination; do not treat `allow_internet = true` on those runs as permission
-to move dependency setup or verifier installs back into runtime.
+in reports when the Harbor task explicitly disables network, for example via
+`--harbor-disable-network`, and agent logs show WebFetch/WebSearch or shell
+network-command use; do not treat `allow_internet = true` on those runs as
+permission to move dependency setup or verifier installs back into runtime.
+Even when network stays enabled, candidate guards deny obvious target-answer
+routes such as public PR/commit pages, raw target-repo source, provider web
+fetch/search surfaces, GitHub API answer endpoints, and target upstream git
+history fetch/show/apply paths. Candidate-visible denials are intentionally
+generic; use the operator artifacts for precise route and validity diagnostics.
+Some provider CLIs still expose harness-looking launch details such as `/app`,
+sandbox/trust flags, or headless execution modes; treat those as residual
+eval-awareness risk until the provider wrappers support less revealing launch
+metadata.
+`--harbor-disable-network` runs tasks with `network_mode=none` (no DNS or
+egress) and is rejected for model-backed agents, which cannot reach their
+provider API offline; it is valid only for offline agents (oracle, nop).
 
 For Go tasks, build bakes the toolchain at the recipe's `runtime_version` and
 freezes it (`GOTOOLCHAIN=local`) so the offline run never auto-downloads a
@@ -220,11 +246,29 @@ to opt out (not recommended; you get lower-fidelity broad verifiers).
 
 After >= 80% gold pass, verify test_cmd relevance: pick a task with test
 patch, confirm test_cmd runs those files. Under `--llm-install-config`, build
-auto-narrows a single broad whole-suite verifier (e.g. `go test ./...`, bare
-`pytest`, `pnpm test`) to the test packages/files covering the change and
-fail-closes to the broad command otherwise; each task's
-`build_logs/test_selection.json` records the outcome (`narrowed` / `left_broad`
-/ `abstained`).
+attempts runner-neutral selector evidence for a single broad whole-suite
+verifier. It accepts a narrowed command only when deterministic proof succeeds
+(filesystem package/path/file proof for supported path runners, Bazel label
+proof through `bazel query` or Bazelisk when available). Each task's existing
+`build_logs/test_selection.json` path now carries `schema:
+test_selection/v2`, stable reason codes, runner/target metadata, proof source
+and strength, selected targets, covered paths, fallback, setup blocker class
+when known, and a legacy v1 projection. Unsupported, ambiguous, malformed,
+stale, or missing evidence keeps the broad command with `left_broad` or
+`abstained`; selector coverage is corpus evidence, not model-quality evidence.
+
+Repos may declare a lower-trust selector input surface in `.stet/stet.yaml`:
+
+```yaml
+test_selector:
+  runner: bazel
+  selector_command: .stet/select-tests --changed-files-json <path>
+  fallback: keep_broad
+```
+
+Stet records digest/provenance/trust state for this config. It does not treat
+arbitrary selector-command output as proof unless Stet can normalize and
+cross-check it.
 
 **CHECKPOINT: Report iteration results. Proceed to scale on approval.**
 
@@ -263,12 +307,16 @@ Add `--prune-buildkit` only when broad Docker BuildKit cache cleanup is
 acceptable. Do not delete `.stet` run roots or `~/.cache/stet` evidence
 artifacts.
 
-For completed Stet roots that are using disk because of retained raw patches,
-run `stet artifacts status --root <root>` before manual deletion, then
-`stet artifacts compact --root <root>` when bounded patch metadata is enough.
-This preserves `patch_retention.v1.json` contracts but does not remove
-datasets, repo bundles, trajectories, Docker cache, APFS snapshots, or whole
-run roots.
+Successful compare/run completions now auto-drop their regeneratable scratch
+(`.harbor-dataset/` and `.smoke/`) while preserving evidence; set
+`STET_KEEP_SCRATCH=1` to keep it for debugging. For backlog, run
+`stet artifacts status --root <root>`, then `stet artifacts compact --root
+<root>` (default `--level all` = compact bounded patches AND evict scratch; use
+`--level scratch` or `--level patch` to narrow, `--dry-run` to preview). Add
+`--include-datasets` only when you want to remove verified built dataset
+directories too. This preserves `patch_retention.v1.json` contracts and a
+`cleanup.v1.json` seal but never removes trajectories, Docker cache, APFS
+snapshots, or whole run roots.
 
 When Docker Desktop cannot allocate more memory, tune concurrency instead of
 raising resource limits. Start with `--workers 2` for dataset builds. For eval
@@ -335,7 +383,10 @@ failure (`prompt_shape_requires_ai_task`) when `ai_task` cannot be produced.
 Every task records the decision under `meta.prompt_provenance` in `task.yaml`,
 and `build-summary.json` reports `prompt_shape_fallbacks`,
 `prompt_shape_explicit_failures`, plus the two `ai_task_generation_*`
-counters.
+counters. For materialized tasks with selector evidence, `build-summary.json`
+also includes a separate `test_selector` rollup with selector status,
+reason-code, proof-strength, runner, target-kind, fallback, and legacy-v1
+counts.
 
 ## Common Next Steps
 

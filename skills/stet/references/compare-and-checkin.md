@@ -6,7 +6,7 @@ next-step recommendations.
 ```
 compare ──► report ──► complete?
                        ├─ yes, winner (release context) ──► gate / inspect / stop
-                       ├─ yes, winner (baseline-first context) ──► promote baseline / inspect / stop
+                       ├─ yes, winner (baseline-first context) ──► refresh baseline / inspect / stop
                        ├─ yes, mixed ──► inspect / rerun / stop
                        └─ incomplete ──► repair / rerun / stop
 ```
@@ -19,16 +19,16 @@ after partial results.
 Use `compare` when the question is "baseline or candidate?" and the dataset or
 compare-compatible roots already exist.
 
-Before proposing a fresh compare in a cost-sensitive workflow, run:
+Before proposing a fresh compare, run:
 
 ```bash
 stet context --repo /path/to/repo --json
 ```
 
-If `artifact_reuse` is present, prefer the listed exact comparable roots before
-launching a new eval. If only near matches are available, explain the task-slice
-or dataset drift explicitly so the operator can decide whether the extra spend is
-worth it.
+If `artifact_reuse` is present, prefer the listed exact comparable roots or
+frozen baselines before launching a new eval. If only near matches are
+available, explain the task-slice or dataset drift explicitly so the operator can
+decide whether fresh spend preserves enough decision value.
 
 ```bash
 stet eval compare \
@@ -102,6 +102,9 @@ CI) for multiplicative metrics, `cuped` (covariate-adjusted delta with `theta`
 and `covariate_source` — gold-patch size from `task_detail.json`, falling back
 with a reason when absent), `wilcoxon` (signed-rank p + method), `robust_means`
 (trimmed/Winsorized), and `mcnemar` (exact two-sided) for paired-binary metrics.
+The block also carries standardized `effect_sizes` when estimable, such as
+paired `cohens_dz` / `log_ratio_dz`, Wilcoxon rank-biserial, and McNemar
+discordant effects; degenerate cases carry a reason instead of a fake zero.
 Token/cost/duration get their own `aggregate.multiplicative_metrics.<name>`
 entries whose headline is the geometric ratio (never a raw mean of arms). All
 blocks are optional; reports without them load unchanged.
@@ -127,7 +130,10 @@ equivalence / code-review pass) carry `low_power_binary` and are read as the
 weakest layer at small n. `small_n: true` (default threshold 200, Bowyer 2025)
 means the CI is not well-calibrated — do not read it as tight. A metric pinned
 near-ceiling for both arms is flagged `saturated` and demoted to `noise-band`
-unless its estimator is itself significant. The compare-level roll-up is
+unless its estimator is itself significant. New reports preserve raw `p_value`,
+add BH-FDR `calibration.multiplicity.q_value`, and compute the visible tier from
+the adjusted value unless an exact pre-registered primary metric is exempt. The
+compare-level roll-up is
 `aggregate.calibration`: it lists `decision_grade_metrics` /
 `directional_metrics` / `noise_band_metrics`, and fails closed with a `reason`
 and `next_action` when no metric had a paired subset. Treat a delta as
@@ -136,6 +142,12 @@ optimization signal only when its metric labels `decision-grade` (or consistentl
 The same information is projected by default into `statistics` in
 `experiment.json`, `eval_report.v1.json`, and the sibling HTML report so readers
 do not need to reconstruct the panel from raw aggregate fields.
+
+When a compatible `grader_noise.v1.json` calibration artifact is present, the
+default panel annotates graded deltas with `grader_noise` and marks movements
+below the judge noise floor. Missing artifacts, legacy artifacts without
+`grader_profile`, or profile mismatches fail closed as unknown or blocked rather
+than applying a stale floor.
 
 When `delta_ci` is available, promotion is noise-aware: a candidate
 point-estimate win only counts as promotion-strength when the favorable delta is
@@ -150,6 +162,9 @@ shuffled by default with a generated seed recorded in arm manifests. For
 dataset-backed compares, `--task-order-seed <seed>` overrides that seed for
 deterministic replay while preserving the same sorted task set in
 `task_selection` and reports.
+Existing-root compares can use repeatable `--task-id` / `--task-pr` to
+materialize a no-spend narrowed compare root; selected tasks must exist in both
+arms, and persisted compare/report artifacts describe that narrowed slice.
 
 ```text
 STET :: COMPARE
@@ -182,7 +197,7 @@ STET :: COMPARE
 
 answer      winner
 confidence  medium
-step        compare -> baseline promotion
+step        compare -> baseline refresh
 baseline    current frozen baseline
 candidate   latest candidate
 sample      9 tasks
@@ -279,6 +294,18 @@ Machine-readable default:
   `raw_total_agent_tokens` from `billable_cost_usd` and `uncached_input_tokens`
   and carries `cache_status` for frozen-baseline reuse. Read this single block
   instead of re-deriving comparability from each cost/token row.
+- `claim_readiness` is the claim-grade summary. Read it before saying same
+  quality, better model, cheaper, behavior-efficient, or cheap-first-policy
+  evidence is ready. It separates `ready`, `directional`, and `blocked` by claim
+  type, and its `grader_admissibility` block distinguishes requested coverage
+  from comparison-effective grader math. Missing, asymmetric, unavailable, or
+  provenance-mismatched decisive graders block public cost/quality claims even
+  if tests and raw cost deltas look favorable.
+- `decision_receipt.runtime_token_evidence` is the common surface for "did
+  total runtime token usage move?" across run, compare, and A/A/B optimizer
+  reads. Use `raw_total_agent_tokens` there, not prompt-surface file size; read
+  `coverage` / `reasons` before treating the movement as decision-grade. Grader
+  cost is separate and may be explicitly missing.
 - Conditional economics and footprint rows use the Go report definition of
   clean pass: tests pass, equivalence is `equivalent`, and code review is
   `pass`.
@@ -392,6 +419,16 @@ Machine-readable default:
   - `recommended_action="rerun_affected_arm"` means the leftover artifacts are
     not smoke-shaped; rerun or repair the arm before claiming results.
 
+Before launching a frozen-baseline rules compare, read
+`eval_rules_plan.v1.json.reuse.baseline_compatibility` or the matching
+`stet eval status --change-manifest ...` check-in. `incompatible` blocks
+candidate spend and names a blocker/remediation; common fixes are to use a
+baseline-stable harness manifest path, regrade/repair the frozen baseline grader
+set, refreeze on the current harness surface, or intentionally opt into
+`--force-fresh-baseline`. `stale_but_usable` and `directional_only` are
+screening labels only. Candidate-only harness prompt-template changes are
+labeled `application_surface=candidate_harness_prompt_template`.
+
 On a frozen-baseline compare, read `decision_receipt.baseline_freshness` (also at
 `evidence.baseline_freshness`) before trusting the delta — the stale-digest
 verdict lives in the artifact, not just a stderr warning. Its `evidence_class` is
@@ -420,7 +457,7 @@ as a finished win/loss verdict. Read:
 
 Common next steps in this flow:
 - `gate`: `stet eval workbench gate --from <compare-root>`
-- `promote baseline`: `stet baseline freeze --from <winning-candidate-root> --name <baseline-id> --json`
+- `refresh baseline`: `stet baseline freeze --from <winning-candidate-root> --name <baseline-id> --json`
 - `inspect`: `task_detail.json`, `trajectory.json`, or local inspect bundle
 
 Baseline reference rules:
@@ -439,8 +476,9 @@ Baseline reference rules:
   recommend freezing the leading arm as a directional baseline before asking the
   operator to spend on another comparison. Make clear that the baseline is a
   reusable reference, not a release promotion.
-- For dataset-backed compare, task selectors are optional. When `--task-id` /
-  `--task-pr` are omitted, compare runs all realized tasks from the dataset.
+- For dataset-backed or existing-root compare, task selectors are optional.
+  When `--task-id` / `--task-pr` are omitted, compare uses the full realized
+  task slice.
 - Do not recommend `--baseline-instruction-file` /
   `--candidate-instruction-file` for raw file A/B. Those flags are only for
   operators intentionally supplying full prompt templates with
@@ -448,68 +486,9 @@ Baseline reference rules:
 
 ## Active Check-In
 
-Use `status` when the user asks "what is it doing?", "is it stuck?", or "should
-we wait?".
-
-```bash
-stet eval status --out /path/to/run-root --json
-stet eval status --change-manifest /path/to/stet.change.yaml --json
-```
-
-Machine-readable default:
-- `stet eval status --json` is the canonical health surface.
-- Prefer `activity_state`, `active_work`, `last_artifact`, `blocking_tasks`,
-  and `lifecycle` from the JSON payload.
-- Use `lifecycle.smoke` / `lifecycle.full` when present to explain smoke-to-full
-  lineage instead of guessing from sibling directories.
-- Treat `STET_STATUS_SUMMARY ...` stderr lines as operator-facing mirrors of the
-  same state, not the primary automation contract.
-- During an active compare, absence of `experiment.json` by itself is not a
-  failure signal. Compare-only roots may write it only at completion, so use
-  `stet eval status --json` rather than inferring failure from partial
-  directory contents.
-- For `--change-manifest` check-ins, a payload with `reasons` and no
-  `run_status` or `report` is inspect-class evidence; do not treat the current
-  phase alone as a clean wait signal.
-
-Check-in terminal receipt:
-
-```text
-STET :: STATUS
-
-step        eval run
-state       waiting_on_model
-health      active
-progress    18/40 tasks
-idle        6m
-last_seen   validation/model-x/task-18
-blocker     candidate/task-19 waiting on evaluator
-lineage     smoke complete -> full active
-evidence    .tmp/stet-run
-why         Wait is next because artifacts are still arriving and the current
-            idle window does not yet look like a stall.
-
-recommend   wait and check status again
-command     stet eval status --out <root> --json
-other       inspect latest task evidence if progress stops; stop with this status read
-```
-
-State meanings:
-- `active`: new artifacts are appearing
-- `waiting_on_model`: execution is blocked on model runtime
-- `waiting_on_evaluator`: execution is blocked on grading
-- `no_progress`: no meaningful artifact progress; inspect before rerun
-
-Status reading rules:
-- If `blocking_tasks` is non-empty, name the first blocker explicitly in the
-  terminal receipt before recommending wait or inspect.
-- Prefer blocker-first explanations over generic "still running" text.
-- If status is healthy and heartbeat/progress is advancing, do not recommend a
-  rerun just because logs are quiet.
-
-Common next steps in status checks:
-- `wait`: `stet eval status --out <root> --json` (check in again)
-- `inspect`: last task detail, trajectory, or runtime status artifact
+Use [status-checkin](status-checkin.md) for active status, heartbeat, waiting,
+blockers, inspect-or-wait decisions, and status receipts. Keep this file focused
+on compare interpretation and recovery.
 
 ## Inspect Handoff
 

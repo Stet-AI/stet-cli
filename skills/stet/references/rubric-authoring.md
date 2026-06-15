@@ -129,6 +129,11 @@ Path preservation rule:
   single-score output. The same flag can rerun `equivalence` and `code_review`
   from their stored validation prompts when those built-ins are part of the
   noise-floor slice.
+- When a loop-state `grader_policy` names `required_graders`, those grader IDs
+  are coverage gates and must appear as `ok` in the Trial Result coverage
+  summary. Use `emphasized_dimensions` for profile-specific ranking or
+  explanation, and `diagnostic_graders` for context that should not decide
+  acceptance.
 
 Task-detail grader context:
 - Custom task-detail graders receive bounded `task_detail.json.grader_context`
@@ -141,6 +146,10 @@ Task-detail grader context:
   `insufficient_evidence` when the rubric needs patch evidence that is missing,
   and `no_patch_but_change_required` when an implementation task produced no
   substantive patch.
+- Treat prompt, rubric, example-set, context, reference, pairwise position, and
+  truncation-policy changes as `grader_profile` changes. Stet stores safe policy
+  IDs and digests for those measuring-device inputs; mixed profiles are
+  inspect-only until the affected evidence is repaired or rerun.
 
 ## Run It
 
