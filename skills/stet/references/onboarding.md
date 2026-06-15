@@ -28,26 +28,31 @@ read CI ──► init ──► discover ──► build ──► receipt
 For most repos, the quick path is enough:
 
 ```bash
-# 1. Resolve test setup from CI evidence
+# 1. Frame the dataset target with the operator
+#    Ask which product areas, PR types, paths, and difficulty mix the starter
+#    dataset should represent. If the operator does not know yet, infer a first
+#    pass from merged PRs/commits and call out the assumption.
+
+# 2. Resolve test setup from CI evidence
 #    Read GitHub Actions, GitLab CI, or equivalent repo CI config, then
 #    Makefile, package.json scripts, README.
 #    Pick the real repo-level test command. CI is ground truth, not README.
 
-# 2. Author the Harbor environment
+# 3. Author the Harbor environment
 #    Write .stet/harbor.Dockerfile for this repo and reference it from
 #    .stet/stet.harness.yaml under environment.dockerfile.
 
-# 3. If Claude is the selected provider, set up host auth first
+# 4. If Claude is the selected provider, set up host auth first
 #    Run `claude setup-token`, store the printed token in
 #    ~/.config/stet/claude-oauth-token with 0600 permissions, and do not export
 #    it globally. Stet fails before launching Claude runs if auth is missing.
 
-# 4. Ask the operator which first-run quality posture to use
+# 5. Ask the operator which first-run quality posture to use
 #    recommended: discipline bundle + intentionality
 #    standard: repo tests plus default coding graders only
 #    custom: inspect `stet graders --repo . --json`, then choose
 
-# 5. Persist config
+# 6. Persist config
 stet init --repo . --yes --test "<repo test cmd>"
 
 # If the operator chose recommended while using --yes automation, ensure .stet/stet.yaml
@@ -58,18 +63,34 @@ stet init --repo . --yes --test "<repo test cmd>"
 #   include_graders:
 #     - intentionality
 
-# 6. Mine candidate pool
+# 7. Mine candidate pool
 stet suite discover --repo . --rev-range main~50..main
 #    GitHub PR source uses `gh`; GitLab MR source uses `glab`.
 #    For ambiguous enterprise hosts, add `--change-provider github|gitlab`;
 #    use `--source commits` when provider auth/tooling is unavailable.
 
-# 7. Build dataset
+# 8. Build dataset
 stet suite build --repo . --manifest .stet/discover-manifest.yaml
 
-# 8. Read receipt and propose starter slice
+# 9. Validate setup with one cheap local replay/test smoke when available
+#    Confirm at least one representative task can execute in Docker before
+#    treating the starter slice as ready. This is setup validation, not a model
+#    smoke, probe, or rules eval.
+
+# 10. Read receipt and propose starter slice
 # Build writes onboarding_receipt.v1.json to the dataset root.
 ```
+
+Task-selection rules:
+- Dataset selection is product work, not a mechanical newest-PR slice.
+- Interview the operator for the work Stet should track before locking a
+  starter slice: important product areas, PR types, paths, exclusions, and
+  desired easy/medium/hard mix.
+- Use read-only subagents when available to sample merged PRs/commits and map
+  where representative work lies in the repo. If subagents are unavailable, do
+  the same bounded history sampling yourself and say so.
+- Prefer a slice with real workflow relevance, strong test signal, path or
+  subsystem coverage, and mixed task difficulty. Do not hide coverage gaps.
 
 Test-setup rules:
 - The agent owns test-command selection. `stet init` writes config; it does not
@@ -85,6 +106,12 @@ Test-setup rules:
   when they are missing. Treat the generated harness as starter setup only;
   edit the repo harness when CI requires pinned runtimes, build tools, private
   dependencies, or repo-specific setup scripts.
+- The Harbor Dockerfile should include the dependencies the real tests need:
+  language runtimes, package managers, system packages, service clients, build
+  tools, and repo-specific setup visible in CI.
+- Before calling the starter slice ready, run the smallest local replay or test
+  smoke that proves at least one representative task executes in Docker. If it
+  cannot run, report the blocker instead of upgrading confidence.
 - If the repo rarely co-locates test edits with code changes, use
   `stet suite discover --allow-no-test-changes ...` to admit repo-tests-only
   tasks.
@@ -162,7 +189,7 @@ other       approve the slice for probe without running now; stop with recommend
 - Prefer tasks with strong test signal and plausible medium difficulty.
 - Avoid trivially small, obviously huge, duplicate-looking, or weak-signal
   tasks.
-- Keep light subsystem coverage.
+- Keep light subsystem/path coverage and a reasonable easy/medium/hard mix.
 - Include `confidence`, the funnel, what was excluded, and coverage gaps.
 - Show at most 5 representative tasks, then `+N more`.
 

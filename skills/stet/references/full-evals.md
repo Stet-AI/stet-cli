@@ -38,9 +38,12 @@ dropoff     131 rejected before build
 build       9 materialized, 3 skipped
             top: unsafe_external_symlink 3
 coverage    auth, cli, config
+difficulty  easy 3, medium 4, hard 2
 gap         db
-why         Smoke is next because the slice is broad enough to calibrate, but
-            still exploratory evidence rather than a locked benchmark.
+setup       Docker-backed local test check passed on one representative task
+why         Smoke is next because the slice is representative enough to
+            calibrate, but still exploratory evidence rather than a locked
+            benchmark.
 recommend   smoke this starter slice
 command     stet eval smoke --dataset ... --models "..." --json
 other       approve tasks for probe without running now; stop with recommendation only

@@ -218,16 +218,21 @@ command -v uv
 In the repo you want to onboard, ask your agent:
 
 ```text
-Use the Stet skill. Onboard this repo for Stet evals. Read CI first, choose the real test command, create the Harbor setup, build a starter dataset, and stop with a receipt before launching expensive evals.
+Use the Stet skill. Onboard this repo for Stet evals. Ask what work I want Stet to track, read CI first, choose the real test command, inspect merged PRs/commits for representative work, create the Harbor setup, build a representative starter dataset, run the smallest local replay or test smoke needed to confirm Docker execution, and stop with a receipt before launching model smoke, probe, or rules evals. Treat the Docker check as setup validation, not a model eval.
 ```
 
 Your agent should:
 
 1. Read CI and build files to choose the real repo-level test command.
-2. Author `.stet/harbor.Dockerfile` and `.stet/stet.harness.yaml`.
-3. Run `stet init`, `stet suite discover`, and `stet suite build`.
-4. Return an onboarding receipt with the candidate-task funnel, selected starter
-   slice, confidence, and recommended next step.
+2. Interview for the product areas, PR types, and difficulty mix Stet should
+   track.
+3. Inspect merged PRs/commits for representative work and important repo paths.
+4. Author `.stet/harbor.Dockerfile` and `.stet/stet.harness.yaml` with the CI
+   dependencies needed by the selected tasks.
+5. Run `stet init`, `stet suite discover`, `stet suite build`, and the smallest
+   local replay or test smoke needed to confirm Docker execution.
+6. Return an onboarding receipt with the candidate-task funnel, selected starter
+   slice, representativeness rationale, confidence, and recommended next step.
 
 After that, use [PROMPT_COOKBOOK.md](PROMPT_COOKBOOK.md) to run a first smoke,
 probe, model comparison, instruction rollout, or skill evaluation.

@@ -170,9 +170,13 @@ the agent could recommend it.
 Agent routes to: onboarding.
 Agent reads: `references/onboarding.md`
 
-Agent inspects CI (`.github/workflows/test.yml`), finds `npm test`, then
-authors `.stet/harbor.Dockerfile` and `.stet/stet.harness.yaml` with
-`environment.dockerfile: .stet/harbor.Dockerfile`.
+Agent asks which work Stet should track. The user names API, auth,
+validation, and CLI work, with a mix of product features and bug fixes. Agent
+inspects CI (`.github/workflows/test.yml`), finds `npm test`, then uses
+read-only PR/history sampling to confirm those areas show up in merged work.
+Agent authors `.stet/harbor.Dockerfile` and `.stet/stet.harness.yaml` with
+`environment.dockerfile: .stet/harbor.Dockerfile` and the Node/system
+dependencies used by CI.
 
 Agent asks once for the first-run quality posture. User chooses recommended.
 
@@ -182,6 +186,8 @@ stet init --repo . --yes --test "npm test"
 # quality.include_graders=[intentionality] before launching smoke/probe/eval.
 stet suite discover --repo . --rev-range main~50..main
 stet suite build --repo . --manifest .stet/discover-manifest.yaml
+# Agent runs the cheapest Docker-backed local replay/test check for one
+# representative task. This validates setup; it is not a model smoke/probe/eval.
 ```
 
 Agent reports:
@@ -196,8 +202,11 @@ funnel      87 scanned -> 14 passed discover -> 9 build-ready
 dropoff     73 rejected: no_test_changes 48, oversize 15, llm_gate_fail 10
 build       9 materialized, 2 skipped (unsafe_external_symlink)
 coverage    api, auth, validation, cli
+difficulty  easy 2, medium 5, hard 2
 gap         db migrations (no test co-changes found)
-why         Smoke is next because the slice is untested — a quick
+setup       Docker-backed local test check passed on one representative task
+why         Smoke is next because the slice is representative but still
+            exploratory. A quick
             multi-model read will calibrate before you commit to a probe.
 
 recommend   smoke this starter slice

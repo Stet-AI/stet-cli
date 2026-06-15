@@ -12,8 +12,9 @@ By the end of this session, your agent should have:
    skill.
 2. Read your repo's CI and selected the real repo-level test command.
 3. Created or reviewed the repo's Stet harness files.
-4. Built a starter dataset from real merged work.
-5. Returned an onboarding receipt and a concrete next-step recommendation.
+4. Built a representative starter dataset from real merged work.
+5. Verified enough Docker/test setup to trust the starter slice.
+6. Returned an onboarding receipt and a concrete next-step recommendation.
 
 The first session should stop before an expensive eval unless you explicitly
 approve the launch.
@@ -65,12 +66,28 @@ Docker rather than launching ambiguous work.
 Use this prompt:
 
 ```text
-Use the Stet skill. Onboard this repo for Stet evals. Read CI and package/build files first, choose the real repo-level test command, create the Harbor Dockerfile and harness manifest, run Stet init/discover/build, and report the onboarding receipt. Stop before launching smoke, probe, or rules evals.
+Use the Stet skill. Onboard this repo for Stet evals. First ask what product areas, PR types, and difficulty mix I want Stet to track. Read CI and package/build files, choose the real repo-level test command, then use read-only subagents when available to sample merged PRs/commits and map where representative work happens in the repo. Create the Harbor Dockerfile and harness manifest with the CI dependencies needed for those tasks, run Stet init/discover/build, run the smallest local replay or test smoke needed to confirm one representative task can execute in Docker, and report the onboarding receipt. Stop before launching model smoke, probe, or rules evals.
 ```
 
 Your agent should inspect CI first. CI is more trustworthy than README prose for
 test setup. The selected test command should run the actual repo test suite, not
 only lint, build, `echo`, or `true`.
+
+Dataset selection is the most important onboarding choice. The agent should not
+take the newest PRs by default. It should interview you long enough to learn
+which work you want Stet to measure, then inspect merged PRs or commits for
+real clusters of work: product features, bug fixes, refactors, migrations,
+infra changes, test-heavy changes, and any repo-specific workflows that matter.
+The starter slice should cover the important paths and include a reasonable
+mix of easy, medium, and hard tasks. If subagents are unavailable, the agent
+should do the same bounded PR/history sampling itself and say so.
+
+The Harbor Dockerfile should encode the dependencies the real tests need:
+language runtimes, package managers, system packages, service clients, build
+tools, and any repo-specific setup visible in CI. Before treating the dataset
+as ready, the agent should run the cheapest local replay or test smoke that
+proves at least one representative task can execute inside Docker. That check
+is setup validation, not a model eval.
 
 The agent should create or update:
 
@@ -85,7 +102,7 @@ The agent should create or update:
 Ask:
 
 ```text
-Use the Stet skill. Read the Stet onboarding receipt. Summarize the candidate-task funnel, selected starter slice, skipped-task reasons, test setup, confidence, and recommended next step. Do not launch more work yet.
+Use the Stet skill. Read the Stet onboarding receipt. Summarize the candidate-task funnel, selected starter slice, representativeness rationale, subsystem/path coverage, difficulty mix, skipped-task reasons, Docker/test setup validation, confidence, and recommended next step. Do not launch more work yet.
 ```
 
 The receipt should answer:
@@ -93,12 +110,15 @@ The receipt should answer:
 - how many candidate tasks were scanned
 - how many passed discover and build
 - which tasks are in the starter slice
+- why the slice represents the work you want to track
+- what subsystem/path coverage and difficulty mix it has
 - why tasks were rejected or skipped
 - what test command and setup source were used
+- what Docker/test smoke was run, or why it could not run
 - whether the starter slice is high, medium, or low confidence
 
-If the confidence is low, improve repo setup or task selection before running a
-larger eval.
+If the confidence is low, improve repo setup, Docker dependencies, test signal,
+or task selection before running a larger eval.
 
 ## Step 4: choose the first run
 

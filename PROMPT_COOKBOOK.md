@@ -17,11 +17,11 @@ Use the Stet skill. Check whether this repo is ready for Stet. Inspect CI, build
 ## Repo onboarding
 
 ```text
-Use the Stet skill. Onboard this repo for Stet evals. Read CI and package/build files first, choose the real repo-level test command, create the Harbor Dockerfile and harness manifest, run Stet init/discover/build, and report the onboarding receipt. Stop before launching smoke, probe, or rules evals.
+Use the Stet skill. Onboard this repo for Stet evals. First ask what product areas, PR types, and difficulty mix I want Stet to track. Read CI and package/build files, choose the real repo-level test command, then use read-only subagents when available to sample merged PRs/commits and map where representative work happens in the repo. Create the Harbor Dockerfile and harness manifest with the CI dependencies needed for those tasks, run Stet init/discover/build, run the smallest local replay or test smoke needed to confirm one representative task can execute in Docker, and report the onboarding receipt. Stop before launching model smoke, probe, or rules evals.
 ```
 
 ```text
-Use the Stet skill. Read the Stet onboarding receipt. Summarize the candidate-task funnel, selected starter slice, skipped-task reasons, test setup, confidence, and recommended next step. Do not launch more work yet.
+Use the Stet skill. Read the Stet onboarding receipt. Summarize the candidate-task funnel, selected starter slice, representativeness rationale, subsystem/path coverage, difficulty mix, skipped-task reasons, Docker/test setup validation, confidence, and recommended next step. Do not launch more work yet.
 ```
 
 ```text
