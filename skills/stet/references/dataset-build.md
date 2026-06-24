@@ -224,6 +224,18 @@ build needs a model client. Like `discover`, it resolves one from
 no explicit `--ai-cmd` needed once a provider is configured. Pass
 `--llm-install-config=false` to build without one (lower-fidelity broad verifiers).
 
+For a repo that ships a vetted recipe, prefer `--install-config <path>` (or
+`build.install_config` in `.stet/stet.yaml`): it consumes the deterministic
+recipe directly — a `.sh` that emits install_config JSON (run locally on the
+host), or a static `.json` — bypasses LLM generation (no model client needed even
+with `--llm-install-config` left on), and derives the allowlist from the recipe's
+own commands so forms like `env PATH=… cargo test` and toolchain installers are
+auto-allowed. A toolchain preflight then fails loud
+(`toolchain preflight: rust test runner "cargo" is not installed …`) before any
+fan-out/materialization for a non-base toolchain (Rust) the recipe doesn't
+install, instead of a downstream "gold tests did not run". `stet init` on a Rust
+repo scaffolds rustup/cargo into `.stet/harbor.Dockerfile` so `cargo test` runs unedited.
+
 Debug loop (up to 5 attempts). Ordered by frequency:
 
 | Failure pattern | Classification | Fix |
@@ -269,6 +281,49 @@ test_selector:
 Stet records digest/provenance/trust state for this config. It does not treat
 arbitrary selector-command output as proof unless Stet can normalize and
 cross-check it.
+
+### `test_selection` override (workspace layouts the auto ladder can't infer)
+
+When the zero-config candidate ladder abstains on a custom layout (monorepos,
+nx/turbo, bespoke runners, non-standard roots), declare a `test_selection` block
+in `.stet/stet.harness.yaml` to supply the missing layout knowledge:
+
+```yaml
+test_selection:
+  command_template: "npx vitest run {file_rel_project}{name}"
+  path_strip_prefix: frontend        # optional, when no project matches
+  projects:
+    - glob: packages/*               # most-specific match wins
+      cwd: packages/zod              # optional: run from this dir
+      project_flag: "--project zod"  # optional: rendered as {project_flag}
+```
+
+Placeholders: `{file}` (repo-relative test path), `{file_rel_project}` (`{file}`
+with the matched project's glob-dir or `path_strip_prefix` stripped), `{name}`
+(quoted name filter rendered as ` -t '^name$'`, vitest/jest style; empty for
+file targets), `{project_flag}`. Package-based runners (cargo/go/maven/gradle/
+dotnet) select by package not file path, so use `{project_flag}`/`cwd` and omit
+`{name}` for those.
+
+Override candidates are tried **ahead of** the auto ladder but are still
+proof-gated by the same base-fail/gold-pass run: a wrong block (unsafe path,
+unknown placeholder, or a changed test file that matches none of the declared
+`projects` globs) **fails the build loudly** — never a silent `repo_tests_only`
+or a falsely-included cell. When `projects` is set, every changed test file must
+match a glob; use `command_template` alone (no `projects`) for blanket coverage
+of mixed layouts. The winning rung is recorded as `config-function#N` /
+`config-file#N` in `DynamicProof.Rung`.
+
+`stet init` pre-fills a **commented** suggestion when it detects a workspace
+(pnpm / npm / nx / turbo / lerna / Cargo / go.work / Maven / Gradle / .NET);
+review, adapt, and uncomment it. `stet dataset regenerate-f2p` operates on a
+built dataset with no source repo, so it ignores the override and re-proves via
+the auto ladder only. It runs directly on exported corpora: it resolves node PM
+script aliases (`pnpm`/`yarn`/`npm test` -> the `vitest`/`jest` runner in
+`package.json` scripts.test), splits a multi-step `test_cmd` (last entry is the
+narrowed test command, earlier entries run as preamble first), and synthesizes
+`solution.sh` when a task omits it. The gold pass-to-pass suite stays the broad
+original command whenever an alias is resolved or a preamble exists.
 
 **CHECKPOINT: Report iteration results. Proceed to scale on approval.**
 
@@ -362,7 +417,7 @@ Inline audit at target count:
 4. Non-test file ratio: flag > 80% test files
 5. Spot-check ai_task quality
 
-Update `agent_docs/datasets.md` with the finalized recipe.
+Update `apex/tasks/agent_docs/datasets.md` with the finalized recipe.
 
 ## Prompt shape (`--prompt-shape`)
 

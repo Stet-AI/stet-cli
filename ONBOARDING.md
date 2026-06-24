@@ -51,10 +51,17 @@ writes a structured result.
 
 ## Replay: running the agent against a frozen world
 
-When a task starts, Stet launches a container with the repo at the base commit,
-the task prompt, and the agent under test. The agent can read files, edit code,
-and run commands as it normally would, but the container is isolated from your
-real checkout.
+When a task starts on the default path, Stet launches a container with the repo
+at the base commit, the task prompt, and the agent under test. The agent can
+read files, edit code, and run commands as it normally would, but the container
+is isolated from your real checkout.
+
+For supported local runs, Stet can also use an opt-in worktree backend instead
+of Docker. That path creates detached git worktrees from a local commit and
+records worktree integrity evidence, but it is still a local execution mode
+rather than Docker-equivalent isolation. Your agent should keep reading the
+canonical Stet status and report surfaces before using lower-level integrity
+artifacts for diagnosis.
 
 The agent does not see the gold patch from the original merge. It does not see
 the hidden judging tests. It sees the starting state and the task prompt, then

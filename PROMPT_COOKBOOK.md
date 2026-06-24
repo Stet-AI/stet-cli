@@ -14,6 +14,10 @@ Use the Stet skill. Install and verify Stet for this machine using the beta docs
 Use the Stet skill. Check whether this repo is ready for Stet. Inspect CI, build files, test commands, Docker assumptions, and model-provider auth. Report blockers before editing files or launching evals.
 ```
 
+```text
+Use the Stet skill. Docker is intentionally unavailable for this check. Use the opt-in Harbor worktree backend only if this Stet surface supports it, keep the task source tied to a local git commit, read status/report as the decision authority, and inspect worktree integrity artifacts only for diagnosis.
+```
+
 ## Repo onboarding
 
 ```text

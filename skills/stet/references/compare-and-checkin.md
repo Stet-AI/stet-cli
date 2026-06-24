@@ -47,6 +47,35 @@ stet eval compare \
   --json
 ```
 
+For an existing-root question with two or more arms where the answer is a
+standing rather than "baseline or candidate?", use generic multi-arm compare:
+
+```bash
+stet eval compare \
+  --multi-arm \
+  --source-root /path/to/root-a \
+  --source-root /path/to/root-b \
+  --arm low=<selector-low> \
+  --arm high=<selector-high> \
+  --comparison-surface <harness-surface-key> \
+  --denominator-policy publishable \
+  --out ./stet-multi-arm \
+  --json
+```
+
+Use `--denominator-policy include-contaminated` only when the operator
+explicitly wants an exploratory full-denominator read. Report that validity and
+denominator policy separately: network-contaminated evidence can be included for
+this analysis while still blocking publishable or rollout-grade claims.
+Answer-contamination (`agent_answer_contamination`) is a non-blocking flag:
+those cells keep their real `matrix_status` and count under `publishable`, so
+exclude them by their flag if you want a contamination-free denominator. Read
+`decision_receipt.compare.multi_arm`, `multi_arm.standings`, and
+`statistics.multi_arm` instead of reconstructing counts by hand. New multi-arm
+reports include quality columns in `multi_arm.standings`; bind metric claims to
+`statistics.multi_arm.metrics.<metric>.calibration.tier` and check each metric
+standing's coverage counts before comparing arms.
+
 Compare-only staging hardlinks immutable `runs/**` artifacts and copies mutable
 metadata such as `reports/` and `validation/`. Put `--out` on the same
 filesystem as reused roots; if hardlinks fail, compare fails instead of copying
@@ -148,6 +177,14 @@ default panel annotates graded deltas with `grader_noise` and marks movements
 below the judge noise floor. Missing artifacts, legacy artifacts without
 `grader_profile`, or profile mismatches fail closed as unknown or blocked rather
 than applying a stale floor.
+
+For subjective grader deltas, also read
+`decision_receipt.graders.discrimination` (mirrored at
+`decision_receipt.compare.grader_discrimination`). Missing, stale,
+profile-incompatible, underpowered, invalid, or same-model-inapplicable
+discrimination evidence keeps the compare inspect-only for promotion, hold /
+rollback, and public superiority claims. Use any directional read only for
+diagnosis until that block's blocker and next action are resolved.
 
 When `delta_ci` is available, promotion is noise-aware: a candidate
 point-estimate win only counts as promotion-strength when the favorable delta is
@@ -326,6 +363,10 @@ Machine-readable default:
 - Also read `decision_receipt.graders.profile_status` and `grader_profile`.
   Treat `mixed` or `missing_legacy` profile status as inspect-only evidence,
   even when aggregate grader scores are present.
+- Read `decision_receipt.graders.discrimination` before using subjective grader
+  deltas for model superiority, promotion, hold / rollback, or public claims.
+  If its status/readiness/applicability is not decision-grade, follow its
+  blockers and next action instead of treating the graded delta as decisive.
 - When `quality` is present, use it to identify the enabled grader bundles,
   effective grader IDs, and recurring strengths/risks per dimension. Treat
   those recurring reasons as evidence for follow-up guidance rather than as
@@ -384,18 +425,15 @@ Machine-readable default:
   regrade-graders ... --task-id ... --grading-timeout 45m` repair instead of a
   full model rerun.
 - When a task failed the verifier for environment reasons (e.g. a snapshot
-  toolchain that needs `GOTOOLCHAIN=go1.25.1`) rather than the patch, re-run only
-  the verifier against the existing patch with `stet eval agent --retest-tests
-  --test '<corrected command>'`, then stitch the clean outcome back with `stet
-  runs repair-tests --out <root> --model-key <key> --task-id <id> --from-validation
-  <retest validation.json> --reason '<why>'`, then view with `stet eval report`.
-  This never mutates the original Harbor `results.json`: the original outcome
-  stays in an additive `tests.repair` block and a `repaired_tests.v1.json`
-  sidecar, while the repaired outcome supersedes it
-  (`canonical_source=harbor_retest_repair`) and is refreshed into the run-root
-  `summary.json` in place. `repair-tests` is a commercial command and fails
-  closed if entitlement, the run root, task record, retest validation, or reason
-  cannot be resolved.
+  toolchain that needs `GOTOOLCHAIN=go1.25.1`) rather than the patch, use
+  `stet runs repair-patches --out <root> --model <arm> --task-id <id> --test
+  '<corrected command>'`. This reuses the existing model-under-test
+  `agent.patch`, reruns validation/evidence repair, refreshes summaries, and
+  does not rerun the model-under-test agent. It fails closed if a selected cell
+  lacks a regular non-empty patch; those cells need a real narrowed
+  `stet eval run --stitch-rerun` instead. `repair-tests` remains lower-level
+  compatibility plumbing only when you already have a separate retest
+  `validation.json` to stitch as explicit repaired provenance.
 - LLM-backed grader repairs must carry evaluator provenance. When overriding
   the evaluator command, pass the true `--ai-model-id`; deterministic graders
   such as `footprint_risk` should not be treated as missing LLM provenance.
@@ -516,9 +554,9 @@ Flow-specific recovery steps:
   candidate arm before repairing requested grader coverage
 - `retry grader`: finish retryable artifact-graded task; checks
   `validation/<model_key>/<task_id>/task_decision.json`
-- `revalidate`: rerun tests only when that is the missing signal
-  (`--revalidate-tests-only` can reuse existing artifacts without AI/model
-  registry coverage when no discover/build work is requested)
+- `revalidate`: rerun tests only when that is the missing signal; prefer
+  `stet runs repair-patches` for patch-present cells because it wraps the
+  no-agent `--revalidate-tests-only` path and follow-on evidence repair
 
 Recovery rules:
 - If the compare is blocked by invalid or partially valid evidence, explain that
@@ -547,5 +585,9 @@ Recovery rules:
   unresolved, use the summary's stable `unresolved[].reason` and optional
   `category`/`detail` fields to separate `model_output_shape`,
   `rubric_schema`, and `runtime_failure` before escalating.
+- For stranded patches (non-empty `agent.patch` with no `validation/`), `eval
+  report`/`eval status` fail closed and `eval combine` refuses to merge; run the
+  no-spend `stet runs repair-patches --out <root>` recovery first. See
+  [full-evals](full-evals.md) for the full stranded-patches rule.
 
 Do not use rerun when status says the current run is still healthy.

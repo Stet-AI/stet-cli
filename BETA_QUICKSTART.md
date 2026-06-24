@@ -8,8 +8,8 @@ repo can be onboarded, and the first Stet evidence can be read without guessing.
 
 By the end of this session, your agent should have:
 
-1. Verified the Stet CLI, Stet auth, Docker, Harbor, GitHub auth, and the Stet
-   skill.
+1. Verified the Stet CLI, Stet auth, Docker/Harbor or an explicitly selected
+   worktree backend, GitHub auth, and the Stet skill.
 2. Read your repo's CI and selected the real repo-level test command.
 3. Created or reviewed the repo's Stet harness files.
 4. Built a representative starter dataset from real merged work.
@@ -26,10 +26,12 @@ Use a repo with:
 - real Git history
 - merged PRs or commits representative of the work you care about
 - CI or documented test commands
-- a test suite that can run in Docker
+- a test suite that can run in Docker, or an explicit plan to use the opt-in
+  worktree backend for supported local checks
 
-Then start Docker. If your first run will discover tasks from GitHub PRs,
-confirm GitHub CLI auth as well:
+Then start Docker unless you are intentionally using the worktree backend. If
+your first run will discover tasks from GitHub PRs, confirm GitHub CLI auth as
+well:
 
 ```sh
 docker info
@@ -43,7 +45,7 @@ If you have not installed Stet yet, start with [README.md](README.md).
 In your coding agent, from the repo you want to evaluate, ask:
 
 ```text
-Use the Stet skill. Check whether this machine is ready to run Stet. Verify Stet, Stet auth, Docker, Harbor, GitHub auth, model-provider auth, and the Stet skill. Do not run an eval yet.
+Use the Stet skill. Check whether this machine is ready to run Stet. Verify Stet, Stet auth, Docker/Harbor or the explicitly selected worktree backend, GitHub auth, model-provider auth, and the Stet skill. Do not run an eval yet.
 ```
 
 Expected checks:
@@ -58,8 +60,9 @@ npx skills list
 ```
 
 If any check fails, fix setup before onboarding the repo. Stet should fail
-closed on missing commercial auth, missing model-provider auth, and unavailable
-Docker rather than launching ambiguous work.
+closed on missing commercial auth, missing model-provider auth, unavailable
+Docker on the default path, or an unverified worktree backend rather than
+launching ambiguous work.
 
 ## Step 2: ask your agent to onboard the repo
 
@@ -88,6 +91,12 @@ tools, and any repo-specific setup visible in CI. Before treating the dataset
 as ready, the agent should run the cheapest local replay or test smoke that
 proves at least one representative task can execute inside Docker. That check
 is setup validation, not a model eval.
+
+If Docker is unavailable by design, the agent can use the opt-in worktree
+backend for a supported local check. It should say so explicitly, keep Docker
+as the default recommendation, and read the resulting evidence from
+`stet eval status` / `stet eval report` before inspecting worktree-specific
+integrity artifacts.
 
 The agent should create or update:
 

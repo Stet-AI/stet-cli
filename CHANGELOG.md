@@ -4,7 +4,90 @@ All notable changes to Stet are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Stet
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.8.0] - 2026-06-24
+
+Adds a worktree-native Harbor backend for `stet eval` runs, a deterministic targeted-F2P dataset build path (per-language fail-to-pass extractors, install-config recipes, Rust onboarding), receipt-first resumable `eval combine`, native multi-arm compare, and `stet eval calibrate` for grader-discrimination policy. Operators get more isolated and reproducible eval execution, recoverable combine/relaunch flows, and validity gates that close equivalence fail-open and contamination bypasses so Trial Results stay trustworthy.
+
+### Added
+- Build targeted fail-to-pass datasets deterministically: `stet dataset regenerate-f2p`, `stet suite build --install-config` consuming committed install-config recipes, per-language F2P extractors (Go/Rust/JVM and more) with a candidate ladder plus proof-aware P2P narrowing, dynamic proof of the targeted feature, and end-to-end F2P verification against the committed corpus ([d78641e7], [29cc7206], [d6be690b], [9b47a131], [5c00adac], [9cc8cef6], [86d76217], [80c35e2a], [3bfedb68])
+- Onboard Rust toolchains and pre-fill workspace test selection in `stet init`, with a `test_selection` config override and workspace auto-detect ([29cc7206], [333b93f7])
+- Add a worktree-native Harbor backend for eval execution: a worktree lifecycle primitive, Harbor-shaped agent runner and verifier roles, worktree-native validation staging, runtime provenance, and execution-integrity guardrails, selectable via `--harbor-backend worktree` on `stet eval rules` and `stet eval smoke` ([cd75e79d], [1a816a71], [b8d701d4], [f09ddbda], [d4280b0c], [b86994b5], [b8111584], [4f90703a], [4533afcb], [10813c32], [04626fc1], [f0cd6413])
+- Make `stet eval combine` receipt-first, incremental, and resumable via `--finalize` ([68ff1607])
+- Add `--relaunch-arm` to `stet eval rules resume` so operators can recover a single wiped-out arm without rerunning the whole comparison ([2a5e8756])
+- Report native multi-arm compares with per-arm quality-metric statistics ([4c47d851], [5517f6d3])
+- Add `stet eval calibrate` to measure grader discrimination and gate eval decisions on the calibrated policy ([0ae3bbae], [0ab2122e])
+- Add a `stet runs repair-patches` flow to repair runs from stranded or missing agent patches ([6ec65fc2])
+
+### Changed
+- Make per-cell verdicts tests-first so an equivalence judge no longer fails open on test-bearing corpora, and gate equivalence-only test-verdict corpora explicitly ([ab36df6c], [66945125])
+- Flag agent-answer contamination on a graded cell instead of blocking grading outright, keeping the Trial Result while marking the provenance risk ([125c4a38])
+- Surface stranded agent patches in the run instead of silently dropping them, so recoverable work is visible to repair flows ([c4b030b4])
+- Mark superseded trial directories after a repair so the canonical outcome is unambiguous ([a3fb0fc6])
+- Update shipped skill guidance for dataset onboarding and for the worktree and repair rules workflows ([daaadc01], [eaa8f6f5])
+
+### Fixed
+- Make targeted-F2P build robust: scope gradle valueless-flag handling to the JVM/gradle path, force-add ignored files into the synthetic base so the test-file revert is faithful, install a no-op solve for corpus tasks lacking `solution.sh`, ensure verdicts measure the gold feature, and fix guarded toolchain-root inference ([f4208d11], [89dfbc27], [23c8dc81], [7cc1f98c], [90405960])
+- Harden worktree and Harbor eval execution: fix worktree eval parity and Composer evidence, harden Harbor export migration and the Go toolchain environment, and allow current worktree paths through integrity scans ([ce0a3636], [ff731ad8], [99ada10e], [5a4bcc80])
+- Repair grader-coverage recovery, verifier retest repair-outcome projection, H2H repair-outcome surfaces, and the Harbor non-verdict projection so repaired and verdict-less outcomes report correctly ([682771d6], [bb3318f6], [5e017239], [ffd4e4d9])
+- Exclude infra-verifier failures from quality scoring so toolchain/infra noise does not score against the model ([3cb809f0])
+- Fix provider-schema classification of unsupported flags so unsupported levers are reported rather than silently mishandled ([4247d5d3])
+- Improve `stet artifacts doctor` repo-cleanup UX ([4bdc5b0f])
+- Serialize concurrent H2H progress emits to avoid interleaved progress output ([75b75ac6])
+
+[d78641e7]: https://github.com/benredmond/stet/commit/d78641e7f9f5442f67cef5527557f3d563603b10
+[29cc7206]: https://github.com/benredmond/stet/commit/29cc720659ce77a3fc9bab3a338846272b6b68cc
+[d6be690b]: https://github.com/benredmond/stet/commit/d6be690bf1aff0d2f56e1252adbeac704eb5657b
+[9b47a131]: https://github.com/benredmond/stet/commit/9b47a131aa89f635ca022956e1cfdc1800c8963e
+[5c00adac]: https://github.com/benredmond/stet/commit/5c00adac0566aa42b2f100c32191f9fcb777bca4
+[9cc8cef6]: https://github.com/benredmond/stet/commit/9cc8cef651012c233bbb2005503402c08a2874bc
+[86d76217]: https://github.com/benredmond/stet/commit/86d7621742c07042689bc9a3c1f753d5aea82897
+[80c35e2a]: https://github.com/benredmond/stet/commit/80c35e2a0053ab0955cb2d887137704ac390951a
+[3bfedb68]: https://github.com/benredmond/stet/commit/3bfedb68cde13e1ecaf7fc3c45fe16f51b2f6cc0
+[333b93f7]: https://github.com/benredmond/stet/commit/333b93f7933b6b362bf1676d00ea8bbb33ab275d
+[cd75e79d]: https://github.com/benredmond/stet/commit/cd75e79d3a4a61f074d1370b27438c8ed875b6ca
+[1a816a71]: https://github.com/benredmond/stet/commit/1a816a71df638b7f7930b0ef781134407a36f27d
+[b8d701d4]: https://github.com/benredmond/stet/commit/b8d701d43527756da153b1a78f934213b42f45bc
+[f09ddbda]: https://github.com/benredmond/stet/commit/f09ddbda4a3e10bea9ddc64d0e580fb398235ad2
+[d4280b0c]: https://github.com/benredmond/stet/commit/d4280b0cafebdc56ebe2b769ebd2000c1b8dcf2a
+[b86994b5]: https://github.com/benredmond/stet/commit/b86994b57ed9b54dad418b36124baffd680c1881
+[b8111584]: https://github.com/benredmond/stet/commit/b8111584402cbec8d099647d94a03863315d4951
+[4f90703a]: https://github.com/benredmond/stet/commit/4f90703ac7768636e3247804c2d45b86cf331fe1
+[4533afcb]: https://github.com/benredmond/stet/commit/4533afcb1451bbbb73e3e9ecec59a01a593d1b09
+[10813c32]: https://github.com/benredmond/stet/commit/10813c322823833f8223b9515fec9050bd4488ec
+[04626fc1]: https://github.com/benredmond/stet/commit/04626fc117c597b55126744278dc721f2ce53cca
+[f0cd6413]: https://github.com/benredmond/stet/commit/f0cd6413257b297c86150d679b18419d23014e8e
+[68ff1607]: https://github.com/benredmond/stet/commit/68ff16075ee9198fa1ea0b207a139df8bb85ca6d
+[2a5e8756]: https://github.com/benredmond/stet/commit/2a5e875647fb874f7462491f44a2dd0669a854cb
+[4c47d851]: https://github.com/benredmond/stet/commit/4c47d851d05d5cbf504fb037cdb10b881a3bb76f
+[5517f6d3]: https://github.com/benredmond/stet/commit/5517f6d3078c823548b279ee3de7a885232a85bf
+[0ae3bbae]: https://github.com/benredmond/stet/commit/0ae3bbae7ee13cc2b910d8df96a5ec9f9b8317ec
+[0ab2122e]: https://github.com/benredmond/stet/commit/0ab2122e8eaa6d15d669545ff7d19391040acb0d
+[6ec65fc2]: https://github.com/benredmond/stet/commit/6ec65fc27746d9ca9db795e380c8b051a45474e5
+[ab36df6c]: https://github.com/benredmond/stet/commit/ab36df6c7e4752111e1235ac880775c3322f5f6d
+[66945125]: https://github.com/benredmond/stet/commit/669451254ae60e7dc9a6a7fd96e70224e2d1e91f
+[125c4a38]: https://github.com/benredmond/stet/commit/125c4a386ae02f9e27c61f409cf1dbfe5f9e821f
+[c4b030b4]: https://github.com/benredmond/stet/commit/c4b030b46fc1f5f42031b89a127f1b549034c947
+[a3fb0fc6]: https://github.com/benredmond/stet/commit/a3fb0fc6681409ec49aabf6a7838f090438b7258
+[daaadc01]: https://github.com/benredmond/stet/commit/daaadc019a6fe162579f35e18407ae64b4e892fb
+[eaa8f6f5]: https://github.com/benredmond/stet/commit/eaa8f6f5716f6e63f5fe06719fe479e48abdc56f
+[f4208d11]: https://github.com/benredmond/stet/commit/f4208d11806304bea210377a3bdfb2e75a361499
+[89dfbc27]: https://github.com/benredmond/stet/commit/89dfbc27e39e2c0a3d8f3cc5ed370497071313a7
+[23c8dc81]: https://github.com/benredmond/stet/commit/23c8dc814a5efe93200eaa48da9381b4a419fd1c
+[7cc1f98c]: https://github.com/benredmond/stet/commit/7cc1f98ce4ab8daafea44ddf273fbf7f87321609
+[90405960]: https://github.com/benredmond/stet/commit/904059602c58b7c1fee80c4a29b918f7f362d246
+[ce0a3636]: https://github.com/benredmond/stet/commit/ce0a3636c9cd1814c4635f441edb2d6fc5567664
+[ff731ad8]: https://github.com/benredmond/stet/commit/ff731ad8e872e302da499466d3e282fc93001a8a
+[99ada10e]: https://github.com/benredmond/stet/commit/99ada10e29824407c9dfd7271ebe45a4e4d49cc5
+[5a4bcc80]: https://github.com/benredmond/stet/commit/5a4bcc8036ce8f67c4433ae82c77a7527d747f85
+[682771d6]: https://github.com/benredmond/stet/commit/682771d6b8de19545cd8ad111a33230ed1680472
+[bb3318f6]: https://github.com/benredmond/stet/commit/bb3318f63a8536eb398d961338927d6a81a55a12
+[5e017239]: https://github.com/benredmond/stet/commit/5e0172391e360ac74cd5ba261257ab1038982d0e
+[ffd4e4d9]: https://github.com/benredmond/stet/commit/ffd4e4d9e6afaf9499c26c5ab5b35f8c32ce7846
+[3cb809f0]: https://github.com/benredmond/stet/commit/3cb809f09e00df184557c17d34df8b8873953eef
+[4247d5d3]: https://github.com/benredmond/stet/commit/4247d5d31fa3a114c28f0b535e37b6309913de0d
+[4bdc5b0f]: https://github.com/benredmond/stet/commit/4bdc5b0f1303bf797c3da6420e495633891ccb0f
+[75b75ac6]: https://github.com/benredmond/stet/commit/75b75ac6d693e75003d2c6c489c7ad744460a7e1
+[v0.8.0]: https://github.com/benredmond/stet/releases/tag/v0.8.0
 
 ## [v0.7.0] - 2026-06-15
 

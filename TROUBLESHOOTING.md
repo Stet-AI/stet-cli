@@ -82,6 +82,14 @@ Start Docker Desktop on macOS or the Docker service on Linux, then run:
 docker info
 ```
 
+Docker is the default backend. If Docker is intentionally unavailable and the
+task supports local git worktree execution, ask your agent to select the
+worktree backend explicitly instead of relaunching the default path:
+
+```text
+Use the Stet skill. Run the supported local check with --harbor-backend worktree, then read status/report and inspect worktree integrity artifacts only if diagnosis is needed.
+```
+
 If Docker is running but Stet jobs fail with stale state or exhausted Docker
 resources, first confirm no Stet/Harbor run is active. Then inspect stale state:
 

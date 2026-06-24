@@ -455,9 +455,9 @@ contradiction check and evidence posture.
   small-sample iteration signal: read the per-arm dim deltas and weakest-risk
   artifacts to pick one lever, then widen the task slice before any
   release-grade run. When posture is `inspect`, stop iterating until the
-  non-small-n factor (grader_coverage, grader_profile, provenance, validity,
-  compare_state, skill_activation) is resolved — directional reads from an
-  inspect-posture run are not credible iteration signal.
+  non-small-n factor (grader_coverage, grader_profile, grader_discrimination,
+  provenance, validity, compare_state, skill_activation) is resolved —
+  directional reads from an inspect-posture run are not credible iteration signal.
 - If the candidate wins a baseline-first loop, refresh the baseline reference;
   do not describe that as release promotion.
 - If an iteration needs A/A confirmation or a candidate repair/rerun, reuse the

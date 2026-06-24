@@ -56,7 +56,7 @@ Roles:
   different slice is not a matched baseline.
 - `manifest resolve`: inspect normalized inputs before launch. Prints the canonical resolved change manifest as YAML (or JSON with `--json`); injected defaults (e.g. `context.baseline.source`, `context.candidate.source`, `policy.version`, `treatments[*].path`) are inlined silently — there is no separate validation verdict. On a malformed manifest, `manifest resolve` exits non-zero; without `--json` it emits a plain-text stderr line, and with `--json` it emits a structured `{"error": {"code", "message", "field"}}` envelope on stdout. A non-zero exit is the validation contract — treat it as "malformed manifest" and read `error.code` / `error.field` (or the stderr line) for the field-precise reason.
 - `eval rules plan`: preflight tasks, arms, graders, frozen-baseline reuse, cost confidence, missing pricing/cost data, and cheaper alternatives without launching compare evidence. It persists an `eval_rules_plan.v1.json` receipt with replay-validity identity that a matching launch can reuse. It is not free: plan runs the Harbor `oracle`-agent gold-replay validation containers to populate `replay_validity` and runs the LLM-grader preflight, so under contention it routinely takes 8–10+ minutes. A future `--quick-plan` that skips replay validation does not exist yet; when an operator needs a sub-minute readiness check, reach for `stet manifest resolve` instead. The next command, `stet eval rules` without `--plan`, is the charged launch. The plan output's `task_selection_adequacy.verdict` is informational; values such as `insufficient_history` describe historical sample size for confidence calibration and do not block launch.
-- `eval rules`: launch the bounded rules-backed run
+- `eval rules`: launch the bounded rules-backed run. By default the compare projects Harbor test outcomes. Pass `--retest-tests` (or equivalently `--validate-arg "--retest-tests"`) on the main `stet eval rules` launch to run real validate-side tests on both arms instead of projecting; it applies symmetrically to baseline and candidate. The setting is persisted in the rules runtime artifact and re-applied automatically by `--relaunch-arm`, so a relaunch retests the same way the original launch did. Retest is opt-in only on the main launch (not the `checkpoint`/`holdout`/`skill` subcommands).
 - `eval status`: explain the current phase or health
 - `eval rules repair`: recover an incomplete rules compare from the persisted runtime; when the surface is replayable, it can resume a baseline-phase compare or rerun a missing/partial candidate arm while preserving completed evidence, then repair/regrade missing coverage. `eval rules resume` remains accepted for compatibility. Pass `--parse-retries N` to forward grader JSON parse-repair attempts during regrade recovery. Pass `--report-mode separate_axes|strict_publishable_pass` to pin the reporting mode when the baseline and candidate arms were produced by Stet binaries whose default drifted; baseline mode is used automatically otherwise.
 - `grader_profile_mismatch`: repair/regrade blockers include expected and actual evaluator runtime, provider, command hash, and measuring-device digests so operators can distinguish real profile drift from reconstruction bugs.
@@ -200,6 +200,35 @@ Put stable variance controls in the suite manifest under `eval:`:
 overrides; CLI values take precedence over suite YAML. `stet eval rules skill`
 also accepts `--task-order-seed` and writes it into its synthesized iteration
 suite; omit the flag for fresh per-run randomness.
+
+Harbor's Docker backend remains the default. Use `--harbor-backend worktree`
+only when the operator explicitly wants local, Docker-free execution from a
+local git commit. Keep `repo:` set in `stet.suite.yaml`, pass worktree controls
+only as needed (`--worktree-keep`, `--worktree-install=false`,
+`--worktree-allow-pre-install`, `--worktree-concurrency N`), and treat
+Docker-only controls such as `--harbor-arg` and `--harness-cli-cache` as
+unsupported on the worktree path. On worktree, Stet resolves the baseline
+default branch from the local branch HEAD only when no `origin` remote is
+configured. If `origin` exists but `origin/HEAD` and same-name `origin/<branch>`
+are missing, Stet preserves `default_branch` so the strict plan/launch error
+surfaces. To pin the baseline explicitly, set
+`context.baseline.source: ref` and set `context.baseline.ref` to a commit or
+branch in the change manifest. Worktree-backend evidence is inspect-only and
+non-decision-grade by default on integrity grounds, so do not make rollout,
+model, cost, or efficiency claims from unsandboxed worktree runs. A successful
+Docker-free run is expected to read as inspect — it exits with code 21 (not 0)
+and a transient `status=failed` line can appear even though the run completed,
+so trust the report, not the exit code. Worktree runs also do not emit per-task
+trajectory artifacts, so behavior, cost, and token telemetry are unavailable on
+this path. Status/report remain the canonical decision readers; use per-task
+`worktree_integrity.json` only when diagnosing worktree isolation,
+source-mutation, or forbidden-artifact findings.
+
+`stet eval rules` accepts `--reasoning-effort low|medium|high|xhigh|max` to set
+the reasoning level for both arms (default `high`); it is backend-agnostic and
+applies to the worktree path too (e.g. run gpt-5.4 at `medium`). The CLI flag
+overrides any `harness_settings.reasoning_effort` declared in the change
+manifest.
 
 `stet eval rules` is non-destructive by default when a matching rules runtime
 already exists. It reuses completed evidence, auto-resumes candidate-phase
@@ -358,6 +387,7 @@ Common next steps:
 - `promote`: `stet promote --change-manifest .stet/rules/stet.change.yaml --reason "..."`
 - `promote override`: `stet promote --change-manifest .stet/rules/stet.change.yaml --reason "..." --allow-inspect` when trust remains `inspect` and the operator is intentionally overriding the gate
 - `repair compare`: `stet eval rules repair --change-manifest .stet/rules/stet.change.yaml --json` when the persisted rules runtime exists but the canonical Trial Result is incomplete; use this for OOM/rate-limit interruptions before deleting the compare root, because repair reruns only missing/retryable arm tasks and can replay unchanged AGENTS.md/CLAUDE.md overlays from the change manifest. `resume` remains accepted as a compatibility alias. Repair cannot recover a terminal arm failure: when status/report emit a `repair` block with code `RULES_COMPARE_ARM_FAILED` or `RULES_ACTIVE_ARM_FAILED`, inspect the failed arm root, address the harness failure (auth, config, missing bundle, etc.), then relaunch instead of repairing
+- `relaunch arm`: when one arm lost every cell's `agent.patch` to a transient single-arm wipeout (e.g. an HTTP 429 that left results+validation present but `agent_no_patch`/empty patches and no arm summary), plain `repair`/`resume` stays non-spending and emits an `arm_relaunch_required` blocker; rerun `stet eval rules resume --rules-root <dir> --relaunch-arm candidate` to relaunch only that arm's empty cells while reusing every good cell and the sibling arm byte-for-byte. Accepts a comma list and repeats (`--relaunch-arm candidate,baseline`) or `all`; it spends tokens. Prefer it over `--restart`, which discards everything
 - `retry graders`: use the `repair-ai-coverage` or `regrade-graders` command emitted by report/status; add `--parse-retries N` for saved grader prompts that failed JSON/schema parsing, and keep the emitted `--grading-timeout` for timeout-gapped custom graders
 - `restart`: `stet eval rules --change-manifest .stet/rules/stet.change.yaml --suite-manifest .stet/rules/stet.suite.yaml --restart` only when the operator intentionally discards existing rules evidence for that change manifest
 

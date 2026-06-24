@@ -51,7 +51,8 @@ model changes, or harness policy.
 - `curl` for the public installer
 - [GitHub CLI](https://cli.github.com/) for private release overrides or PR/MR-backed repo discovery
 - Node.js and `npx` for installing the Stet agent skill
-- Docker, either Docker Desktop on macOS or Docker Engine on Linux
+- Docker, either Docker Desktop on macOS or Docker Engine on Linux, for the
+  default Harbor-backed eval path
 - Python 3.12+
 - A model-provider auth path for the agent you plan to evaluate
 
@@ -131,6 +132,11 @@ npx skills update stet -y
 ```
 
 ### 4. Install Docker
+
+Docker is the default and most isolated local execution backend. Stet also has
+an opt-in Harbor worktree backend for supported local runs, but first-time
+onboarding should still verify Docker unless Ben has asked you to use the
+worktree path.
 
 Check whether Docker is already running:
 
@@ -233,6 +239,12 @@ Your agent should:
    local replay or test smoke needed to confirm Docker execution.
 6. Return an onboarding receipt with the candidate-task funnel, selected starter
    slice, representativeness rationale, confidence, and recommended next step.
+
+If Docker is intentionally unavailable, ask the agent to use the opt-in
+worktree backend for a supported local check instead of silently skipping setup
+validation. Worktree evidence should still be read through `stet eval status`
+and `stet eval report`, with low-level `worktree_integrity.json` used only for
+diagnosis.
 
 After that, use [PROMPT_COOKBOOK.md](PROMPT_COOKBOOK.md) to run a first smoke,
 probe, model comparison, instruction rollout, or skill evaluation.

@@ -132,10 +132,17 @@ Machine-readable default:
   detailed counters.
 - For per-task authority, prefer `task_decision.json`, then `task_detail.json`
   and `trajectory.json` for inspectability.
+- In Harbor-backed roots, a flat trial dir with `superseded_trial.v1.json` is
+  preserved debug/telemetry evidence, not canonical scored authority. Follow its
+  `authoritative_results_path` and `authoritative_trial_dir` before judging the
+  scored patch/test outcome.
 
-For partial reruns on an existing root, keep `--out` pointed at the canonical
-root and add `--task-id ... --stitch-rerun`. This preserves the original slice,
-refreshes only the selected task artifacts, and regenerates one merged summary.
+For patch-present cells that need verifier or evidence repair, keep `--out`
+pointed at the canonical root and use `stet runs repair-patches --task-id ...`.
+This reuses the existing model-under-test `agent.patch`, reruns
+validation/evidence repair, and regenerates the merged summary without a model
+rerun. Use raw `stet eval run --task-id ... --stitch-rerun` only for selected
+cells that lack usable patch evidence and truly need a fresh model run.
 
 When comparing a model whose outputs will be judged by LLM-backed graders,
 persist the evaluator model in the suite manifest so reruns keep the same
@@ -215,14 +222,26 @@ flags override suite values for a temporary launch.
   reasoning arms: `stet eval run --dataset <dataset> --model <model> --reasoning-efforts max,xhigh,high,low --out <out>`.
   Add `--pinned-task-source` and `--pinned-dataset-key` when reusing prior Stet
   history. Do not repeat the same model under `--models` for reasoning tests.
+  For no-spend reporting across three or more completed arms, use
+  `stet eval compare --multi-arm` and set `--comparison-surface reasoning_effort`.
 - If multiple experiment arms request the same explicit `model_key`, read the
   manifest for the effective keys; Stet disambiguates them before writing run
   and validation artifact paths.
-- `stet eval run --stitch-rerun` is the supported subset-rerun path for an
-  existing canonical run root. Do not tell the user to hand-copy retry
+- `stet runs repair-patches` is the supported patch-present repair path for an
+  existing canonical run root. `stet eval run --stitch-rerun` is for narrowed
+  no-patch reruns. Stitch reruns preserve superseded flat trial dirs as debug
+  evidence and mark them with `superseded_trial.v1.json`; use the referenced
+  canonical trial for scored outcomes. Do not tell the user to hand-copy retry
   artifacts unless they explicitly need the legacy manual path.
 - `stet eval report` is the canonical decision surface over finished artifacts.
 - `stet eval status` is the canonical health/check-in surface for active roots.
+- Stranded patches (quota-interrupted windows): if a root holds non-empty
+  `agent.patch` files with no `validation/` behind them, `eval report`/`eval
+  status` fail closed (report → `inspect` with a `stranded_patches` block;
+  status → not `COMPLETE`) and `eval combine` refuses to merge that source,
+  each naming the stranded tasks and pointing at `stet runs repair-patches --out
+  <root>`. Run that no-spend recovery before trusting the aggregate; do not
+  re-run the model agent.
 - Prefer `runs.<model>.decision_metrics.tests.leaderboard_pass_rate` for
   standard model comparison truth.
 - `strict_publishable_pass_rate` remains explicit legacy publish gating; do not
