@@ -69,21 +69,34 @@ launching ambiguous work.
 Use this prompt:
 
 ```text
-Use the Stet skill. Onboard this repo for Stet evals. First ask what product areas, PR types, and difficulty mix I want Stet to track. Read CI and package/build files, choose the real repo-level test command, then use read-only subagents when available to sample merged PRs/commits and map where representative work happens in the repo. Create the Harbor Dockerfile and harness manifest with the CI dependencies needed for those tasks, run Stet init/discover/build, run the smallest local replay or test smoke needed to confirm one representative task can execute in Docker, and report the onboarding receipt. Stop before launching model smoke, probe, or rules evals.
+Use the Stet skill. Onboard this repo for Stet evals.
+
+Your first and main priority is to build a high-quality representative starter dataset from real merged work. First ask what product areas, PR types, and difficulty mix I want Stet to track. If I do not answer, infer a reasonable first-pass slice from repo history and say what you assumed.
+
+Use subagents when available to make this efficient: delegate independent read-only checks for CI/test setup, merged PR/commit sampling, important subsystems, and starter-slice representativeness. Integrate their findings yourself. If subagents are unavailable, do the same bounded sampling yourself and say so.
+
+Read CI and package/build files, choose the real repo-level test command, then sample merged PRs/commits to understand where meaningful work happens in this repo. Prefer a starter dataset that covers several important subsystems and a mix of features, fixes, refactors, infra/setup work, and tests, rather than many similar tasks from one package.
+
+Create or update the Stet harness files, run init/discover/build as needed, and verify that the retained starter slice is executable enough to trust as onboarding evidence. Return an onboarding receipt that explains the task funnel, selected slice, representativeness, coverage, setup validation, confidence, and the next recommended action.
+
+Stop before launching model smoke, probe, or rules evals.
 ```
 
 Your agent should inspect CI first. CI is more trustworthy than README prose for
 test setup. The selected test command should run the actual repo test suite, not
 only lint, build, `echo`, or `true`.
 
-Dataset selection is the most important onboarding choice. The agent should not
-take the newest PRs by default. It should interview you long enough to learn
-which work you want Stet to measure, then inspect merged PRs or commits for
-real clusters of work: product features, bug fixes, refactors, migrations,
-infra changes, test-heavy changes, and any repo-specific workflows that matter.
-The starter slice should cover the important paths and include a reasonable
-mix of easy, medium, and hard tasks. If subagents are unavailable, the agent
-should do the same bounded PR/history sampling itself and say so.
+The starter dataset is the main artifact from day-one onboarding. It should be
+large and varied enough to support an initial shared-behavior decision later,
+not merely prove that one task can run. Dataset selection is the most important
+onboarding choice: the agent should not take the newest PRs by default. It
+should interview you long enough to learn which work you want Stet to measure,
+then inspect merged PRs or commits for real clusters of work: product features,
+bug fixes, refactors, migrations, infra changes, test-heavy changes, and any
+repo-specific workflows that matter. The starter slice should cover the
+important paths and include a reasonable mix of easy, medium, and hard tasks.
+If the agent cannot build a representative slice, it should report dataset or
+setup remediation as the next step rather than switching to a cheaper signal.
 
 The Harbor Dockerfile should encode the dependencies the real tests need:
 language runtimes, package managers, system packages, service clients, build
@@ -148,11 +161,20 @@ Use the Stet skill. Probe this change with Stet on the starter dataset. Report w
 For an `AGENTS.md`, `CLAUDE.md`, shared-skill, model, or harness-policy decision:
 
 ```text
-Use the Stet skill. Evaluate whether this shared behavior change is safe to ship. Use the manifest-backed Stet rules flow. Run the plan first, explain task count, graders, cost risk, and evidence quality, then ask before launching the full run.
+Use the Stet skill. Evaluate whether this shared behavior change is ready for a Stet rules decision.
+
+First read the onboarding receipt and confirm that the starter dataset is representative enough for this kind of change. Use subagents when available to inspect dataset coverage, task diversity, replay readiness, and plan blockers in parallel. Integrate their findings yourself.
+
+If the dataset is missing, too small, too narrow, replay-invalid, or low-confidence, treat that as onboarding work: expand or repair the dataset and report what changed before evaluating the behavior change.
+
+Once the dataset is credible, use the manifest-backed Stet rules flow. Run the plan first, explain task count, task coverage, graders, cost risk, evidence quality, and any blockers, then ask before launching the full run.
 ```
 
 The rules path is the right path when you intend to keep, recommend, baseline,
-promote, or roll back a shared behavior change.
+promote, or roll back a shared behavior change. For shared behavior changes,
+the agent should not substitute a cheaper first signal for a missing or weak
+dataset. A blocked plan usually means "continue onboarding the dataset," not
+"downgrade the evidence target."
 
 ## Step 5: read the result
 

@@ -254,6 +254,42 @@ and include only a short human mirror in the status update. A compacted agent
 should resume from native loop state, optimize status, and the linked Trial
 Result instead of asking the operator to reconstruct the loop.
 
+When an analysis spans multiple roots, retries, frozen baselines, reports, logs,
+or notes, create or consult a named study before doing manual artifact
+accounting. For fresh work, start the analysis receipt before running evals:
+
+```bash
+stet study start <study-id> \
+  --corpus <stet.suite.yaml|dataset-dir|selection_receipt.v1.json> \
+  --select <selector> \
+  --question "<analysis question>" \
+  --json
+
+stet eval report --out <root> --study <study-id> --json
+stet study scan <root-or-artifact> [<root-or-artifact>...] --name <study-id> --mode study --write --json
+stet study status <study-id> --json
+stet study report <study-id>
+```
+
+`stet study` is the analysis receipt. It references an existing suite, dataset,
+selection receipt, or future corpus contract; it does not define tasks or parse
+task.yaml. It groups refs, roles, inclusion classes, task-selection hashes,
+slices, comparisons, readability, provenance warnings, and the canonical
+`eval_report.v1.json` authority to read first. It does not copy or replace
+`decision_receipt` as the authority for promotion or public claims.
+
+When `--study` is omitted, `stet eval report` auto-attaches only if exactly one
+existing non-inventory study matches the report's corpus/task identity. Use
+`study scan --write` for already-sprawled evidence or migration from old roots.
+
+Use `--mode study` for a named claim over one intended denominator. Use
+`--mode inventory` for collection roots such as `.stet/leaderboard`; inventories
+map many nested run/compare roots into task slices and stay inspect-only until an
+agent chooses a narrower study/slice for a denominator claim. Stet skips task
+bundles and scratch directories during recursive discovery. Re-running
+`study scan --write` appends/merges refs; use a new study id when the intended
+denominator changes.
+
 ## Stet Pattern
 
 For shared skill improvement, use the rules skill loop so the iteration stays on
@@ -447,10 +483,12 @@ contradiction check and evidence posture.
   evidence.
 - If evidence is stale, missing requested graders, or outside the declared
   Search Space, inspect or repair/resume before another edit. If a complete
-  compare is non-decision-grade only because of sample size/history and
-  `evidence_quality.directional_read.status` is `limited`, use it for one
-  hypothesis-backed iteration only when the operator requested optimization;
-  record the caveat and do not make rollout or superiority claims.
+  compare is non-decision-grade only because of sample size/history, or because
+  a named repairable cell such as missing equivalence blocks the rollout claim,
+  and `evidence_quality.directional_read.status` is `usable` or `limited`, use
+  it for one hypothesis-backed iteration only when the operator requested
+  optimization; record the caveat and do not make rollout or superiority
+  claims.
 - When `evidence_quality.posture` is `directional`, treat the run as expected
   small-sample iteration signal: read the per-arm dim deltas and weakest-risk
   artifacts to pick one lever, then widen the task slice before any

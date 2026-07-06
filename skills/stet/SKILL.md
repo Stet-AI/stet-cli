@@ -94,6 +94,29 @@ Keep these constraints in the hot path:
 - The operator-facing answer must include the verdict, confidence or readiness,
   decisive deltas, evidence quality, grader coverage, main risks, and one next
   action before report paths, HTML paths, commands, or raw status output.
+- If status or a partial receipt reports `zero_ready_recent_slice`,
+  `no_eval_ready_tasks`, or zero PASS tasks, treat it as task-slice setup, not a
+  verdict on the model or config change. Follow the emitted next command; widen
+  or shift `--rev-range`, use `--allow-no-test-changes` when repo-level tests
+  exist but commits rarely edit tests, or provide a known dataset before giving
+  up.
+- For first-run repo setup or a first AGENTS.md/CLAUDE.md signal, the driver
+  agent's first and main priority is a high-quality dataset. The driver owns
+  setup: inspect CI and repo history, initialize config, discover and build a
+  representative starter slice, repair or widen zero-ready slices, and validate
+  a meaningful build-ready slice before launching an AGENTS.md/CLAUDE.md read.
+  A 1-3 task run is a smoke, not onboarding; for AGENTS.md/CLAUDE.md, fewer
+  than 10 retained ready tasks means setup is not ready for an instruction
+  signal. Leave quality lanes on unless the operator explicitly asks for
+  no-spend preflight. For first AGENTS.md/CLAUDE.md onboarding, pass
+  `--quality recommended` by default; use `standard`, `custom`, or no-quality
+  only when the operator explicitly asks for that. Do not route around failed
+  onboarding with config-diff or probe. Ask only for auth, spend, lifecycle
+  mutation, destructive recovery, private dependency access, or an explicit
+  dataset approval boundary.
+- "Initial signal" does not downshift first-run setup into a tiny prefilter. If
+  the repo is not already build-ready in Stet, start with onboarding-scale
+  discovery before any `probe --file` or `config-diff` read.
 
 ## Canonical Read Path
 
@@ -125,12 +148,20 @@ Keep these constraints in the hot path:
    Route on `evidence_quality.posture`: `actionable` means act on the
    recommendation, `directional` means iterate or widen the slice before
    promotion, and `inspect` means investigate the non-small-n evidence issue
-   before reasoning from the result. `evidence_quality.directional_read` can
-   guide iteration, not promotion.
+   before reasoning from the result. When present,
+   `evidence_quality.readiness_state` is the compact machine-readable readiness
+   reason (`decision_grade`, `directional`, `abstained`,
+   `insufficient_evidence`, or `needs_review`); it explains the posture but
+   does not override the recommendation or claim gates.
+   `evidence_quality.directional_read` can guide iteration, not promotion.
+   If the verdict is `inspect` but `directional_read.status` is `usable` or
+   `limited`, report that directional signal plainly, then name the blocker and
+   repair command before making any rollout claim.
 7. Before external claims, read `claim_readiness` or
    `decision_receipt.claim_readiness`. It separates claim types as `ready`,
    `directional`, or `blocked` and carries grader admissibility, evaluator
-   provenance, judge-noise status, and blockers.
+   provenance, judge-noise status, blockers, and optional per-claim
+   `readiness_state`. Status controls the gate; readiness explains why.
 8. Drill into lower-level artifacts only for diagnosis: `experiment.json`,
    `release.v1.json`, `task_decision.json`, `task_detail.json`,
    `trajectory.json`, logs, patches, and per-task artifacts. Do not reconstruct
@@ -145,19 +176,23 @@ models, setting up a repo, improving a skill, or checking a release?"
 | User intent | Start here | Load |
 |---|---|---|
 | `$stet optimize ...`, "optimize", "iterate", "keep improving", or max-iteration request on `AGENTS.md`, `CLAUDE.md`, a skill, model, harness, tool-policy, or rollout surface | Read or create native loop state, then use `stet optimize status`, `checkin`, `select`, and `launch`; use rules only as the replay lane under that control plane; select candidates by declared objective and evidence-weighted tradeoffs, not by minimal diff size; surface holdout approval for promising mixed finalists | [iterative-improvement](references/iterative-improvement.md), [rules-flow](references/rules-flow.md) |
-| Shared `AGENTS.md`, `CLAUDE.md`, policy, model, harness, tool-policy, or rollout question that is not an optimization loop | `stet context --repo <repo> --json`, then reusable baseline check, `stet manifest resolve`, `stet eval rules plan`, `stet eval rules` | [rules-flow](references/rules-flow.md) |
-| Fast local directional read or throwaway candidate check | `stet probe`, `stet probe --file`, or `stet eval config-diff` | [quick-probe](references/quick-probe.md) |
+| Set up Stet on a new repo or get a first AGENTS.md/CLAUDE.md signal | If no ready dataset/config exists, run onboarding autonomously first: use onboarding-scale discovery, keep quality lanes on, and do not stop at a 1-3 task smoke. For AGENTS.md/CLAUDE.md first signals, default automated init to `--quality recommended` unless the operator explicitly requests `standard`, `custom`, or no-quality. Stop on a concrete `setup_required` blocker rather than substituting config-diff/probe. For AGENTS.md/CLAUDE.md, get at least 10 retained ready tasks, then use manifest-backed rules for the instruction signal; use probe/config-diff only as an explicit prefilter on that larger retained slice | [onboarding](references/onboarding.md), [rules-flow](references/rules-flow.md), [quick-probe](references/quick-probe.md) |
+| Shared `AGENTS.md`, `CLAUDE.md`, policy, model, harness, tool-policy, or rollout question that is not an optimization loop | `stet context --repo <repo> --json`; if setup is missing or zero-ready, onboard and repair the task slice first; then use reusable baseline check, `stet manifest resolve`, `stet eval rules plan`, `stet eval rules` | [onboarding](references/onboarding.md), [rules-flow](references/rules-flow.md) |
+| Fast local directional read or throwaway candidate check | `stet probe` or `stet probe --file`; use `stet eval config-diff` only for an explicit before/after file-diff prefilter, not as the first-run setup driver; if no eval-ready tasks exist, widen/repair the slice or use onboarding before interpreting the result | [quick-probe](references/quick-probe.md), [onboarding](references/onboarding.md) |
 | Docker-free / local / worktree execution of a rules eval | `stet eval rules --harbor-backend worktree` (origin-less local checkouts supported; evidence is inspect-only and non-decision-grade by default) | [rules-flow](references/rules-flow.md) |
-| Model, reasoning, CLI version, or harness-setting comparison | `stet context --repo <repo> --json`, then reuse/report comparable roots or run a pinned eval; use smoke only for first-run bootstrap | [full-evals](references/full-evals.md), [compare-and-checkin](references/compare-and-checkin.md) |
+| Model, reasoning, CLI version, or harness-setting comparison | `stet context --repo <repo> --json`, then reuse/report comparable roots or run a pinned eval; use smoke only for explicit model/harness calibration after setup, not for new-repo AGENTS.md onboarding | [full-evals](references/full-evals.md), [compare-and-checkin](references/compare-and-checkin.md) |
+| Fresh model, reasoning, harness, or corpus-slice study | `stet study start <study-id> --corpus <stet.suite.yaml|dataset-dir|selection_receipt.v1.json> --select <selector> --question "..."`, then run `stet eval report --out <root> --study <study-id>` when the report exists; omitted `--study` auto-attaches only when one existing study matches | [iterative-improvement](references/iterative-improvement.md), [compare-and-checkin](references/compare-and-checkin.md) |
+| Sprawled or resumed analysis with multiple roots, retries, baselines, logs, or notes | If a named registry exists, start with `stet study status <study-id> --json` or `stet study report <study-id>`; otherwise scan direct claim roots with `--mode study`; scan broad corpora such as `.stet/leaderboard` with `--mode inventory` | [iterative-improvement](references/iterative-improvement.md), [compare-and-checkin](references/compare-and-checkin.md) |
 | Baseline vs candidate compare | `stet eval compare`, preferably against a frozen baseline when compatible | [compare-and-checkin](references/compare-and-checkin.md) |
 | Active run status, stuckness, waiting, heartbeat, or blocker check | `stet eval status --json` | [status-checkin](references/status-checkin.md) |
 | Repair incomplete or under-graded evidence | Follow emitted status/report repair commands before rerun or restart | [status-checkin](references/status-checkin.md), [compare-and-checkin](references/compare-and-checkin.md), [rules-flow](references/rules-flow.md) |
 | Shared skill addition or skill revision | Classify new-skill A/B vs revision, choose test posture, then use rules evidence or `stet eval rules skill` | [rules-skill-loop](references/rules-skill-loop.md), [iterative-improvement](references/iterative-improvement.md) |
 | Optimization loop or "keep improving" | Read native loop state, update check-in, select/launch one allowed next action | [iterative-improvement](references/iterative-improvement.md) |
-| Repo eval setup | Author harness config, ask once for the quality-grader posture (recommended, standard, or custom), then init/discover/build | [onboarding](references/onboarding.md) |
+| Repo eval setup | Inspect CI/history, infer a starter slice, default AGENTS.md/CLAUDE.md first signals to recommended graders, clarify only when the non-instruction setup grader setting is ambiguous, then init/discover/build and repair/widen until ready or concretely blocked | [onboarding](references/onboarding.md) |
 | Large reusable dataset | `stet suite discover` and `stet suite build` | [dataset-build](references/dataset-build.md) |
 | Research, plan, or custom artifact quality | Choose or write custom rubrics first | [rubric-authoring](references/rubric-authoring.md) |
 | Promote, monitor, or roll back | Lifecycle commands after canonical Trial Result evidence | [release-lifecycle](references/release-lifecycle.md) |
+| Find where Stet is using disk or reclaim run/scratch artifacts | `stet artifacts doctor` to discover repo + cache + Docker pressure, then `stet artifacts compact --dry-run` to preview and `--apply` to reclaim; never raw `du`/`rm` on `.stet` roots | [dataset-build](references/dataset-build.md) |
 
 ## Eval Rules Workbench
 
@@ -296,8 +331,11 @@ inspect when evidence remains degraded.
 - Quiet logs are normal. Read status JSON before assuming a stall.
 - Tests are the gate, not the whole source of truth. Quality dimensions above
   the gate are where strong models, skills, and instructions differentiate.
-- Cheap `probe --file` or `config-diff` runs can discard weak drafts, but kept
-  or promoted shared behavior needs rules evidence.
+- Cheap `probe --file` runs can discard weak drafts only after setup has a
+  build-ready dataset. For AGENTS.md/CLAUDE.md, keep at least 10 retained ready
+  tasks before interpreting a probe/config-diff read. `config-diff` is for
+  explicit file-diff prefilters, not failed onboarding. Kept or promoted shared
+  behavior needs rules evidence.
 - Required grader coverage that is missing, asymmetric, unavailable, or
   provenance-mismatched fails closed. Use emitted repair commands instead of
   rerunning clean evidence by hand.
@@ -328,9 +366,10 @@ Only load the reference doc that matches the current route:
 - [references/release-lifecycle.md](references/release-lifecycle.md): gate,
   promote, monitor, rollback.
 - [references/onboarding.md](references/onboarding.md): first-run repo setup,
-  quality posture, dataset building, starter-slice approval.
+  quality defaults, dataset building, starter-slice approval.
 - [references/dataset-build.md](references/dataset-build.md): heavy dataset
-  builds, Docker debug loops, ecosystem templates, scaling.
+  builds, Docker debug loops, ecosystem templates, scaling, and disk reclaim
+  (`stet artifacts doctor` / `compact`).
 - [references/rubric-authoring.md](references/rubric-authoring.md): custom
   grader design, calibration, scored rubric templates.
 - [references/examples.md](references/examples.md): examples only; do not load

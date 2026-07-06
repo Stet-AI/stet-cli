@@ -209,7 +209,7 @@ manifest (scalar path or `manifest:` object). Do not add `runner:` to
 Goal: >= 80% gold pass rate on a smoke batch.
 
 ```bash
-stet init --repo /path/to/local/repo --yes --test "<repo test cmd>"
+stet init --repo /path/to/local/repo --yes --ai-provider <codex|claude|gemini|cursor> --test "<repo test cmd>"
 
 stet suite discover --repo owner/repo --rev-range main~30..main --limit 10 \
   --output $MANIFEST_DIR/manifest.yaml
@@ -223,6 +223,10 @@ build needs a model client. Like `discover`, it resolves one from
 `--ai-cmd`, `build.ai_cmd`, or `ai.default_provider` with a provider installed —
 no explicit `--ai-cmd` needed once a provider is configured. Pass
 `--llm-install-config=false` to build without one (lower-fidelity broad verifiers).
+Without a recipe or LLM, the default install_config now infers `language` from the
+test runner (e.g. `cargo`->rust, `pytest`->python) so runtime env (Rust's
+`CARGO_NET_OFFLINE`) injects; Go stays `unknown` (relies on the go-runner sniff,
+since the default carries no concrete Go toolchain version).
 
 For a repo that ships a vetted recipe, prefer `--install-config <path>` (or
 `build.install_config` in `.stet/stet.yaml`): it consumes the deterministic
@@ -233,8 +237,61 @@ own commands so forms like `env PATH=… cargo test` and toolchain installers ar
 auto-allowed. A toolchain preflight then fails loud
 (`toolchain preflight: rust test runner "cargo" is not installed …`) before any
 fan-out/materialization for a non-base toolchain (Rust) the recipe doesn't
-install, instead of a downstream "gold tests did not run". `stet init` on a Rust
-repo scaffolds rustup/cargo into `.stet/harbor.Dockerfile` so `cargo test` runs unedited.
+install, instead of a downstream "gold tests did not run". `stet init` does not
+choose or pin Rust/Cargo; add the CI-selected toolchain to
+`.stet/harbor.Dockerfile` before building.
+
+For Python repos that use `uv`, prefer the direct verifier command when one
+exists, for example `uv run --frozen --no-sync coverage run -m pytest ...` or
+`uv run --frozen pytest ...`. If CI needs a multi-step shell wrapper such as
+`bash .stet/ci-test.sh`, pass it as the explicit configured `--test` command or
+use a vetted `--install-config` recipe; do not ask the LLM install-config path to
+invent an opaque wrapper.
+When a generated install_config command invokes `uv` directly from `/app`, Stet
+makes `uv` available before running the baked install layer. Generated install
+and test commands cannot use `cd`, `&&`, or other shell chains; subdirectory-only
+projects should fail closed under synthesis unless you route through a vetted
+explicit recipe or operator path supported elsewhere. Init-generated uv starters
+use an unpinned bootstrap; other Dockerfiles may receive Stet's default uv
+bootstrap unless they already carry the `# stet-uv-toolchain` marker. If an
+opaque wrapper hides the `uv` invocation, make `.stet/harbor.Dockerfile`
+explicit about the required `uv` version before rerunning build.
+
+For less common ecosystems, preserve the real CI verifier as an explicit
+configured `--test` command instead of editing Stet's built-in allowlist. Stet
+trusts operator-provided test commands exactly after shell-safety checks; the
+built-in allowlist mainly constrains model-generated install/test commands.
+
+### Fail closed when a repo is not buildable
+
+`--llm-install-config` synthesis fails closed instead of fabricating a
+non-working runner. When the repo needs a private registry, missing
+credentials, or a setup the model cannot determine, the task is skipped loudly
+under the distinct `install_config_unbuildable` reason (separate from
+`install_config_failed`) with the model's stated reason in `build-summary.json`
+— it does not emit an empty-install config that "succeeds" while proving zero
+F2P tasks. The fix is to supply a deterministic `--install-config` recipe or
+repair the environment (Dockerfile toolchain/credentials), then rebuild. For
+inferred (Stet-generated) test commands, the synthesized verifier is rewritten
+to an observable, cache-disabled, discovery-verified form (e.g. pytest gains
+`-p no:cacheprovider`, a leading `--collect-only -q` discovery gate, and
+`-v --color=no`); cache-disable and discovery have F2P-correctness value, the
+verbose/no-color flags only aid log debuggability. Operator-supplied `--test`
+commands are preserved verbatim and never rewritten.
+
+For the interactive onboarding of an arbitrary repo, dispatch a subagent that
+runs the agentic build-and-test loop, then feed its vetted result through the
+trusted `--install-config` path rather than relying on one-shot synthesis. The
+subagent's contract: confirm the project builds and tests from the repo root
+(`/app`) — the runner executes install and the test command there and cannot
+`cd` into a subdirectory, so a subdirectory-only project must fail closed rather
+than onboard a recipe whose install lands in the wrong place; install
+lockfile-aware (`npm ci`, `pip install -r`, `go mod download`, `cargo fetch`);
+record only the
+commands it actually ran successfully (no speculative or replaced steps); emit
+an observable, discovery-verified test command that keeps the narrow selector;
+and **fail closed — emit nothing if it cannot build**. It writes a vetted
+`install_config.json`, which you then build with `--install-config <path>`.
 
 Debug loop (up to 5 attempts). Ordered by frequency:
 
@@ -252,16 +309,19 @@ Debug loop (up to 5 attempts). Ordered by frequency:
 | Lockfile version mismatch | lockfile_drift | Pin package manager version in `.stet/harbor.Dockerfile` |
 
 `--llm-install-config` is **on by default** (it generates the install recipe and
-narrows verifiers, both of which lift dataset quality), so `suite build` /
-`scenario generate` require `--ai-cmd` unless you pass `--llm-install-config=false`
-to opt out (not recommended; you get lower-fidelity broad verifiers).
+may narrow generated verifiers, both of which lift dataset quality), so
+`suite build` / `scenario generate` require `--ai-cmd` unless you pass
+`--llm-install-config=false` to opt out (not recommended; you get lower-fidelity
+broad verifiers).
 
 After >= 80% gold pass, verify test_cmd relevance: pick a task with test
 patch, confirm test_cmd runs those files. Under `--llm-install-config`, build
-attempts runner-neutral selector evidence for a single broad whole-suite
-verifier. It accepts a narrowed command only when deterministic proof succeeds
-(filesystem package/path/file proof for supported path runners, Bazel label
-proof through `bazel query` or Bazelisk when available). Each task's existing
+attempts runner-neutral selector evidence for generated whole-suite verifiers.
+Explicit `--test` or config-provided test commands are preserved unless the repo
+declares a `test_selector` config. Stet accepts a narrowed command only when
+deterministic proof succeeds (filesystem package/path/file proof for supported
+path runners, Bazel label proof through `bazel query` or Bazelisk when
+available). Each task's existing
 `build_logs/test_selection.json` path now carries `schema:
 test_selection/v2`, stable reason codes, runner/target metadata, proof source
 and strength, selected targets, covered paths, fallback, setup blocker class
@@ -362,16 +422,47 @@ Add `--prune-buildkit` only when broad Docker BuildKit cache cleanup is
 acceptable. Do not delete `.stet` run roots or `~/.cache/stet` evidence
 artifacts.
 
+To discover where Stet is using disk, run `stet artifacts doctor` instead of
+raw `du`; it reports per-root pressure plus, with `--global-caches`/`--docker`,
+shared cache and Docker objects:
+
+```bash
+stet artifacts doctor --repo . --roots .stet,.tmp --global-caches --docker --json
+```
+
 Successful compare/run completions now auto-drop their regeneratable scratch
 (`.harbor-dataset/` and `.smoke/`) while preserving evidence; set
-`STET_KEEP_SCRATCH=1` to keep it for debugging. For backlog, run
-`stet artifacts status --root <root>`, then `stet artifacts compact --root
-<root>` (default `--level all` = compact bounded patches AND evict scratch; use
-`--level scratch` or `--level patch` to narrow, `--dry-run` to preview). Add
-`--include-datasets` only when you want to remove verified built dataset
-directories too. This preserves `patch_retention.v1.json` contracts and a
-`cleanup.v1.json` seal but never removes trajectories, Docker cache, APFS
-snapshots, or whole run roots.
+`STET_KEEP_SCRATCH=1` to keep it for debugging. To reclaim a backlog, prefer the
+native compact engine over manual `rm` so retention contracts and seals are
+honored. Scope it to one root or the whole repo, and always preview first:
+
+```bash
+# One root: status, preview, then reclaim (default --level all = compact bounded
+# patches AND evict scratch; --level scratch|patch narrows).
+stet artifacts status --root <root>
+stet artifacts compact --root <root> --dry-run
+stet artifacts compact --root <root>
+
+# Repo-wide: dry-run by default; apply explicitly with an age guard.
+stet artifacts compact --repo . --dry-run --json
+stet artifacts compact --repo . --apply --older-than 14d
+
+# Also include stale Docker/Harbor daemon resources in the same JSON envelope.
+stet artifacts compact --root <root> --include-docker --dry-run
+```
+
+Add `--include-datasets` only when you also want to remove verified built
+dataset directories, `--include-caches` to prune superseded out-of-repo
+Harbor export caches, and `--include-docker` to also report/apply stale
+Docker/Harbor daemon resources in the same JSON envelope (same safety gate as
+`stet harbor cleanup`: refuses to remove anything if any Stet-owned Docker
+resource is active anywhere; never prunes BuildKit cache without
+`stet harbor cleanup --prune-buildkit`). Compact preserves
+`patch_retention.v1.json` contracts and writes a `cleanup.v1.json` seal, but
+never removes trajectories, APFS snapshots, or whole run roots.
+`stet harbor cleanup` remains the dedicated Docker/Harbor surface; reclaim
+refuses an active or partial root unless `--force`, and is always a no-op on a
+pinned root (`stet artifacts pin`).
 
 When Docker Desktop cannot allocate more memory, tune concurrency instead of
 raising resource limits. Start with `--workers 2` for dataset builds. For eval
@@ -453,8 +544,10 @@ Each phase checkpoint recommends one concrete next step:
 
 ## Harbor Dockerfile Starting Points
 
-Use these as starting points; pin versions from CI and keep the actual repo
-test command in `stet init --test`.
+Use these as manual starting points after reading CI and repo config. `stet
+init` generated Dockerfiles do not pin runtimes/package managers; uv starters
+may include an unpinned uv bootstrap. Add the exact CI-selected setup yourself
+when the tests need it. Keep the actual repo test command in `stet init --test`.
 
 ### Python (uv)
 ```dockerfile
@@ -490,10 +583,9 @@ RUN go mod download
 ```dockerfile
 FROM ghcr.io/laude-institute/t-bench/ubuntu-24-04:20250624
 RUN apt-get update -qq && apt-get install -y -qq git curl && rm -rf /var/lib/apt/lists/*
-# install Node + corepack/pnpm versions that match CI here
+# install Node + package-manager versions that match CI here
 WORKDIR /app
 ADD repo.tar.gz /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN pnpm install --frozen-lockfile --prefer-offline
 ```
 

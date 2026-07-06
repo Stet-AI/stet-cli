@@ -32,9 +32,9 @@ answer      safe
 confidence  medium
 phase       report
 compare     candidate (with CLAUDE.md) vs baseline (without)
-sample      8 tasks
-delta       pass +0pp  equiv +12pp  review +4pp
-driver      equivalence improved on 5/8 tasks without review regression
+sample      12 tasks
+delta       pass +0pp  equiv +10pp  review +3pp
+driver      equivalence improved on 7/12 tasks without review regression
 evidence    .stet/rules/stet.change.yaml
 why         Promote is available because this is the formal rollout decision
             surface and the required graders are present.
@@ -60,7 +60,7 @@ Agent routes to: quick-probe prefilter.
 Agent reads: `references/quick-probe.md`
 
 ```bash
-stet eval config-diff --repo . --file AGENTS.md --model "sonnet 4.6" --json
+stet eval config-diff --repo . --file AGENTS.md --dataset .stet/dataset --model "sonnet 4.6" --json
 ```
 
 Agent treats the result as directional only and says so explicitly.
@@ -74,9 +74,9 @@ answer      inconclusive
 confidence  medium
 step        probe -> inspect
 compare     candidate (new AGENTS.md) vs baseline (git HEAD~1)
-sample      8 tasks
+sample      12 tasks
 delta       pass +0pp  equiv -4pp  review +1pp
-driver      equivalence dropped on 3/8 tasks; review gain is noise
+driver      equivalence dropped on 3/12 tasks; review gain is noise
 evidence    .tmp/stet-config-diff
 why         This can prune a weak draft, but it is not release evidence for
             AGENTS.md and does not prove custom agents_* grader coverage.
@@ -124,11 +124,11 @@ carries that forward:
 > under-edit on tasks that legitimately span multiple files.
 
 ```bash
-stet eval config-diff --repo . --file AGENTS.md --model "sonnet 4.6" --json
+stet eval config-diff --repo . --file AGENTS.md --dataset .stet/dataset --model "sonnet 4.6" --json
 ```
 
 > **Result:** Equiv recovered +2pp overall. Tasks 18 and 25 improved. No
-> rigidity regression visible in this sample — but sample is only 8 tasks,
+> rigidity regression visible in this retained sample — but sample is only 12 tasks,
 > so confidence is medium.
 
 ```text
@@ -138,7 +138,7 @@ answer      safe
 confidence  medium
 step        directional prefilter
 compare     candidate (revised AGENTS.md) vs baseline (git HEAD~1)
-sample      8 tasks
+sample      12 tasks
 delta       pass +0pp  equiv +2pp  review +1pp
 driver      equivalence recovered; revised constraint is working
 evidence    .tmp/stet-config-diff
@@ -163,9 +163,9 @@ the agent could recommend it.
 
 ---
 
-## Trace 3: Onboard → Smoke → Probe
+## Trace 3: Onboard → Rules
 
-**User:** "Set up evals for this repo"
+**User:** "Set up Stet in this repo and get an initial AGENTS.md signal"
 
 Agent routes to: onboarding.
 Agent reads: `references/onboarding.md`
@@ -178,13 +178,11 @@ Agent authors `.stet/harbor.Dockerfile` and `.stet/stet.harness.yaml` with
 `environment.dockerfile: .stet/harbor.Dockerfile` and the Node/system
 dependencies used by CI.
 
-Agent asks once for the first-run quality posture. User chooses recommended.
+Agent defaults to recommended quality graders for the first AGENTS.md signal.
 
 ```bash
-stet init --repo . --yes --test "npm test"
-# Agent ensures .stet/stet.yaml contains quality.bundles=[discipline] and
-# quality.include_graders=[intentionality] before launching smoke/probe/eval.
-stet suite discover --repo . --rev-range main~50..main
+stet init --repo . --yes --ai-provider <codex|claude|gemini|cursor> --quality recommended --test "npm test"
+stet suite discover --repo . --rev-range main~200..main --limit 200 --target-pass 25
 stet suite build --repo . --manifest .stet/discover-manifest.yaml
 # Agent runs the cheapest Docker-backed local replay/test check for one
 # representative task. This validates setup; it is not a model smoke/probe/eval.
@@ -197,75 +195,81 @@ STET :: DATASET
 
 answer      starter slice ready
 confidence  medium
-step        onboard -> probe
-funnel      87 scanned -> 14 passed discover -> 9 build-ready
-dropoff     73 rejected: no_test_changes 48, oversize 15, llm_gate_fail 10
-build       9 materialized, 2 skipped (unsafe_external_symlink)
-coverage    api, auth, validation, cli
-difficulty  easy 2, medium 5, hard 2
-gap         db migrations (no test co-changes found)
+step        onboard -> rules
+funnel      240 scanned -> 32 passed discover -> 15 build-ready
+dropoff     208 rejected: no_test_changes 96, llm_gate_fail 64, oversize 22
+build       15 materialized, 4 skipped (unsafe_external_symlink)
+coverage    api, auth, validation, cli, docs/runtime
+difficulty  easy 3, medium 8, hard 4
+gap         db migrations (low representation; report as confidence limit)
 setup       Docker-backed local test check passed on one representative task
-why         Smoke is next because the slice is representative but still
-            exploratory. A quick
-            multi-model read will calibrate before you commit to a probe.
+why         Rules is next because AGENTS.md is shared behavior; probe/config-diff
+            are optional prefilters only after setup.
 
-recommend   smoke this starter slice
-command     stet eval smoke --dataset .stet/dataset --models "..." --json
-other       approve for probe without calibrating; stop with recommendation only
+recommend   launch the first manifest-backed AGENTS.md rules signal
+command     create .stet/rules/agents-md/stet.change.yaml and
+            .stet/rules/agents-md/stet.suite.yaml over the retained dataset,
+            then run stet manifest resolve and stet eval rules plan
+other       run an explicit prefilter only if requested; stop with dataset
+            receipt only when spend is not approved
 ```
 
-**User:** `m`
+**User:** `R`
+
+Agent writes:
+
+```yaml
+# .stet/rules/agents-md/stet.change.yaml
+version: 1
+schema: stet.change/v1
+name: agents-md-onboarding
+change:
+  kind: rules
+  rules:
+    treatments:
+      - kind: agents_md
+```
+
+```yaml
+# .stet/rules/agents-md/stet.suite.yaml
+version: 1
+schema: stet.suite/v1
+repo: .
+eval:
+  dataset: .stet/dataset
+  baseline_model: model:sonnet 4.6
+  candidate_model: model:sonnet 4.6
+  grader_ai_model_id: claude-sonnet-4-6
+```
 
 ```bash
-stet eval smoke --dataset .stet/dataset --models "opus 4.6,sonnet 4.6" --tasks 5 --json
+stet manifest resolve --change-manifest .stet/rules/agents-md/stet.change.yaml
+stet eval rules plan --change-manifest .stet/rules/agents-md/stet.change.yaml --suite-manifest .stet/rules/agents-md/stet.suite.yaml --json
+stet eval rules --change-manifest .stet/rules/agents-md/stet.change.yaml --suite-manifest .stet/rules/agents-md/stet.suite.yaml
+stet eval report --change-manifest .stet/rules/agents-md/stet.change.yaml --json
 ```
 
 ```text
-STET :: SMOKE
+STET :: RULES
 
-answer      directional: opus leads
-confidence  low
-step        smoke -> probe
-models      opus 4.6: pass 80%  sonnet 4.6: pass 60%
-sample      5 tasks (too small for high confidence)
-driver      opus solved 1 additional task; both failed the same hard task
-evidence    .tmp/stet-smoke
-why         Probe is next because smoke gave a directional signal but the
-            sample is too small for a release decision.
-
-recommend   launch full probe with this dataset
-command     stet probe --dataset .stet/dataset --model "..." --json
-other       rerun smoke with more tasks; stop with the directional read
-```
-
-**User:** `p`
-
-```bash
-stet probe --dataset .stet/dataset --model "opus 4.6" --json
-stet eval report --out .tmp/stet-probe --json
-```
-
-```text
-STET :: PROBE
-
-answer      safe
+answer      inspect
 confidence  medium
-step        probe -> baseline
-compare     opus 4.6 on 9 tasks
-sample      9 tasks
+step        rules -> inspect
+compare     candidate AGENTS.md vs baseline
+sample      15 tasks
 delta       pass 78%  equiv 3.2/4  review 3.0/4
-driver      strong baseline established across api/auth/validation/cli
-evidence    .tmp/stet-probe
-why         This is your first real evidence. Baseline freeze is the natural
-            next step so you have a stable reference for future comparisons.
+driver      AGENTS.md changed shared behavior across api/auth/validation/cli
+evidence    .stet/eval-rules/<run>/eval_report.v1.json
+why         The retained dataset produced a first instruction-surface signal;
+            the db-migration coverage gap remains a confidence limit.
 
-recommend   freeze as the repo's first baseline
-command     stet baseline freeze --from <probe-root> --name <capability> --json
-other       gate only if shipping now; stop with directional evidence
+recommend   inspect weakest tasks, then revise or keep
+command     stet eval status --change-manifest .stet/rules/agents-md/stet.change.yaml --json
+other       run a checkpoint/holdout lane before promotion
 ```
 
-Done in 4 turns. The onboard → smoke → probe pipeline produced the repo's
-first real eval evidence.
+Done in 3 turns. The onboard → rules pipeline produced the repo's first
+manifest-backed AGENTS.md signal.
 
 When the first real evidence is a small pairwise model compare instead of a
 probe, keep the same baseline-first posture:

@@ -65,11 +65,12 @@ stet eval compare \
 
 Use `--denominator-policy include-contaminated` only when the operator
 explicitly wants an exploratory full-denominator read. Report that validity and
-denominator policy separately: network-contaminated evidence can be included for
-this analysis while still blocking publishable or rollout-grade claims.
-Answer-contamination (`agent_answer_contamination`) is a non-blocking flag:
-those cells keep their real `matrix_status` and count under `publishable`, so
-exclude them by their flag if you want a contamination-free denominator. Read
+denominator policy separately: contamination labels
+(`agent_network_contamination`, `agent_answer_contamination`) are non-blocking
+flags. Those cells keep their real `matrix_status` and count under
+`publishable`, but they are not automatically clean; inspect the trace,
+blocked-access events, and dataset overlap before making rollout-grade or public
+claims, or exclude them by flag for a contamination-free denominator. Read
 `decision_receipt.compare.multi_arm`, `multi_arm.standings`, and
 `statistics.multi_arm` instead of reconstructing counts by hand. New multi-arm
 reports include quality columns in `multi_arm.standings`; bind metric claims to
@@ -115,7 +116,11 @@ types (promote, hold, inspect), not just inspect.
 `leaderboard_eligible_pass_rate`, the derived `clean_pass_rate` (tests ∧
 equivalence ∧ code review), equivalence/code-review/footprint grader metrics,
 code-review rubric means, continuous encodings of the binary equivalence and
-code-review graders, and custom grader metrics when paired values exist.
+code-review graders, the derived `graded_equivalence` 0-4 `score_mean` metric
+when both arms persist it, and custom grader metrics when paired values exist.
+`graded_equivalence` is additive: arms without the persisted metric drop it and
+compare byte-identically, so backfill older roots with
+`stet runs regrade-graders --rederive-only` before expecting the row.
 Tune with `--bootstrap-iterations N` (default 10000), `--bootstrap-seed N`
 (default 1), `--ci-level F` (default 0.95); pass `--no-bootstrap` to skip the
 pass. CIs are percentile-method, repo-stratified by per-task
@@ -183,8 +188,27 @@ For subjective grader deltas, also read
 `decision_receipt.compare.grader_discrimination`). Missing, stale,
 profile-incompatible, underpowered, invalid, or same-model-inapplicable
 discrimination evidence keeps the compare inspect-only for promotion, hold /
-rollback, and public superiority claims. Use any directional read only for
-diagnosis until that block's blocker and next action are resolved.
+rollback, and public superiority claims. Directional reads are still useful for
+iteration, candidate ranking, and deciding where to spend the next eval budget;
+do not discard them just because they are not rollout-grade.
+When present, `decision_receipt.graders.reliability_policy` and status
+`compare.grader_reliability_policy` summarize which required grader dimensions
+are decision-grade, directional, blocked, or missing reliability evidence.
+If `ready=0/N` or the policy is `BLOCKED`, do not treat subjective grader
+movement as rollout-grade evidence by itself, even when per-dimension grader
+scores are populated. When the policy reports directional graders, preserve that
+signal in the check-in and use it to choose the next candidate, rubric repair,
+or expanded task slice.
+If `claim_readiness.claims[].readiness_state` is `abstained`,
+`insufficient_evidence`, or `needs_review`, keep the claim blocked or
+inspect-only until the named grader/evidence blocker is repaired. A
+`directional` readiness state can support diagnosis, iteration, candidate
+ranking, and follow-up eval selection; it is not calibrated enough to be the
+sole basis for rollout-grade decisions.
+If the compatible `grader_discrimination.v1.json` artifact lives outside the
+compare root, pass `--grader-discrimination-artifact <path>` to the compare or
+report command; Stet still fails closed on missing, unreadable, or
+profile-incompatible artifacts.
 
 When `delta_ci` is available, promotion is noise-aware: a candidate
 point-estimate win only counts as promotion-strength when the favorable delta is
@@ -313,6 +337,33 @@ Machine-readable default:
 - Use `decision_receipt.metrics`, `decision_receipt.tasks`, and
   `decision_receipt.compare` instead of reconstructing the answer from
   `experiment.json`, arm summaries, and per-task validation files.
+- When present, read `decision_receipt.capability_read` before making a
+  capability claim from targeted F2P: `precise_f2p_lower_bound` is the strict
+  gold-function lower bound, `mechanically_clean` is the submitted patch
+  compile/check read, and `recall_supported` includes mechanically clean
+  valid-but-different behavioral recall labels. Supporting modes may include
+  `equivalence`, `agent_test_replay`, and `adapted_reference_test`;
+  adapted-reference-test support must carry an audited adapted test diff, not a
+  silent application patch. Treat these as paired recall evidence, not as a
+  replacement for the strict lower-bound headline. Per-cell labels are mirrored
+  in
+  `decision_receipt.tasks[*].{baseline,candidate}_behavioral_recall_label` and
+  mechanical status in
+  `decision_receipt.tasks[*].{baseline,candidate}_mechanical_cleanliness_status`.
+  A `behavioral_recall_label` of `adaptation_inconclusive` is neither credited
+  recall nor a confirmed failure: the strict gate failed but no discriminating
+  test was executed (for example the adaptation model judged no reference-test
+  patch was needed), so do not count it as a solve or as a true regression.
+- After a recall-active run, read the terminal "Behavioral recall" panel (and
+  its programmatic source `task_selection_adequacy.test_verdict_basis`). It
+  renders the strict precise-gold-fn pass-rate as a high-precision lower bound
+  versus the recall-supported rate (precise + `impl_divergent_equivalent`), with
+  a `credited / inconclusive / non_solve` breakdown. Per-arm tallies live in
+  `test_verdict_basis.arms[*]` (`precise_gold_fn_pass_label_cells`,
+  `impl_divergent_equivalent_cells`, `adaptation_inconclusive_cells`,
+  `non_solve_cells`) — use those, not the collapsed aggregate, for a compare or
+  multi-arm read. The panel is intentionally silent on clean test-backed corpora
+  (no impl-divergent or inconclusive cells), so its absence is not a defect.
 - Treat cost deltas as decision-grade only when the cost metric row has
   `comparability.comparable: true`. If `cost_per_task` or `total_cost` says
   `delta_display: "incomparable"`, cite the raw costs only as audit data and
@@ -385,7 +436,15 @@ Machine-readable default:
 - If built-in grader outcomes are missing or unknown, `grader_coverage` lists
   the affected arm/task IDs. For equivalence, also read
   `missing_equivalence`; it qualifies the headline metric and emits the exact
-  `stet runs repair-ai-coverage` command to refresh only those tasks.
+  `stet runs repair-ai-coverage` command to refresh only those tasks. Until
+  that repair succeeds, keep the recommendation inspect-only for rollout, but
+  still summarize `evidence_quality.directional_read` and taskwise quality/cost
+  movement as iteration signal when `directional_read.status` is `usable` or
+  `limited`.
+- Read `decision_receipt.compare.behavior_coverage` before claiming behavioral
+  or process-efficiency differences. If it is blocked, report captured/total
+  counts and the listed `missing_task_ids`; do not silently omit the behavior
+  read or imply telemetry was complete.
 - For footprint reads, prefer the `surface_breakdown` block on
   `footprint_risk` (and the per-task `footprint_surface_breakdown` summary):
   it splits agent vs gold patches into `implementation` vs `test_fixture`

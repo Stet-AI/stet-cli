@@ -62,6 +62,10 @@ other       inspect latest task evidence if progress stops; stop with this statu
 - Prefer blocker-first explanations over generic "still running" text.
 - If status is healthy and heartbeat/progress is advancing, do not recommend a
   rerun just because logs are quiet.
+- If `partial_receipt.failure_class` is `zero_ready_recent_slice` or
+  `no_eval_ready_tasks`, do not recommend waiting. Recommend widening or
+  shifting `--rev-range`, using `--allow-no-test-changes` when the repo has
+  repo-level tests but few test diffs, or rerunning with a known dataset.
 - If status and persisted evidence disagree, follow evidence refs and persisted
   reports before deciding. Explain the contradiction and fail closed to inspect
   when the evidence remains degraded.
@@ -73,6 +77,11 @@ other       inspect latest task evidence if progress stops; stop with this statu
 - `inspect`: open the last task detail, trajectory, or runtime status artifact
   when progress stops or evidence is contradictory.
 - `repair`: follow the exact emitted repair command when status exposes a
-  repairable missing-grader, partial-task, or rules-runtime condition.
+  repairable missing-grader, partial-task, rules-runtime, or root-integrity
+  condition. A "complete" root now downgrades and reads `integrity.status`
+  `incomplete`/`inconsistent` with `decision_grade:false` when a prior
+  repair/rerun left stranded patches, a summary↔disk mismatch, a stale report,
+  or a leftover breadcrumb; run the named fix command and do not treat that root
+  as decision-grade until it clears.
 - `resume`: resume only when the active process has exited or status says the
   flow is stalled/retryable; do not resume over a healthy active run.

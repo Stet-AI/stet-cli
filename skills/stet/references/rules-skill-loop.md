@@ -148,7 +148,7 @@ All wrapper default graders except `footprint_risk` are LLM-backed, including
 `--grader-ai-model-id` so Stet uses provider-native structured output through
 the matching local CLI. Use `--grader-ai-cmd` with `--grader-ai-model-id` only
 when forcing the legacy shell-text evaluator path. `--no-quality` drops only
-auto-bundled craft/discipline graders; it does not bypass the evaluator
+auto-bundled quality graders; it does not bypass the evaluator
 preflight for wrapper defaults. To run without an evaluator, override the
 bundle, for example `--grader footprint_risk`.
 

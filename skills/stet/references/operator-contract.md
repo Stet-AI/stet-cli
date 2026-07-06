@@ -24,6 +24,22 @@ judgment. Do not respond with only paths, commands, report links, or raw status
 output; use those as evidence links after the verdict, evidence quality,
 effective grader coverage, risks, and next action.
 
+When an eval receipt carries an `interpretation` block (on `eval_rules_plan.v1.json`
+with `kind: preview`, or `eval_report.v1.json` with `kind: performance`), base the
+user-facing read on it: state every `must_convey` point in your own words, never make
+any `must_not_claim` claim, lead with the performance/quality `points` (per-dimension
+and per-lane win/draw/loss tallies), and surface `next_action`. For a performance
+brief, the `must_convey` list fixes a calibrated register: state the result as plain
+odds from `confidence.odds_favor` (e.g. "19-in-20", "4-in-5", "even-odds") — never as
+a decimal probability or the word "superiority" — use the verb that matches
+`confidence.tier` (`strong` → "Ship it" / "Promote"; `likely` → "Ship and watch [X]"
+/ "Confirm first"; `flat` → "Don't ship on this alone"), and order your relay as
+evidence and odds, then the verb, then what to watch. Offer the `one_liner` field
+verbatim if the user needs to justify the decision, and mention `track_record` when it
+is populated. Never relay a bare posture/verdict token (e.g. "it says inspect_only")
+as if it were the result; `inspect_only` is the expected posture for an exploratory
+probe, not a failure or a sign Stet is useless.
+
 If the persisted `eval_report.v1.json` for the flow already exists, reuse it.
 Ordinary output roots commonly persist it at
 `<root>/.stet/eval-report/eval_report.v1.json`; change-manifest rules flows
@@ -36,6 +52,12 @@ grader coverage, and next action (the verdict string lives on
 sibling mirrors it). Read top-level `trial_context` for task
 corpus, task selection, Harness Surface, Search Space, baseline/candidate,
 supporting evidence, freshness, and raw machine recommendation refs.
+When present, `evidence_quality.readiness_state` and
+`claim_readiness.claims[].readiness_state` are compact machine-readable reasons
+for readiness such as `decision_grade`, `directional`, `abstained`,
+`insufficient_evidence`, or `needs_review`. They explain evidence posture or
+claim status; they do not replace `decision_receipt.recommendation`,
+`evidence_quality.posture`, or claim `status` as the action gate.
 
 Authority tiers:
 - `eval_report.v1.json`: first read for completed optimizer Trial Results

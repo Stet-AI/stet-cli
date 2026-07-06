@@ -91,7 +91,7 @@ Smoke and run summaries should always state:
 ## Reusable Dataset Flow
 
 ```bash
-stet init --repo . --test "<repo test cmd>"
+stet init --repo . --ai-provider <codex|claude|gemini|cursor> --test "<repo test cmd>"
 stet suite discover --repo . --rev-range main~50..main
 stet suite build --repo . --manifest .stet/discover-manifest.yaml --workers 4
 stet eval run --dataset .stet/dataset --models "opus 4.6,sonnet 4.6" --out .stet/eval-output
@@ -142,7 +142,11 @@ pointed at the canonical root and use `stet runs repair-patches --task-id ...`.
 This reuses the existing model-under-test `agent.patch`, reruns
 validation/evidence repair, and regenerates the merged summary without a model
 rerun. Use raw `stet eval run --task-id ... --stitch-rerun` only for selected
-cells that lack usable patch evidence and truly need a fresh model run.
+cells that lack usable patch evidence and truly need a fresh model run. When a
+stitch-rerun's in-scratch validate/grade partially fails, every cell with a real
+patch is still merged into canonical and a `pending-stitch.v1.json` breadcrumb is
+written naming any still-pending cells; `stet eval status` surfaces the recovery
+command.
 
 When comparing a model whose outputs will be judged by LLM-backed graders,
 persist the evaluator model in the suite manifest so reruns keep the same
@@ -224,11 +228,22 @@ flags override suite values for a temporary launch.
   history. Do not repeat the same model under `--models` for reasoning tests.
   For no-spend reporting across three or more completed arms, use
   `stet eval compare --multi-arm` and set `--comparison-surface reasoning_effort`.
+- To A/B a pre-baked Claude Code plugin/hook/MCP overlay (Caveman, Ponytail, RTK,
+  Context Mode), add `--plugin-overlay <dir>` to a single-arm `stet eval run`
+  (one `--models` entry). The dir needs a `stet-plugin-overlay.json` manifest declaring activation
+  markers; Stet merges it into the run's agent `HOME`, forces required binaries
+  onto `PATH`, and records a typed `plugin_not_active` failure (never a silent
+  clean run) if activation isn't observed. It is a single-arm run-config input,
+  not a compare treatment — combine arms offline. Works in worktree and Harbor
+  backends.
 - If multiple experiment arms request the same explicit `model_key`, read the
   manifest for the effective keys; Stet disambiguates them before writing run
   and validation artifact paths.
 - `stet runs repair-patches` is the supported patch-present repair path for an
-  existing canonical run root. `stet eval run --stitch-rerun` is for narrowed
+  existing finished run root; it resolves the model patch at either the canonical
+  `<task-id>/<trial>/agent-logs/agent.patch` layout or the raw-Harbor/flat
+  `<task-id>__<trial>/{artifacts,agent}/agent.patch` layout, so an
+  un-normalized root no longer fails the preflight. `stet eval run --stitch-rerun` is for narrowed
   no-patch reruns. Stitch reruns preserve superseded flat trial dirs as debug
   evidence and mark them with `superseded_trial.v1.json`; use the referenced
   canonical trial for scored outcomes. Do not tell the user to hand-copy retry
@@ -260,9 +275,16 @@ flags override suite values for a temporary launch.
   summary for both built-in and custom graders. Do not scrape per-task
   `validation.json` if the run-level metric is already available.
 - Built-in code review now exposes normalized
-  `graders.code_review.rubric_scores` in `task_decision.json`, so review
+  `graders.code_review.rubric_scores` in `task_decision.json` (and per-task
+  `quality.graders.code_review.rubric_scores` in `task_detail.json`), so review
   dimension names should come from the canonical artifact rather than inferred
   legacy payloads.
+- `decision_metrics.graders.graded_equivalence` is a derived 0-4 `score_mean`
+  metric projected from the built-in equivalence grader (obligation-attainment
+  mean, else outcome fallback). It is additive and never changes the binary
+  equivalence grader, gate, or denominators; older runs without the persisted
+  metric simply omit it. Backfill it without any LLM calls via
+  `stet runs regrade-graders --rederive-only`.
 - After discover, build, smoke, or report, tell the user the one next step that
   moves the pipeline forward with keyed options.
 - Starter-slice proposals should include `confidence`, coverage gaps, and what
