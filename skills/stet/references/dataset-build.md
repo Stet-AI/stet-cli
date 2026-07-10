@@ -221,6 +221,16 @@ stet suite build --repo /path/to/local/repo --manifest $MANIFEST_DIR/manifest.ya
   --out $OUT --workers 2 --require-f2p=false
 ```
 
+Build snapshots a compressed committed-repository archive at each task's base. It
+follows `git archive` semantics, so Git metadata, untracked files, and paths
+excluded by `export-ignore` are absent; Stet also sanitizes escaping symlinks. The
+default cap is 500 MiB (524288000 bytes). For a larger monorepo, set
+`build.max_snapshot_bytes` in `.stet/stet.yaml` or pass `--max-snapshot-bytes N`;
+the flag wins over config. Any positive int64 value is accepted, but raising the
+cap is operator-owned and can materially increase disk use, extraction cost, and
+runtime. After changing the cap, rerun with `--restart` or choose a fresh output
+directory so an existing build summary is not reused.
+
 `--llm-install-config` defaults on (see the test_cmd-relevance note below), so
 build needs a model client. Like `discover`, it resolves one from
 `--ai-cmd`, `build.ai_cmd`, or `ai.default_provider` with a provider installed —

@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.9.1] - 2026-07-10
+
+Makes the fixed 500 MiB compressed repo-snapshot cap operator-configurable so larger monorepos can build without patching Stet, and records per-base snapshot evidence in the build summary.
+
+### Added
+- Add `--max-snapshot-bytes N` and `build.max_snapshot_bytes` (flag over config over the built-in 500 MiB default) to raise the per-base compressed repo-snapshot cap, plus a `snapshot` block in `build-summary.json` reporting the cap, its source, and per-base accepted/oversize measurements. Oversize-snapshot attrition now carries `--max-snapshot-bytes`-specific remediation guidance in the build summary and rules-skill next actions.
+
+[v0.9.1]: https://github.com/benredmond/stet/compare/v0.9.0...v0.9.1
+
 ## [v0.9.0] - 2026-07-10
 
 Promotes the fully verified `v0.9.0-rc.2` candidate to stable with no product behavior changes. Stet 0.9 makes agentic grading decision-authoritative across verification contracts, confined binary and RewardKit judges, task decisions, and trial reports; expands Docker-free worktree execution and repairable build receipts; and ships the same asset set, source traceability, and installer behavior proven by RC2.
