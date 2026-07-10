@@ -40,6 +40,19 @@ gh auth status
 
 If you have not installed Stet yet, start with [README.md](README.md).
 
+Recommendations for the first build:
+
+- If your repo's tests are awkward to run in Docker (large monorepos, Bazel or
+  other hermetic build systems), use the worktree backend
+  (`--harbor-backend worktree`): verification runs in local git worktrees
+  against your checkout, and no Docker daemon is needed.
+- On a laptop, keep build concurrency modest (for example
+  `--worktree-concurrency 2`). Higher settings trade reliability for little
+  speed.
+- Have plenty of free disk before a dataset build; builds are storage-hungry.
+- After a large build, build-tool daemons can linger (for example Bazel
+  servers). A cleanup pass is worth it.
+
 ## Step 1: ask your agent to check setup
 
 In your coding agent, from the repo you want to evaluate, ask:
@@ -77,10 +90,16 @@ Use subagents when available to make this efficient: delegate independent read-o
 
 Read CI and package/build files, choose the real repo-level test command, then sample merged PRs/commits to understand where meaningful work happens in this repo. Prefer a starter dataset that covers several important subsystems and a mix of features, fixes, refactors, infra/setup work, and tests, rather than many similar tasks from one package.
 
-Create or update the Stet harness files, run init/discover/build as needed, and verify that the retained starter slice is executable enough to trust as onboarding evidence. Return an onboarding receipt that explains the task funnel, selected slice, representativeness, coverage, setup validation, confidence, and the next recommended action.
+Create or update the Stet harness files, run init/discover/build as needed, and verify that the retained starter slice is executable enough to trust as onboarding evidence. Run the dataset build in the foreground and wait for build-summary.json, then report the ready count and the skip-reason distribution. Return an onboarding receipt that explains the task funnel, selected slice, representativeness, coverage, setup validation, confidence, and the next recommended action.
 
 Stop before launching model smoke, probe, or rules evals.
 ```
+
+On large repos a dataset build can take one to two hours, and it is normal for
+many candidate tasks to be rejected: Stet only keeps tasks whose test signal it
+can actually demonstrate, and each rejection has a receipt explaining why. A
+small first corpus is a legitimate day-one outcome; the onboarding receipt will
+say whether it is enough for the decision you want, or what to expand next.
 
 Your agent should inspect CI first. CI is more trustworthy than README prose for
 test setup. The selected test command should run the actual repo test suite, not
@@ -124,7 +143,7 @@ The agent should create or update:
 Ask:
 
 ```text
-Use the Stet skill. Read the Stet onboarding receipt. Summarize the candidate-task funnel, selected starter slice, representativeness rationale, subsystem/path coverage, difficulty mix, skipped-task reasons, Docker/test setup validation, confidence, and recommended next step. Do not launch more work yet.
+Use the Stet skill. Read the Stet onboarding receipt. Summarize the candidate-task funnel, selected starter slice, representativeness rationale, subsystem/path coverage, difficulty mix, skipped-task reasons, Docker/test setup validation, confidence, and recommended next step. Note which rejections were environmental (disk, tooling) versus lack of test signal. Do not launch more work yet.
 ```
 
 The receipt should answer:
