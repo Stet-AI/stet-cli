@@ -185,12 +185,69 @@ override, and `plan` / charged launch refuse pre-flight when neither the suite
 nor the CLI supplies an evaluator and the resolved grader set includes any
 LLM-backed grader.
 
+For agentic v2.alpha pointwise grading, set
+`eval.grader_runtime: v2.alpha_rewardkit` or pass
+`--grader-runtime v2.alpha_rewardkit`, and still provide
+`eval.grader_ai_model_id` / `--grader-ai-model-id`. Stet rewrites the existing
+candidate-blind `verification_contract.v1` as one flat 30–40-item binary rubric
+covering every reporting dimension, then runs exactly one read-only agentic
+judge session per task/arm. The judge sees only `{repo/, agent.patch,
+verification_contract.v1.json}` and every yes/no verdict requires a valid
+candidate-evidence line citation from `repo/` or `agent.patch`; a contract
+citation may only supplement it. Stet also re-derives the staged contract's
+bindings from the current task instruction, gold/test patches, base snapshot,
+F2P/P2P names, and instruction surfaces; stale or cross-task contracts fail
+closed. Tasks missing a staged `verification_contract.v1` fail closed as
+unavailable; on `stet runs regrade-graders`, add
+`--synthesize-verification-contracts` to synthesize missing candidate-blind
+contracts (cached by task identity, so every arm of the same task reuses one
+identical contract). Synthesis accepts Claude models only and uses a fresh
+prompt-only, zero-tool Claude session with only process basics and Claude
+authentication in its environment; default `--parse-retries 1` permits one semantic
+repair after the initial synthesis response, while transport failures do not
+retry. `--seeds` must remain `1`; malformed or partial **judge** output
+is not repaired or retried. It cannot be combined with `eval.grader_ai_cmd`,
+`--grader-ai-cmd`, `--grader-provider`, or a silent v1 fallback. Docker and
+worktree backends are supported, but worktree evidence must carry current
+decision-grade integrity for the selected task/base commit.
+
+The existing alpha trace records the Claude judge's `total_cost_usd`, wall/API
+duration, and turn count. Stet accepts only one successful, non-refusal Claude
+JSON envelope with exact structured criterion output; missing cost telemetry,
+malformed output, and error envelopes fail closed without a repair call.
+
+The current direct alpha judge is a zero-subagent macOS Claude session with
+only `Read`, `Grep`, and `Glob`; shell, write, delegation, and web tools are
+technically denied. Its subprocess environment contains only `PATH`, `HOME`,
+`TMPDIR`, and resolved Claude authentication; ambient proxy, routing, model,
+runtime, and effort controls are excluded. Outbound provider transport remains
+allowed, so the recorded profile does not claim provider-only networking. A
+Cursor/Composer **grader** fails closed before invocation
+because the installed headless Cursor CLI has no enforceable tool allowlist.
+This does not prevent Cursor/Composer from being the independent model under
+test when the grader is Claude.
+
 For Cursor-backed model-under-test runs, use `Composer 2.5` / `composer-2.5`
 and `agent.name: cursor`; do not use `composer-2.5-fast` unless the fast tier is
 the explicit treatment. Keep graders independent with `--grader-ai-model-id`;
 add `--grader-ai-cmd` only for legacy shell-text grading. A local `agent login`
 session is enough; Stet bridges the host Cursor OAuth credential into Harbor
 without requiring `CURSOR_API_KEY`.
+
+If a Cursor-backed run records a zero-byte selected patch with
+`agent_setup_failed`, `agent_bootstrap_failure`, or
+`verifier_failed_before_patch_application`, the agent did not produce valid work.
+Treat the run as a harness/bootstrap failure: fix Cursor auth/config or the
+pre-patch verifier boundary and rerun, instead of regrading or interpreting
+zero-pass metrics as model quality.
+
+Cursor is not a provider-schema grader runtime: the `agent` CLI emits free text,
+not schema-forced JSON, so Stet cannot infer a cursor grader provider. To grade
+with a Cursor model in a cursor-only environment, force the shell-text bridge:
+`--grader-runtime shell_text --grader-ai-model-id composer-2.5 --grader-ai-cmd
+'agent --print --output-format text --mode ask --model composer-2.5 --trust
+"$(cat)"'`. The wrapper must own Cursor auth (a local `agent login` session on
+PATH is sufficient); Stet forwards only Claude evaluator credentials.
 
 For Claude model-update selectors, `model:opus 4.8` is accepted as an alias for
 canonical `claude-opus-4-8`. Cost estimates use the bundled pricing table in
@@ -289,6 +346,22 @@ trajectory artifacts, so behavior, cost, and token telemetry are unavailable on
 this path. Status/report remain the canonical decision readers; use per-task
 `worktree_integrity.json` only when diagnosing worktree isolation,
 source-mutation, or forbidden-artifact findings.
+
+The Docker-free path also covers dataset build: `stet suite build
+--harbor-backend worktree --repo <path>`, `stet dataset regenerate-f2p
+--harbor-backend worktree --repo <path>`, and `stet eval rules skill
+--harbor-backend worktree` run oracle base-fail/gold-pass verification in
+detached git worktrees instead of Docker (`--worktree-keep`,
+`--worktree-allow-pre-install`, `--worktree-install=false`,
+`--worktree-concurrency N` configure it the same way as on the eval path); for
+`eval rules skill`, one flag selection reaches both the internal build and the
+delegated `eval rules` launch. `--repo` must be a local git repo containing
+every task base commit. Built datasets stay fully portable regardless of
+backend, so a later Docker run works unchanged. Worktree-built proofs
+(`test_selection.json` `build_identity.runner_backend: worktree`) are not
+reused as decision-grade evidence by `eval rules` task selection — a real
+replay runs instead — and worktree-built/worktree-evaluated evidence remains
+inspect-only for rollout or model claims.
 
 `stet eval rules` accepts `--reasoning-effort low|medium|high|xhigh|max` to set
 the reasoning level for both arms (default `high`); it is backend-agnostic and
@@ -397,6 +470,12 @@ evaluator fields are missing and any LLM-backed grader is bundled. Worked
 stanza:
 
     eval:
+      grader_ai_model_id: claude-sonnet-4-6
+
+RewardKit v2.alpha uses the same independent evaluator field plus its runtime:
+
+    eval:
+      grader_runtime: v2.alpha_rewardkit
       grader_ai_model_id: claude-sonnet-4-6
 
 Pick an evaluator distinct from the candidate model so the grader is not

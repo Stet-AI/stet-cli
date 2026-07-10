@@ -138,6 +138,9 @@ stet suite discover --repo . --rev-range main~200..main --limit 200 --target-pas
 
 # 7. Build dataset
 stet suite build --repo . --manifest .stet/discover-manifest.yaml
+#    Requires Docker by default. Add --harbor-backend worktree to verify
+#    base-fail/gold-pass in local git worktrees from --repo instead — no
+#    Docker daemon needed; the built dataset is still Docker-portable.
 #    Build is complete only when the dataset root has build-summary.json.
 #    During onboarding, if task directories exist but build-summary.json is
 #    missing, treat the dataset as partial/interrupted setup output. Rerun
@@ -192,6 +195,8 @@ Too-few task recovery:
   `--limit`/`--target-pass` so Stet can keep searching until it finds enough.
   For normal onboarding, `--target-pass 25 --limit 200` is a better starting
   point than tiny smoke values; widen from there when build-ready yield is low.
+- For either PR or commit discovery, `--target-pass` bounds PASS yield while
+  `--limit` remains the maximum source-search budget.
 - If the repo uses broad repo-level tests but commits rarely edit tests, rerun
   discover with `--allow-no-test-changes`.
 - If discover's dropoff is dominated by LLM-gate reasons (`no_hard_signal`,

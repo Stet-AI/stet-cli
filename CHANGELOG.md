@@ -6,6 +6,150 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.9.0-rc.2] - 2026-07-10
+
+This candidate makes Stet's agentic grading path substantially more decision-authoritative: verification contracts now drive confined binary, pointwise, and pairwise judges into task decisions and trial reports, while build and validation receipts preserve more of the evidence needed to repair failed runs. It also expands Docker-free worktree execution and operator-facing model-comparison surfaces, while deliberately excluding the incomplete WS4 Bazel cache work before tagging.
+
+### Added
+- Add the v2.alpha agentic grading stack: verification-contract schemas and synthesis, grading workspaces, RewardKit pointwise and pairwise runners, multi-arm sidecars and ranking, a confined binary judge, prompt-only Claude transport, atomic pairwise authority, decision/report materialization, per-dimension judge controls, and a rederived 0-100 code-review score ([72304bda], [41ffe3b5], [29f27abc], [73806168], [32ebcab6], [05c44fc7], [05460567], [dc33e328], [8dcdb1b8], [d72c892d], [79308cd4], [bfc30d35], [7e2bcf30], [cb9ad226], [80a6800c], [e67481e1])
+- Add a Docker-free worktree dataset-build backend, Cursor worktree execution, Codex plugin overlays, context-exclusion controls, and a customer-perspective `stet-dogfood` workflow ([aa2979d1], [1486b268], [3a65ff75], [cbfa6d7b], [082c6c89])
+- Add durable rejected-task receipts and `--retry-rejected`, an honest A/B instruction floor, prompt-preserving Bazel selector support, C++/Node test-file classification, and truthful broad-fallback infrastructure taxonomy ([f6a3a4b1], [e724e98f], [feb789f5], [2450ca2d], [5d966f8d])
+- Add a contact page, homepage experiment, and Sonnet 5 versus Opus 4.8 reasoning-dial material to the leaderboard ([55bad7b6], [6b0024e6], [9138d715], [9cc576f5], [f72f20e6])
+
+### Changed
+- Reduce default build flake reruns from three to two and polish the leaderboard landing and comparison guidance ([97492a8f], [174bd7cb])
+
+### Fixed
+- Keep RewardKit grading fail-closed and reproducible by invalidating stale pairwise evidence, binding workspace criteria, wiring synthesis and seeds, preserving legacy runner provenance, routing Claude through the agent judge, enforcing judge timeouts, reliably applying agent patches, and blinding the judge ([0b40caab], [f6dcc5a5], [ee09ad1e], [f9b1e802], [d67395d3], [110522dd], [2d2fed14], [c6aae863])
+- Preserve evidence-bearing PASS tasks and discover manifests, accept natural grader phrasing, retry exhausted provider-schema calls, surface repairable invalid patches and multi-arm direction, and correct mechanical-cleanliness, parser, citation, truncation, and persisted-review recovery ([6296340a], [8c10eb0c], [33a1b5f6], [662ba5b6], [58ac7492], [948ef38a], [66762b4c], [e1adf9d7], [d877a754])
+- Harden worktree, build, and harness evidence by completing integrity contracts, bounding discover work, proving Bazel F2P labels, forwarding batch context exclusions, and applying Codex overlay instructions and skills ([65a4bab1], [0503633f], [1a1fc15d], [ed99b575], [5bbb3dd5], [6e8f4eab])
+- Make Harbor and agent startup more reliable by aligning the published agent pin, raising agent timeouts, failing fast on Cursor bootstrap no-signal runs, and tolerating concurrent Docker-cleanup races ([05396474], [78646513], [2ba1f51b], [c70ead21])
+- Restore first-run quality-grader guidance and correct the dogfood brief boundary ([618e8c70], [4f0b0a09])
+
+### Removed
+- Exclude the incomplete WS4 verifier-isolation, per-task Bazel action-cache, query-output-root, and cache-proof plumbing from RC2; both the original commits and their clean reversions remain in history as evidence ([9889adbc], [7b90d738], [552f0d14], [6f6fe4c7], [3915bee2], [5e10d3be], [e6fc9006], [9f438d07])
+
+### Internal
+- Record the grader calibration harness, certification contract, gap register, corpus inventories, approval packets, scope-discipline experiments, and paused XID gap-fill state ([4cc6e4dc], [d34b9b9d], [d2d45d47], [1a39a8f8], [3e7a69bb], [d2241c11], [654aba3f], [a8fe320c], [ea51d1d3], [0dbd681e], [9779ac33], [63e397ff], [31b2856d], [ffdd4c87], [551c5542], [cb925e26], [937b7f86], [164c61a0], [8fe1caf6], [f4bd1bbd], [419a8171], [b63288ab], [8925e5d2], [021f7996], [2d806afd], [02bed6ff], [4e365ccf])
+- Record RewardKit alpha guidance, calibration preregistration, judge-route amendments, timeout and provenance pins, and the agentic grader design evolution ([0e24b390], [c8ddb5fb], [8c3b973f], [67b1d70d], [87302253], [8cd2811e], [9f335bdf])
+- Refresh self-dogfood recipes, ignored generated artifacts, closeout policy, beta dist prose, worktree-backend follow-ups, lead scans, pointwise grading smoke coverage, and RC2 dist skill collateral ([436908fe], [e555469e], [11db63eb], [6d972054], [db1c9f64], [1b4e985c], [31b6a504], [d7c56956], [8f8f1d73])
+
+[v0.9.0-rc.2]: https://github.com/benredmond/stet/compare/v0.9.0-rc.1...v0.9.0-rc.2
+
+[7b90d738]: https://github.com/benredmond/stet/commit/7b90d7383d6aeadac80fa454ded0cad7f254995a
+[6f6fe4c7]: https://github.com/benredmond/stet/commit/6f6fe4c795aba55441ed458c8eda20495fe9e58f
+[5e10d3be]: https://github.com/benredmond/stet/commit/5e10d3be6a092d8c6ed52dc5b7981e7e0892748b
+[9f438d07]: https://github.com/benredmond/stet/commit/9f438d078d035e57cda5530514d113a14329c05c
+[e6fc9006]: https://github.com/benredmond/stet/commit/e6fc9006614e908614361d545ebe0dc92994f7d1
+[80a6800c]: https://github.com/benredmond/stet/commit/80a6800ca24c05cd76ad0a6a099c2bbb938418e4
+[3915bee2]: https://github.com/benredmond/stet/commit/3915bee2f723062b4a91bf8b5244044175ff77eb
+[552f0d14]: https://github.com/benredmond/stet/commit/552f0d1425189c7f00e552d3cbe706100bd15045
+[9f335bdf]: https://github.com/benredmond/stet/commit/9f335bdfdbcabcbcf5a9634806e6b3dda266bb6e
+[cb9ad226]: https://github.com/benredmond/stet/commit/cb9ad226e4f0b54fbe1c25ec64b7788acc3ce039
+[7e2bcf30]: https://github.com/benredmond/stet/commit/7e2bcf3038b4682c4a670dec8ba09a496934fe4b
+[bfc30d35]: https://github.com/benredmond/stet/commit/bfc30d35e485514d26cdd0b38984f0415581cfec
+[79308cd4]: https://github.com/benredmond/stet/commit/79308cd4de7d18375dc6cf500b3c402adbcaf98b
+[d72c892d]: https://github.com/benredmond/stet/commit/d72c892df1ad27e7e4f44e862cdbd1b00deeac3f
+[31b6a504]: https://github.com/benredmond/stet/commit/31b6a5049880de3ea7dc56fa317883d491e64d79
+[6e8f4eab]: https://github.com/benredmond/stet/commit/6e8f4eab47d6821a330724c215ec52f1b79edf3c
+[5bbb3dd5]: https://github.com/benredmond/stet/commit/5bbb3dd5dab266c1b885b320bff75eacb84e2253
+[9889adbc]: https://github.com/benredmond/stet/commit/9889adbc9ca0698391cec8cd0da5dda221981d34
+[f6a3a4b1]: https://github.com/benredmond/stet/commit/f6a3a4b10070db1c2d9595a617907fba63c38a2d
+[d877a754]: https://github.com/benredmond/stet/commit/d877a7547276cd96d12626b49d0ee7bf9f870b8f
+[e1adf9d7]: https://github.com/benredmond/stet/commit/e1adf9d7ab51a70d0ce85e66584c05e656efe397
+[66762b4c]: https://github.com/benredmond/stet/commit/66762b4c3436a159f80faf2d2a90160cecc5c37d
+[e724e98f]: https://github.com/benredmond/stet/commit/e724e98fe5cbb3522cef6e90fdd8763b492ba2c3
+[6d972054]: https://github.com/benredmond/stet/commit/6d9720546676478c92cd95d4eb017044e1919a04
+[5d966f8d]: https://github.com/benredmond/stet/commit/5d966f8d26ba9827c6dea1476e7e9d78f76583d8
+[2450ca2d]: https://github.com/benredmond/stet/commit/2450ca2d2d9c2e8c1af96d161f9abe7b5f737f94
+[feb789f5]: https://github.com/benredmond/stet/commit/feb789f5952975675b349d1d3a96110945612752
+[97492a8f]: https://github.com/benredmond/stet/commit/97492a8f326875524aa10c0c821a1ebfdd82a2fe
+[f72f20e6]: https://github.com/benredmond/stet/commit/f72f20e678949c3df3d247ab1b184a9c80d114eb
+[9cc576f5]: https://github.com/benredmond/stet/commit/9cc576f578be51c2c5200e6a3054c6809acc1b7b
+[db1c9f64]: https://github.com/benredmond/stet/commit/db1c9f649bb1178692e3517cfa1f8bdd693a6838
+[aa2979d1]: https://github.com/benredmond/stet/commit/aa2979d1d7b4c55f380fabeb287a7a485ed88dfb
+[ed99b575]: https://github.com/benredmond/stet/commit/ed99b5755e22bbf0af20b867c83b79a7a1cd3927
+[9138d715]: https://github.com/benredmond/stet/commit/9138d715cd4af9b7ceb66c9a7027bfddf2c96fce
+[1a1fc15d]: https://github.com/benredmond/stet/commit/1a1fc15d32614e312f4c87676652e47e6c3d3ce6
+[0503633f]: https://github.com/benredmond/stet/commit/0503633fedb68076b3104d82ec1cb62c08e2bf25
+[65a4bab1]: https://github.com/benredmond/stet/commit/65a4bab1fae324b9f07e5075eb70b02978f0b8d2
+[e67481e1]: https://github.com/benredmond/stet/commit/e67481e187f0d43bfe92c6add26ead7575db8cdd
+[1486b268]: https://github.com/benredmond/stet/commit/1486b268ed48244e0149c6f947370f337a385a49
+[948ef38a]: https://github.com/benredmond/stet/commit/948ef38a74fae006151558a72e00d042e4ca1499
+[6b0024e6]: https://github.com/benredmond/stet/commit/6b0024e69bcf7a1561ed3c0e53415678f1b01f3f
+[c70ead21]: https://github.com/benredmond/stet/commit/c70ead21b894255f4d28bdf7c270ea40c6047fd3
+[2ba1f51b]: https://github.com/benredmond/stet/commit/2ba1f51bfee614cad52a03308930853511cf9de9
+[8cd2811e]: https://github.com/benredmond/stet/commit/8cd2811e525851436e6131f9ad54471fe4a5028c
+[c6aae863]: https://github.com/benredmond/stet/commit/c6aae863bfa12ec57a5761623a94ddcac09d8bbd
+[cbfa6d7b]: https://github.com/benredmond/stet/commit/cbfa6d7baa89a4143f465f652503214fcfe75901
+[87302253]: https://github.com/benredmond/stet/commit/87302253a3f9aae873be5574ee5c2d7854865a40
+[2d2fed14]: https://github.com/benredmond/stet/commit/2d2fed14687ba3d0d01dd19c282d689786f72de9
+[67b1d70d]: https://github.com/benredmond/stet/commit/67b1d70dc0c65307c70a6cc5832275989c200891
+[110522dd]: https://github.com/benredmond/stet/commit/110522dddd1c9f168d45db1a439e46b141a27cc1
+[8c3b973f]: https://github.com/benredmond/stet/commit/8c3b973f16092c17af8d8b417fa3a096e9f78c06
+[d67395d3]: https://github.com/benredmond/stet/commit/d67395d30f24b00d54e62ef747f74c287bc717dd
+[c8ddb5fb]: https://github.com/benredmond/stet/commit/c8ddb5fb7039020267bd3fc34d09d5d0c973ee4b
+[f9b1e802]: https://github.com/benredmond/stet/commit/f9b1e802e8f1ebc547627af246bf40898a07942e
+[1b4e985c]: https://github.com/benredmond/stet/commit/1b4e985cd092b277d751489dfc3d49556f30377e
+[174bd7cb]: https://github.com/benredmond/stet/commit/174bd7cbd7bc5a10679c59103c02d5f418d01a6e
+[11db63eb]: https://github.com/benredmond/stet/commit/11db63eb1b10ec229b72bc7160db6e99f894d69b
+[58ac7492]: https://github.com/benredmond/stet/commit/58ac74923586f063e79824308fe7ace951c14e11
+[662ba5b6]: https://github.com/benredmond/stet/commit/662ba5b6b86241368982a607d5483c3340756cea
+[3a65ff75]: https://github.com/benredmond/stet/commit/3a65ff754df20186ca8765ca30e930be91a41215
+[436908fe]: https://github.com/benredmond/stet/commit/436908fe72f23259346807856af11c6c7d47bf94
+[e555469e]: https://github.com/benredmond/stet/commit/e555469e436efaa02696f9180665b64862c02ab5
+[78646513]: https://github.com/benredmond/stet/commit/786465132254815e08c3f142265dab2139cdc160
+[0e24b390]: https://github.com/benredmond/stet/commit/0e24b390f5540b889cf3fc66bea20bbd69728d9f
+[ee09ad1e]: https://github.com/benredmond/stet/commit/ee09ad1e3eac17d685bafaa7d7779071dcdbe00d
+[f6dcc5a5]: https://github.com/benredmond/stet/commit/f6dcc5a56c838e0a21ded4fedf2c2063523a788a
+[d7c56956]: https://github.com/benredmond/stet/commit/d7c569563a2c5a48bd1335036cc940df891a6100
+[0b40caab]: https://github.com/benredmond/stet/commit/0b40caabd3503830f10374a7e1a8da17ede4da19
+[8dcdb1b8]: https://github.com/benredmond/stet/commit/8dcdb1b8ddba8a98c6d3e45402b2e5738d0aaf76
+[dc33e328]: https://github.com/benredmond/stet/commit/dc33e328e0ac0c782fabf48ace2a62befcb58b3b
+[05460567]: https://github.com/benredmond/stet/commit/054605676c678926e7cfaa2b34b4264ea71c85e5
+[05c44fc7]: https://github.com/benredmond/stet/commit/05c44fc73db8565c4fe11dd09ba0786fe5cf6bff
+[32ebcab6]: https://github.com/benredmond/stet/commit/32ebcab67076f2b387ced90dbc429593cd2a03f6
+[73806168]: https://github.com/benredmond/stet/commit/73806168c2bd5f83fb76e8dd8ef99717acae208e
+[29f27abc]: https://github.com/benredmond/stet/commit/29f27abc60d40e66df324aa586559c75bd362670
+[41ffe3b5]: https://github.com/benredmond/stet/commit/41ffe3b513ca490c55a23f19a5c4c887760ffca8
+[4e365ccf]: https://github.com/benredmond/stet/commit/4e365ccfd755ad47d39afa8b1a722d1e058eadeb
+[72304bda]: https://github.com/benredmond/stet/commit/72304bdaf87c3b83344b2a35e9b3fee9f5cd8314
+[02bed6ff]: https://github.com/benredmond/stet/commit/02bed6fff5073e3b33ebd559f23dfd71d28c0f30
+[2d806afd]: https://github.com/benredmond/stet/commit/2d806afdf24f239e551f310ba7c6731daf203202
+[021f7996]: https://github.com/benredmond/stet/commit/021f7996b3a58e8b7240a3da1380a921273913aa
+[8925e5d2]: https://github.com/benredmond/stet/commit/8925e5d21e3efa922784bbda85e965d8c6180c57
+[b63288ab]: https://github.com/benredmond/stet/commit/b63288abce4ea2208d61ca343191038b40d1f4a3
+[419a8171]: https://github.com/benredmond/stet/commit/419a8171693d7b66f05d3de4a61279e56ecef356
+[f4bd1bbd]: https://github.com/benredmond/stet/commit/f4bd1bbd2ebdd58a309543142d400341c43bb7f7
+[8fe1caf6]: https://github.com/benredmond/stet/commit/8fe1caf6c877f8108dde5ed5f331fb61348ad63c
+[164c61a0]: https://github.com/benredmond/stet/commit/164c61a04c87564c572acabc3d779d8c14fc72b1
+[937b7f86]: https://github.com/benredmond/stet/commit/937b7f86b9b417c714a599ac96e514cea0f913b9
+[cb925e26]: https://github.com/benredmond/stet/commit/cb925e26e0f99a6dd25450e750c96b843a413007
+[551c5542]: https://github.com/benredmond/stet/commit/551c5542731defa85deb61191c6a1430b6869f8b
+[ffdd4c87]: https://github.com/benredmond/stet/commit/ffdd4c870037bfe19010b84cf8f2731d22a3cdcb
+[31b2856d]: https://github.com/benredmond/stet/commit/31b2856d77fb504966e310dde168789f582f200c
+[63e397ff]: https://github.com/benredmond/stet/commit/63e397ff7d4657726d6b07264dba9c8515417aec
+[9779ac33]: https://github.com/benredmond/stet/commit/9779ac33e79daa076a8f776f57df82b3936e7739
+[0dbd681e]: https://github.com/benredmond/stet/commit/0dbd681e07343ea53fcf14100796cde5d8f7038a
+[ea51d1d3]: https://github.com/benredmond/stet/commit/ea51d1d3ceafcbbc4aa0ca24f1b7417f15b44e1d
+[a8fe320c]: https://github.com/benredmond/stet/commit/a8fe320cda1ae3cfbd85b1025fad56b597a91f6b
+[654aba3f]: https://github.com/benredmond/stet/commit/654aba3f24a6e906d728e117cc3dd812eae300c0
+[d2241c11]: https://github.com/benredmond/stet/commit/d2241c11a9557fd3f1e9f927b7357375ced5a301
+[3e7a69bb]: https://github.com/benredmond/stet/commit/3e7a69bb8c1ee47ccff0fff118e9da992888370d
+[1a39a8f8]: https://github.com/benredmond/stet/commit/1a39a8f876e7d4b161f08cbad70e0d258fbe01cb
+[d2d45d47]: https://github.com/benredmond/stet/commit/d2d45d477d30b326a49a9631d62023445b6f43cb
+[33a1b5f6]: https://github.com/benredmond/stet/commit/33a1b5f6f2bfc51bf43526437a7208a9b835793b
+[d34b9b9d]: https://github.com/benredmond/stet/commit/d34b9b9d770bfc987e97062848ab32d925b4d006
+[4cc6e4dc]: https://github.com/benredmond/stet/commit/4cc6e4dc72cff7febddf2a9e79cb25440518e7ae
+[8c10eb0c]: https://github.com/benredmond/stet/commit/8c10eb0c955bb0bf56db515f55981dc88694fb19
+[6296340a]: https://github.com/benredmond/stet/commit/6296340a20777e0271b7b03d7cc7f11173d38e3d
+[4f0b0a09]: https://github.com/benredmond/stet/commit/4f0b0a09e3221fb1fc47924ecddcf6a2fbfac715
+[082c6c89]: https://github.com/benredmond/stet/commit/082c6c897f56ed12a730def87d6abac5e15ecd03
+[05396474]: https://github.com/benredmond/stet/commit/05396474cec0e3732ef4e279283d8f2f03fe706e
+[55bad7b6]: https://github.com/benredmond/stet/commit/55bad7b6b5ee308f14ebad8e06cade4f59fcc04f
+[618e8c70]: https://github.com/benredmond/stet/commit/618e8c70e1fbf5343df3275371c841725538a320
+[8f8f1d73]: https://github.com/benredmond/stet/commit/8f8f1d7327dce6a76df38624910929a21fc55a6a
+
 ## [v0.9.0-rc.1] - 2026-07-06
 
 Adds an interpretation layer to Stet receipts so coding agents get a trusted, performance-first read of an eval instead of relaying a bare posture token, calibrated confidence so strong evidence can promote without over-hedging, and a pinned grader identity so decision-grade evidence is reproducible. Operators also get per-arm harness levers (Claude Code plugin overlays), native Windows builds, and unified disk reclaim.
@@ -73,7 +217,7 @@ Adds an interpretation layer to Stet receipts so coding agents get a trusted, pe
 - Collapse six repair/rerun verbs (`--stitch-rerun`, `repair-patches`, `revalidate-tests`, `repair-tests`, `repair-ai-coverage`, `regrade-graders`) onto one invariant-preserving run-mutation substrate so atomicity, breadcrumbing, derived-artifact regeneration, scratch GC, and the integrity check are defined once behind a commit chokepoint; behavior-preserving with no change to verb flags or behavior ([715dbbdd])
 - Refresh onboarding prompts, agent docs, and rules-skill-loop guidance, and rename craft/discipline graders to quality graders in skill docs ([99d45afa], [9874c882], [133bcfab], [0967129c], [8395ebca])
 
-[Unreleased]: https://github.com/benredmond/stet/compare/v0.9.0-rc.1...HEAD
+[Unreleased]: https://github.com/benredmond/stet/compare/v0.9.0-rc.2...HEAD
 
 [v0.9.0-rc.1]: https://github.com/benredmond/stet/compare/v0.8.0...v0.9.0-rc.1
 

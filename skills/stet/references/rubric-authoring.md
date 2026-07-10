@@ -128,7 +128,8 @@ Path preservation rule:
   run/report-level `sigma_judge`; the default N of 1 keeps the historical
   single-score output. The same flag can rerun `equivalence` and `code_review`
   from their stored validation prompts when those built-ins are part of the
-  noise-floor slice.
+  noise-floor slice. The single-session `v2.alpha_rewardkit` runtime always
+  requires `--seeds 1`.
 - When a loop-state `grader_policy` names `required_graders`, those grader IDs
   are coverage gates and must appear as `ok` in the Trial Result coverage
   summary. Use `emphasized_dimensions` for profile-specific ranking or

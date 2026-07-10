@@ -342,6 +342,9 @@ inspect when evidence remains degraded.
 - Auth, license, Claude `/login`, Harbor setup, Docker capacity, and runtime
   setup failures are infrastructure risk before they are candidate quality
   evidence. Read the relevant reference before spending again.
+- For first-time repo setup, ask once for the quality-grader posture before
+  non-interactive init or the first smoke/probe/eval: recommended, standard, or
+  custom. See [onboarding](references/onboarding.md).
 
 ## Read As Needed
 

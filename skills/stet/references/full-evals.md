@@ -172,6 +172,9 @@ Stet infers `codex_cli` or `claude_code` from the grader model; set
 `eval.grader_runtime: shell_text` with `eval.grader_ai_cmd` only when forcing
 the legacy shell-text evaluator. Provider-schema mode records the
 runtime/provider separately instead of falling back to the arm model command.
+Cursor (and other non-codex/claude models) have no provider-schema grader
+runtime — grade them via `shell_text` plus an `agent ... --grader-ai-cmd`
+wrapper; see `rules-flow.md` for the Cursor grader bridge.
 
 Before `stet init`, the agent should inspect repo evidence and decide the test
 commands itself. Treat `stet init` as config persistence, not as the authority
@@ -228,10 +231,12 @@ flags override suite values for a temporary launch.
   history. Do not repeat the same model under `--models` for reasoning tests.
   For no-spend reporting across three or more completed arms, use
   `stet eval compare --multi-arm` and set `--comparison-surface reasoning_effort`.
-- To A/B a pre-baked Claude Code plugin/hook/MCP overlay (Caveman, Ponytail, RTK,
+- To A/B a pre-baked agent plugin/hook/MCP overlay (Caveman, Ponytail, RTK,
   Context Mode), add `--plugin-overlay <dir>` to a single-arm `stet eval run`
-  (one `--models` entry). The dir needs a `stet-plugin-overlay.json` manifest declaring activation
-  markers; Stet merges it into the run's agent `HOME`, forces required binaries
+  (one `--models` entry). The dir needs a `stet-plugin-overlay.json` manifest
+  declaring activation markers; `agent` defaults to `claude-code`, and Codex
+  overlays should set `"agent": "codex"` with markers under `.codex/`. Stet
+  merges it into the run's agent `HOME`/`CODEX_HOME`, forces required binaries
   onto `PATH`, and records a typed `plugin_not_active` failure (never a silent
   clean run) if activation isn't observed. It is a single-arm run-config input,
   not a compare treatment — combine arms offline. Works in worktree and Harbor

@@ -23,7 +23,10 @@ discover (fetch change requests -> prefilter -> LLM scoring -> manifest)
     -> harbor run -> validate
 ```
 
-`discover` is cheap (no Docker). `build` is expensive (Docker containers).
+`discover` is cheap (no Docker). `build` is expensive (Docker containers by
+default; `stet suite build --harbor-backend worktree --repo <path>` runs
+base-fail/gold-pass verification in local git worktrees instead, no Docker
+daemon needed, but requires a local repo with every task base commit).
 `suite select` is the bridge from historically merged / selected task
 candidates to a launchable rules slice: it oversamples built task dirs, runs
 gold replay preflight, drops replay-invalid or unchecked tasks, and writes a
@@ -317,11 +320,17 @@ broad verifiers).
 After >= 80% gold pass, verify test_cmd relevance: pick a task with test
 patch, confirm test_cmd runs those files. Under `--llm-install-config`, build
 attempts runner-neutral selector evidence for generated whole-suite verifiers.
-Explicit `--test` or config-provided test commands are preserved unless the repo
-declares a `test_selector` config. Stet accepts a narrowed command only when
-deterministic proof succeeds (filesystem package/path/file proof for supported
-path runners, Bazel label proof through `bazel query` or Bazelisk when
-available). Each task's existing
+Explicit `--test` or config-provided test commands remain the task commands
+unless the repo declares a `test_selector` config. During strict F2P proof,
+Stet may derive flags-preserving Bazel label candidates when `bazel query` (or
+Bazelisk) resolves a package pattern to actual test-rule labels and proves their
+sources/buildfiles cover required test-patch directories; recursive patterns
+are never recorded as strict F2P identities. An actual label is accepted only after the same dynamic
+base-fail/gold-pass check as other targeted candidates. Query or structural
+selection failures write an abstained `test_selection.json` receipt and keep the
+broad command. Generated whole-suite verifiers may also narrow after
+deterministic filesystem package/path/file proof for supported path runners.
+Each task's existing
 `build_logs/test_selection.json` path now carries `schema:
 test_selection/v2`, stable reason codes, runner/target metadata, proof source
 and strength, selected targets, covered paths, fallback, setup blocker class

@@ -89,6 +89,12 @@ Harbor patch capture should honor the task repo's `.gitignore` before Stet's
 cache/build denylist runs. If ignored environment artifacts appear in
 `agent.patch`, diagnose patch capture before judging model quality.
 
+If report validity says there was no valid agent execution, such as all cells
+failing before the agent ran or before patch application, treat the result as a
+harness/bootstrap blocker. Do not read zero test pass, missing grader coverage,
+or subjective grader deltas as model signal. Fix the agent setup/auth/config or
+verifier-before-patch failure and rerun from a clean harness boundary.
+
 Or with two plain files that should be evaluated as one logical repo path:
 
 ```bash
@@ -209,6 +215,25 @@ If the compatible `grader_discrimination.v1.json` artifact lives outside the
 compare root, pass `--grader-discrimination-artifact <path>` to the compare or
 report command; Stet still fails closed on missing, unreadable, or
 profile-incompatible artifacts.
+
+For agentic v2.alpha, pointwise grading writes per-arm traces under
+`rewardkit/v2.alpha/`; those are arm-level scores, not pairwise preference.
+`stet eval compare --pairwise --grader-runtime v2.alpha_rewardkit
+--grader-ai-model-id <grader-model-id>` reads those traces and writes bounded
+`pairwise_ranking.v1.json` sidecars. The default shape is baseline-vs-candidate
+(or each extra arm vs the first arm), not an N^2 matrix or repeated grading
+pass; use `--pairwise-max-judge-calls` to cap sidecar/task expansion.
+Read sidecar readiness fail-closed: `invalid` means contract/provenance/verdicts
+or stale-workspace evidence blocked the sidecar, `legacy_absent` means
+pre-sidecar evidence, and `directional` is iteration signal. Current alpha
+clamps `decision_grade` sidecars to `directional`. A compatible protected
+calibration artifact can separately clear the rollout-grade claim-readiness gate.
+Pointwise worktree grading remains supported. In the current alpha pairwise
+reader, a worktree trace whose verdict cites `repo/` is `invalid` because the
+bound trace/contract/manifest/patch/task evidence cannot reconstruct the exact
+local-git checkout; the report is still written with that reason and no
+directional vote. Worktree traces using exact bound `agent.patch` citations do
+not have this limitation. There is no fallback to a dataset tarball.
 
 When `delta_ci` is available, promotion is noise-aware: a candidate
 point-estimate win only counts as promotion-strength when the favorable delta is
@@ -480,6 +505,9 @@ Machine-readable default:
   `stet runs regrade-graders --repo <repo> --from-repo-quality`; this preserves
   the completed harness/test evidence and regenerates run summaries from
   canonical task details.
+- If a run-root repair fails terminally, treat that runtime as authoritative:
+  `stet eval report --out <run-root>` stays `INSPECT`/inconclusive and directs
+  you to `stet eval status --out <run-root>` until a successful retry completes.
 - For custom-grader timeout gaps, use the report/status `stet runs
   regrade-graders ... --task-id ... --grading-timeout 45m` repair instead of a
   full model rerun.
