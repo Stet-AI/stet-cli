@@ -1,8 +1,7 @@
 # Beta quickstart
 
-This guide is the first-session path for a beta customer. The goal is not to
-learn every Stet command. The goal is to prove that the machine is ready, one
-repo can be onboarded, and the first Stet evidence can be read without guessing.
+This guide is the first-session path for our customer. The goal is not to
+learn every Stet command, instead you will learn how to use your agent to drive Stet to receive actionable outcomes
 
 ## What you will accomplish
 
@@ -51,14 +50,14 @@ Recommendations for the first build:
   speed.
 - Have plenty of free disk before a dataset build; builds are storage-hungry.
 - After a large build, build-tool daemons can linger (for example Bazel
-  servers). A cleanup pass is worth it.
+  servers). A cleanup pass is worth it, have your agent do this.
 
 ## Step 1: ask your agent to check setup
 
 In your coding agent, from the repo you want to evaluate, ask:
 
 ```text
-Use the Stet skill. Check whether this machine is ready to run Stet. Verify Stet, Stet auth, Docker/Harbor or the explicitly selected worktree backend, GitHub auth, model-provider auth, and the Stet skill. Do not run an eval yet.
+Use the Stet skill. Ensure Stet is setup correctly according to https://github.com/benredmond/stet-cli. Do not run an eval yet. If user is using worktree backend, skip Docker.
 ```
 
 Expected checks:
@@ -71,11 +70,6 @@ docker info
 command -v uv
 npx skills list
 ```
-
-If any check fails, fix setup before onboarding the repo. Stet should fail
-closed on missing commercial auth, missing model-provider auth, unavailable
-Docker on the default path, or an unverified worktree backend rather than
-launching ambiguous work.
 
 ## Step 2: ask your agent to onboard the repo
 
@@ -92,7 +86,7 @@ Read CI and package/build files, choose the real repo-level test command, then s
 
 Create or update the Stet harness files, run init/discover/build as needed, and verify that the retained starter slice is executable enough to trust as onboarding evidence. Run the dataset build in the foreground and wait for build-summary.json, then report the ready count and the skip-reason distribution. Return an onboarding receipt that explains the task funnel, selected slice, representativeness, coverage, setup validation, confidence, and the next recommended action.
 
-Stop before launching model smoke, probe, or rules evals.
+Stop before launching evals.
 ```
 
 On large repos a dataset build can take one to two hours, and it is normal for
@@ -102,11 +96,11 @@ small first corpus is a legitimate day-one outcome; the onboarding receipt will
 say whether it is enough for the decision you want, or what to expand next.
 
 Your agent should inspect CI first. CI is more trustworthy than README prose for
-test setup. The selected test command should run the actual repo test suite, not
-only lint, build, `echo`, or `true`.
+test setup
 
-The starter dataset is the main artifact from day-one onboarding. It should be
-large and varied enough to support an initial shared-behavior decision later,
+**The starter dataset is the main artifact from day-one onboarding.**
+
+It should be large and varied enough to support an initial shared-behavior decision later,
 not merely prove that one task can run. Dataset selection is the most important
 onboarding choice: the agent should not take the newest PRs by default. It
 should interview you long enough to learn which work you want Stet to measure,
@@ -125,10 +119,7 @@ proves at least one representative task can execute inside Docker. That check
 is setup validation, not a model eval.
 
 If Docker is unavailable by design, the agent can use the opt-in worktree
-backend for a supported local check. It should say so explicitly, keep Docker
-as the default recommendation, and read the resulting evidence from
-`stet eval status` / `stet eval report` before inspecting worktree-specific
-integrity artifacts.
+backend for a supported local check. 
 
 The agent should create or update:
 
@@ -168,13 +159,13 @@ Use one of these paths.
 For a cheap calibration read:
 
 ```text
-Use the Stet skill. Run a small first Stet smoke on this repo using the starter dataset. Keep it cheap, explain what evidence it produces, and do not make rollout claims from it.
+Use the Stet skill. Run a small first Stet eval on this repo using the starter dataset. Keep it cheap, explain what evidence it produces.
 ```
 
 For a directional read on a specific change:
 
 ```text
-Use the Stet skill. Probe this change with Stet on the starter dataset. Report whether the result is usable for iteration, and do not describe it as rollout evidence.
+Use the Stet skill. Probe this change with Stet on the starter dataset. Report whether the result is usable for iteration.
 ```
 
 For an `AGENTS.md`, `CLAUDE.md`, shared-skill, model, or harness-policy decision:
@@ -200,7 +191,7 @@ dataset. A blocked plan usually means "continue onboarding the dataset," not
 Ask your agent:
 
 ```text
-Use the Stet skill. Read the current Stet result from status/report surfaces. Tell me the recommendation, confidence, evidence quality, grader coverage, task coverage, next action, and residual risk. Do not reconstruct the verdict from pass rate alone.
+Use the Stet skill. Read the current Stet result from status/report surfaces. Tell me the recommendation, confidence, evidence quality, grader coverage, task coverage, next action, and residual risk. Interpret the results for me.
 ```
 
 The important lifecycle words are:
@@ -211,7 +202,7 @@ The important lifecycle words are:
 - `inspect`: the evidence is useful for diagnosis or iteration, but not strong
   enough for a rollout decision.
 
-`inspect` is common on small or degraded samples. It is not the same as failure.
+`inspect` is common on small samples. It is not the same as failure.
 It means the evidence should guide the next bounded action rather than justify a
 ship/no-ship claim.
 
