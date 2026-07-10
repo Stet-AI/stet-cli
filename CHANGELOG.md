@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.9.0] - 2026-07-10
+
+Promotes the fully verified `v0.9.0-rc.2` candidate to stable with no product behavior changes. Stet 0.9 makes agentic grading decision-authoritative across verification contracts, confined binary and RewardKit judges, task decisions, and trial reports; expands Docker-free worktree execution and repairable build receipts; and ships the same asset set, source traceability, and installer behavior proven by RC2.
+
+[v0.9.0]: https://github.com/benredmond/stet/compare/v0.9.0-rc.2...v0.9.0
+
 ## [v0.9.0-rc.2] - 2026-07-10
 
 This candidate makes Stet's agentic grading path substantially more decision-authoritative: verification contracts now drive confined binary, pointwise, and pairwise judges into task decisions and trial reports, while build and validation receipts preserve more of the evidence needed to repair failed runs. It also expands Docker-free worktree execution and operator-facing model-comparison surfaces, while deliberately excluding the incomplete WS4 Bazel cache work before tagging.
@@ -217,7 +223,7 @@ Adds an interpretation layer to Stet receipts so coding agents get a trusted, pe
 - Collapse six repair/rerun verbs (`--stitch-rerun`, `repair-patches`, `revalidate-tests`, `repair-tests`, `repair-ai-coverage`, `regrade-graders`) onto one invariant-preserving run-mutation substrate so atomicity, breadcrumbing, derived-artifact regeneration, scratch GC, and the integrity check are defined once behind a commit chokepoint; behavior-preserving with no change to verb flags or behavior ([715dbbdd])
 - Refresh onboarding prompts, agent docs, and rules-skill-loop guidance, and rename craft/discipline graders to quality graders in skill docs ([99d45afa], [9874c882], [133bcfab], [0967129c], [8395ebca])
 
-[Unreleased]: https://github.com/benredmond/stet/compare/v0.9.0-rc.2...HEAD
+[Unreleased]: https://github.com/benredmond/stet/compare/v0.9.0...HEAD
 
 [v0.9.0-rc.1]: https://github.com/benredmond/stet/compare/v0.8.0...v0.9.0-rc.1
 
