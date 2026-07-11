@@ -158,12 +158,19 @@ limit, or session-limit exhaustion. Remediation points to waiting for reset or
 choosing an available grader AI command/model, then rerunning `stet eval rules`.
 
 Within `task_selection`, AGENTS.md/CLAUDE.md runs may emit
-`code=instruction_dataset_too_small` when the selected retained dataset has
-fewer than 10 ready tasks. Follow the remediation: expand or rebuild the
-onboarding dataset with an onboarding-scale discover command such as
+`code=instruction_dataset_too_small` when the retained dataset has fewer than
+10 qualifying tasks. Qualifying means `proven_dynamic_f2p` selector proof
+(`repo_tests_only` and tasks with no qualifying selector evidence are
+excluded, fail-closed), then deduped by source commit and by a two-segment
+touched-subsystem key so one PR or one area of the repo cannot be double- or
+triple-counted; on corpora where the subsystem key collapses (a flat top-level
+tests/ dir, a monorepo package root) a degenerate-signal guard skips subsystem
+dedupe and falls back to commit-only dedupe, which the error message
+discloses. Follow the remediation: expand or rebuild the onboarding dataset
+with an onboarding-scale discover command such as
 `stet suite discover --repo . --rev-range HEAD~200..HEAD --limit 200 --target-pass 25`,
-keep quality lanes on, then rerun `stet eval rules` with the larger retained
-slice.
+keep quality lanes on, then rerun `stet eval rules` with a larger retained
+slice that carries real F2P selector proof.
 
 Do not treat that floor as a reason to switch to one-task `probe --file` or
 `config-diff`. AGENTS.md/CLAUDE.md probe and config-diff reads use the same

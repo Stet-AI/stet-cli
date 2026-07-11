@@ -62,6 +62,14 @@ rules, or selector internals before Stet can do useful work.
 - Choose the real test command from CI evidence, write starter Stet config,
   discover/build the dataset, and validate at least one representative replay
   when possible.
+- Before parallel task building, rank test-bearing publish candidates first
+  and prove one representative gold canary end to end. Repair a shared
+  environment failure before widening the build; when the environment is
+  valid but the oracle is unsuitable, try at most two more canary candidates.
+  Only fan out after one canary proves gold, and stop adding work once the
+  requested retained ready-task floor is met. For manifest-backed instruction
+  onboarding, run `stet suite build ... --target-ready 10`; this canary/floor
+  controller is implemented for manifest mode, not rev-range builds.
 - If discovery, build, probe, or config-diff returns zero ready tasks, or fewer
   than 10 retained ready tasks for AGENTS.md/CLAUDE.md, continue setup: follow
   `next_command`, widen or shift `--rev-range`, use `--allow-no-test-changes`

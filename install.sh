@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-DEFAULT_REPO="${STET_DIST_REPO:-benredmond/stet-cli}"
+DEFAULT_REPO="${STET_DIST_REPO:-Stet-AI/stet-cli}"
 DEFAULT_BIN_DIR="${STET_INSTALL_DIR:-$HOME/.local/bin}"
 
 repo="$DEFAULT_REPO"
@@ -54,7 +54,7 @@ done
 command -v tar >/dev/null 2>&1 || die "tar is required"
 
 use_public_download=0
-if [ "$repo" = "benredmond/stet-cli" ] && [ "$repo_overridden" = "0" ]; then
+if [ "$repo" = "Stet-AI/stet-cli" ] && [ "$repo_overridden" = "0" ]; then
   use_public_download=1
 fi
 

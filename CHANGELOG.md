@@ -6,6 +6,46 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.10.0-rc.1] - 2026-07-11
+
+This candidate makes large Bazel-backed task corpora faster and more reliable by reusing per-task caches, failing fast on non-progressing flake loops, and preserving durable verifier evidence for repair. It also hardens task selection and gate parsing, isolates worktree agents from source-repo rules, and moves Stet's source and public CLI distribution to their org-owned repositories.
+
+### Added
+- Add Bazel hygiene checks, per-task action caches, install-generation caching, and cached h2h verification for worktree dataset builds ([f67f5815], [f3c05669], [c5b10717])
+- Add manifest-mode `--target-ready N` as an exact ready-floor cohort control with fail-closed shortfall receipts, plus first-class Claude rules treatments with activation evidence and provider preflights ([daceffc7])
+
+### Changed
+- Route active source and CLI distribution references through org-owned `Stet-AI/stet` and `Stet-AI/stet-cli` repositories while preserving installer and updater overrides ([12a22c0e])
+
+### Fixed
+- Preserve durable verifier receipts and structural selector evidence, clean Bazel scratch state robustly, and stabilize dataset regeneration and scenario execution ([c310b406], [79dff515], [bf789d0e])
+- Bind output-root registration and compare cleanup to pinned, symlink-resistant filesystem authority ([daceffc7])
+- Isolate worktree agent execution from source-repository rules so the evaluated harness surface stays explicit ([1e07f20e])
+- Repair three Bazel selector false-denial paths and accept Markdown-emphasized gate verdicts and scores ([9b563215], [3ea45a08])
+
+### Internal
+- Synchronize shipped build guidance, document the distribution experience and dogfood trust gates, simplify Linear workflow guidance, and strengthen CLI/Bazel contract fixtures ([168f3ae3], [27230840], [cb3f7e29], [ce7f162c], [8d575466], [e8bd6a81], [271484bc])
+
+[v0.10.0-rc.1]: https://github.com/Stet-AI/stet/compare/v0.9.1...v0.10.0-rc.1
+[f67f5815]: https://github.com/Stet-AI/stet/commit/f67f581567e190fc686f6300f5b576517b29fd7c
+[168f3ae3]: https://github.com/Stet-AI/stet/commit/168f3ae39d6166bf40b2379233fa88b5a48eff20
+[f3c05669]: https://github.com/Stet-AI/stet/commit/f3c05669c18f81e47e9b1e2f0748d99e9f93721c
+[c5b10717]: https://github.com/Stet-AI/stet/commit/c5b10717679876b7c22c0420a2cb274ecd88a7a0
+[e8bd6a81]: https://github.com/Stet-AI/stet/commit/e8bd6a81a02a3b65a1257aa8b1f1623ffc910d16
+[27230840]: https://github.com/Stet-AI/stet/commit/27230840d02f1e2ae8d2a2e7d2fc1a020a71a227
+[c310b406]: https://github.com/Stet-AI/stet/commit/c310b406bc011f3c38a9014224381bef86a5615f
+[bf789d0e]: https://github.com/Stet-AI/stet/commit/bf789d0e6a4648def0a5af5b9ac30a6468f92e65
+[daceffc7]: https://github.com/Stet-AI/stet/commit/daceffc749e888286765f77f0e7474185b19a11c
+[79dff515]: https://github.com/Stet-AI/stet/commit/79dff51572ae2b3e28dcb11a3f54ea6c9f954558
+[271484bc]: https://github.com/Stet-AI/stet/commit/271484bc1ebc5bafce348e1adb5f6bfb31e7c4b8
+[cb3f7e29]: https://github.com/Stet-AI/stet/commit/cb3f7e2988e332ba8786979aaf4bf06e8d6a7ec7
+[9b563215]: https://github.com/Stet-AI/stet/commit/9b5632156ab49828922c17484525e9ab4a4ae0d1
+[1e07f20e]: https://github.com/Stet-AI/stet/commit/1e07f20e439541faa1e580bd856dc6b1bf99f49a
+[ce7f162c]: https://github.com/Stet-AI/stet/commit/ce7f162c12a121b39bed2ae8114e5180875f20a9
+[8d575466]: https://github.com/Stet-AI/stet/commit/8d5754668740904fd41ae07daaa93dd0430bbe43
+[12a22c0e]: https://github.com/Stet-AI/stet/commit/12a22c0ef393b6718b7e72a782d4f7c3414a9e97
+[3ea45a08]: https://github.com/Stet-AI/stet/commit/3ea45a08979392f95a04fc1b6b6a3b88aaa3ade9
+
 ## [v0.9.1] - 2026-07-10
 
 Makes the fixed 500 MiB compressed repo-snapshot cap operator-configurable so larger monorepos can build without patching Stet, and records per-base snapshot evidence in the build summary.
@@ -13,7 +53,7 @@ Makes the fixed 500 MiB compressed repo-snapshot cap operator-configurable so la
 ### Added
 - Add `--max-snapshot-bytes N` and `build.max_snapshot_bytes` (flag over config over the built-in 500 MiB default) to raise the per-base compressed repo-snapshot cap, plus a `snapshot` block in `build-summary.json` reporting the cap, its source, and per-base accepted/oversize measurements. Oversize-snapshot attrition now carries `--max-snapshot-bytes`-specific remediation guidance in the build summary and rules-skill next actions.
 
-[v0.9.1]: https://github.com/benredmond/stet/compare/v0.9.0...v0.9.1
+[v0.9.1]: https://github.com/Stet-AI/stet/compare/v0.9.0...v0.9.1
 
 ## [v0.9.0] - 2026-07-10
 
@@ -232,7 +272,7 @@ Adds an interpretation layer to Stet receipts so coding agents get a trusted, pe
 - Collapse six repair/rerun verbs (`--stitch-rerun`, `repair-patches`, `revalidate-tests`, `repair-tests`, `repair-ai-coverage`, `regrade-graders`) onto one invariant-preserving run-mutation substrate so atomicity, breadcrumbing, derived-artifact regeneration, scratch GC, and the integrity check are defined once behind a commit chokepoint; behavior-preserving with no change to verb flags or behavior ([715dbbdd])
 - Refresh onboarding prompts, agent docs, and rules-skill-loop guidance, and rename craft/discipline graders to quality graders in skill docs ([99d45afa], [9874c882], [133bcfab], [0967129c], [8395ebca])
 
-[Unreleased]: https://github.com/benredmond/stet/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Stet-AI/stet/compare/v0.10.0-rc.1...HEAD
 
 [v0.9.0-rc.1]: https://github.com/benredmond/stet/compare/v0.8.0...v0.9.0-rc.1
 

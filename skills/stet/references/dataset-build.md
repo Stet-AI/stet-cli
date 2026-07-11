@@ -221,15 +221,16 @@ stet suite build --repo /path/to/local/repo --manifest $MANIFEST_DIR/manifest.ya
   --out $OUT --workers 2 --require-f2p=false
 ```
 
-Build snapshots a compressed committed-repository archive at each task's base. It
-follows `git archive` semantics, so Git metadata, untracked files, and paths
-excluded by `export-ignore` are absent; Stet also sanitizes escaping symlinks. The
-default cap is 500 MiB (524288000 bytes). For a larger monorepo, set
-`build.max_snapshot_bytes` in `.stet/stet.yaml` or pass `--max-snapshot-bytes N`;
-the flag wins over config. Any positive int64 value is accepted, but raising the
-cap is operator-owned and can materially increase disk use, extraction cost, and
-runtime. After changing the cap, rerun with `--restart` or choose a fresh output
-directory so an existing build summary is not reused.
+Build snapshots a compressed committed-repository archive at each task's base.
+It follows `git archive` semantics, so Git metadata, untracked files, and paths
+excluded by `export-ignore` are absent; Stet also sanitizes escaping symlinks.
+The default cap is 500 MiB (524288000 bytes). For a larger monorepo, set
+`build.max_snapshot_bytes` in `.stet/stet.yaml` or pass
+`--max-snapshot-bytes N`; the flag wins over config. Any positive int64 value is
+accepted, but raising the cap is operator-owned and can materially increase
+disk use, extraction cost, and runtime. After changing the cap, rerun with
+`--restart` or choose a fresh output directory so an existing build summary is
+not reused.
 
 `--llm-install-config` defaults on (see the test_cmd-relevance note below), so
 build needs a model client. Like `discover`, it resolves one from
@@ -336,9 +337,16 @@ Stet may derive flags-preserving Bazel label candidates when `bazel query` (or
 Bazelisk) resolves a package pattern to actual test-rule labels and proves their
 sources/buildfiles cover required test-patch directories; recursive patterns
 are never recorded as strict F2P identities. An actual label is accepted only after the same dynamic
-base-fail/gold-pass check as other targeted candidates. Query or structural
-selection failures write an abstained `test_selection.json` receipt and keep the
-broad command. Generated whole-suite verifiers may also narrow after
+base-fail/gold-pass check as other targeted candidates. When Bazel candidate
+derivation abstains (query pattern failure, the >16-label bound, or no
+covering target), the build keeps the original broad command and reruns
+base+gold for it under the same multi-run flake policy, accepting only on a
+broad base-fail/gold-pass — recorded as `proof_strength: abstained_kept_broad`
+with `fallback: keep_broad`. It never falls back to a partial or first-N label
+subset. Infrastructure failures (disk/extraction errors, missing toolchain
+binaries, selector crashes) classify as `executor_runtime_error`, skip the task
+instead of minting a fallback proof, and are never recorded as `f2p_failed`.
+Generated whole-suite verifiers may also narrow after
 deterministic filesystem package/path/file proof for supported path runners.
 Each task's existing
 `build_logs/test_selection.json` path now carries `schema:
@@ -519,6 +527,18 @@ Course correction:
 | Docker errors | Kill zombies, reduce workers |
 
 Stop expanding if 3 consecutive batches yield < 5 new tasks.
+
+Every rejected candidate leaves `rejected/<taskID>/rejection.json` (task ID,
+skip reason, error, timestamp, attempt) plus its preserved verifier logs, so a
+rejection is always auditable after the fact. To re-verify eligible rejections
+in place without redoing accepted work, rerun with `--retry-rejected`
+(manifest mode only, mutually exclusive with `--restart`): it reuses accepted
+task dirs byte-for-byte, retries only `f2p_failed` / `gold_validation_failed` /
+`executor_runtime_error` classes, appends each retry under `attempts/<n>/`
+without deleting prior receipts, and refuses a retry if the on-disk patch no
+longer matches the manifest's recorded checksum. Build verification reruns
+default to 2 attempts (`--flake-reruns N` to override); a divergent outcome
+across attempts is rejected, never silently accepted.
 
 Inline audit at target count:
 1. Empty test patches -> flag for removal

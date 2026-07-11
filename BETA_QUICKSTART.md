@@ -57,7 +57,7 @@ Recommendations for the first build:
 In your coding agent, from the repo you want to evaluate, ask:
 
 ```text
-Use the Stet skill. Ensure Stet is setup correctly according to https://github.com/benredmond/stet-cli. Do not run an eval yet. If user is using worktree backend, skip Docker.
+Use the Stet skill. Ensure Stet is setup correctly according to https://github.com/Stet-AI/stet-cli. Do not run an eval yet. If user is using worktree backend, skip Docker.
 ```
 
 Expected checks:

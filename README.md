@@ -47,12 +47,12 @@ model changes, or harness policy.
 
 ## Requirements
 
-- macOS or Linux, x86_64 or arm64
-- `curl` for the public installer
+- Stet CLI: macOS or Linux on x86_64 or arm64, or Windows on amd64
+- `curl` for the macOS/Linux public installer, or PowerShell 5.1+ on Windows
 - [GitHub CLI](https://cli.github.com/) for private release overrides or PR/MR-backed repo discovery
 - Node.js and `npx` for installing the Stet agent skill
-- Docker, either Docker Desktop on macOS or Docker Engine on Linux, for the
-  default Harbor-backed eval path
+- Docker, either Docker Desktop on macOS/Windows or Docker Engine on Linux,
+  for the default Harbor-backed eval path
 - Python 3.12+
 - A model-provider auth path for the agent you plan to evaluate
 
@@ -60,24 +60,24 @@ model changes, or harness policy.
 
 ### 1. Install the Stet CLI
 
-The default installer downloads public release assets from `benredmond/stet-cli`
+The default installer downloads public release assets from `Stet-AI/stet-cli`
 and does not require GitHub authentication.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/benredmond/stet-cli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.sh | sh
 ```
 
 Install a specific version:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/benredmond/stet-cli/main/install.sh | sh -s -- --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.sh | sh -s -- --version v0.1.0
 ```
 
 The default install directory is `$HOME/.local/bin`. To use a different
 directory:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/benredmond/stet-cli/main/install.sh | sh -s -- --bin-dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.sh | sh -s -- --bin-dir "$HOME/bin"
 ```
 
 Verify:
@@ -86,12 +86,18 @@ Verify:
 stet --version
 ```
 
+On Windows amd64, run this in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.ps1 | iex
+```
+
 If Ben gives you a private or alternate release repo, keep using the explicit
 repo override. That path uses `gh` so GitHub can authenticate the download:
 
 ```sh
 gh auth status || gh auth login
-curl -fsSL https://raw.githubusercontent.com/benredmond/stet-cli/main/install.sh | sh -s -- --repo owner/private-stet-cli
+curl -fsSL https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.sh | sh -s -- --repo owner/private-stet-cli
 ```
 
 ### 2. Sign in to Stet
@@ -110,13 +116,13 @@ the right Stet workflow, preserve decision semantics, read canonical artifacts,
 and avoid treating directional checks as rollout evidence.
 
 ```sh
-npx skills add https://github.com/benredmond/stet-cli.git --skill stet --all
+npx skills add https://github.com/Stet-AI/stet-cli.git --skill stet --all
 ```
 
 To inspect the available skills before installing:
 
 ```sh
-npx skills add https://github.com/benredmond/stet-cli.git --list
+npx skills add https://github.com/Stet-AI/stet-cli.git --list
 ```
 
 Verify the skill is visible to the agent you will use for Stet work:

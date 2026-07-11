@@ -49,7 +49,7 @@ stet update --version v0.1.0-rc.3
 
 ## GitHub auth or private repo access
 
-The default installer and skill use the public `benredmond/stet-cli` repo. You
+The default installer and skill use the public `Stet-AI/stet-cli` repo. You
 only need GitHub CLI auth for private release overrides or PR/MR-backed repo
 discovery.
 
@@ -149,7 +149,7 @@ or install it separately:
 
 ```sh
 npx skills update stet -y
-npx skills add https://github.com/benredmond/stet-cli.git --skill stet --all
+npx skills add https://github.com/Stet-AI/stet-cli.git --skill stet --all
 ```
 
 ## Rules plan seems slow

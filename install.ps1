@@ -38,7 +38,7 @@ function Die {
 # --- Resolve --repo, mirroring install.sh's DEFAULT_REPO / repo_overridden logic ---
 # STET_DIST_REPO overrides the hardcoded default but does NOT count as an explicit
 # override; only an explicit -Repo argument flips to the gh-authenticated path.
-$resolvedRepo = "benredmond/stet-cli"
+$resolvedRepo = "Stet-AI/stet-cli"
 if (-not [string]::IsNullOrEmpty($env:STET_DIST_REPO)) {
     $resolvedRepo = $env:STET_DIST_REPO
 }
@@ -77,7 +77,7 @@ $resolvedBase = $resolvedBase.TrimEnd('/')
 
 # Public GitHub download when using the default repo and no explicit -Repo override;
 # otherwise fall back to gh-authenticated access (private/overridden repo).
-$usePublicDownload = ($resolvedRepo -eq "benredmond/stet-cli") -and (-not $repoOverridden)
+$usePublicDownload = ($resolvedRepo -eq "Stet-AI/stet-cli") -and (-not $repoOverridden)
 
 if (-not $usePublicDownload) {
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
