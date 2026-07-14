@@ -28,14 +28,31 @@ only for diagnosis.
 ## Repo onboarding
 
 ```text
-Use the Stet skill to onboard this repo for Stet evals. Ask what work I want
-tracked, read CI and build files, and choose the narrowest credible bounded
-verifier. Pass it explicitly with `--test`. Treat `bazel test //...`,
-unfiltered `pytest`, `go test ./...`, and workspace-wide scripts as broad. If
-only a broad verifier exists, stop before build and propose bounded alternatives;
-do not broaden verification to increase yield. Sample representative history,
-create the Harbor setup, build the starter slice, report scope/skips/confidence,
-and stop before model smoke, probe, or rules evals.
+Use the Stet skill to onboard this repo for Stet evals. Ask what product areas,
+PR types, and difficulty mix I want Stet to track. Read CI, documentation,
+package/build files, and build graphs. Choose the narrowest credible verifier
+that is affordable to run repeatedly and pass it explicitly with `--test`.
+Treat `bazel test //...`, unfiltered `pytest`, `go test ./...`, and
+workspace-wide test scripts as broad. If no credible bounded verifier exists,
+stop before `stet suite build`; report the broad command you withheld and
+propose two or three bounded alternatives for my approval.
+
+Use read-only subagents when available to sample merged PRs/commits and map
+where representative work happens. Create the Harbor Dockerfile and harness,
+then run a manifest-backed build with conservative concurrency. Keep the
+verifier boundary fixed if yield is low. Wait for `build-summary.json`, report
+the onboarding receipt, and stop before model smoke, probe, or rules evals.
+```
+
+```text
+Use the Stet skill to expand this bounded onboarding slice without changing its
+evidence bar. Read the receipt and skipped-task reasons. Add the smallest
+bounded set of representative tasks that improves missing subsystem or
+difficulty coverage. Keep the approved verifier explicit with `--test`. If
+yield is low, widen or shift candidate history or propose another bounded
+subsystem cohort. Do not switch to a repository-wide verifier without my
+explicit approval. Report what was added, what remains skipped, verifier
+scope, subsystem coverage, and updated confidence. Do not launch a model eval.
 ```
 
 ```text
@@ -46,19 +63,10 @@ reasons, setup validation, confidence, and next step. Do not launch more work.
 
 ```text
 Use the Stet skill. Confidence is low. Diagnose whether the blocker is test
-setup, Docker/Harbor, weak task history, path-sensitive tests, or selection.
-Propose the smallest fix before running more Stet work.
-```
-
-```text
-Use the Stet skill to expand this onboarding slice without changing its
-evidence bar. Read the receipt and skipped-task reasons, then add only the
-smallest bounded set of representative tasks that improves missing subsystem
-or difficulty coverage. Keep the verifier explicit with `--test`. Do not use
-`bazel test //...`, unfiltered `pytest`, `go test ./...`, or a workspace-wide
-script as a bounded verifier; if no bounded verifier exists, stop and propose
-one. Report what was added, what remains skipped, and the updated confidence.
-Do not launch a model eval.
+setup, Docker/Harbor setup, weak task history, path-sensitive tests, verifier
+scope, or task selection. Propose the smallest fix before running more Stet
+work. Do not increase yield by switching to an unapproved repository-wide
+verifier.
 ```
 
 ## First evaluation
@@ -192,7 +200,9 @@ quality rather than code correctness.
 ## Good default instruction to your agent
 
 ```text
-Use the Stet skill. Keep the workflow bounded. Read status/report artifacts as
-truth, change one lever at a time, treat inspect as diagnostic, and ask before
-expensive evals or discarding existing evidence.
+Use the Stet skill. Keep the workflow bounded. During unfamiliar-repo
+onboarding, never launch a repository-wide verifier without explicit approval.
+Read status/report artifacts as the source of truth, change one lever at a
+time, treat inspect as a diagnostic state, and ask before launching expensive
+evals or discarding existing evidence.
 ```

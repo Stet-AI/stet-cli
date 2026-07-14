@@ -565,7 +565,7 @@ Common next steps:
 When the rules flow is still running, use the same running/check-in contract as
 plain `stet eval status`, but include the manifest path and current phase.
 
-## A/B Testing AGENTS.md or CLAUDE.md
+## A/B Testing AGENTS.md, CLAUDE.md, or .claude/rules
 
 The rules flow is the preferred path for A/B testing AGENTS.md or CLAUDE.md.
 It provides full provenance, release lifecycle integration, and writes the
@@ -858,6 +858,61 @@ when the destination is a symlink, so the agent sees the convention file as a
 symlink rather than a regular file copy. The installed overlay is committed
 into the task image's treatment baseline, so captured agent patches should
 contain only the agent's work, not the treatment overlay itself.
+
+### Claude Code project rules (.claude/rules)
+
+`claude_rules` is a first-class treatment kind for A/B testing Claude Code
+project rules under `.claude/rules/**/*.md`. Declare it in the change manifest:
+
+```yaml
+change:
+  kind: rules
+  rules:
+    treatments:
+      - kind: claude_rules
+```
+
+The path is fixed to `.claude/rules`; `glob` and `selector` are rejected. The
+tree is walked **recursively** (`.claude/rules/**/*.md`), so add, edit, delete,
+and nested rule files all flow through as file overlays.
+
+Rule files are **physical files in a git repo**, not inline manifest content.
+Stet resolves them from the suite's `repo:` at the baseline git ref and from the
+working tree at candidate, then stamps each task arm with the matching overlay.
+This makes the suite `repo:` invariant load-bearing: the worktree backend
+resolves each task's `base_commit` against that same `repo:`, so point `repo:`
+at a clone that carries the dataset's full commit history. A separate
+instruction repo without the base commits will not resolve.
+
+`claude_rules` is **Claude-only**: it forces both arms to the `claude-code`
+harness provider (`agent.name: claude-code` in `stet.harness.yaml`).
+
+Activation is observed, not assumed. Stet injects a neutral observer hook into
+the repo's existing `.claude/settings.json` (merging, not overwriting) that
+records `InstructionsLoaded` events. Each evidence record carries `load_reason`
+(`session_start` for unscoped rules, `path_glob_match` for scoped rules),
+`file_path`, and Claude Code version. A rule with YAML frontmatter
+`paths: ["v2/**/*.go"]` is scoped: it activates only when the agent opens a
+matching file. Unscoped rules (no frontmatter) load at `session_start`.
+
+Isolation is guaranteed by construction: agent worktrees execute in external
+mode-0700 directories outside the source repo, so the baseline arm cannot
+inherit candidate rules from the source checkout. Verified: baseline
+`InstructionsLoaded` logs contain only the staged baseline rules, with no
+source-repo ancestor leak.
+
+`.claude/settings.json` gotcha: do **not** add a `permissions.allow` block
+there. Claude Code's untrusted-worktree mode (`--permission-mode auto`, no trust
+dialog) refuses to honor `permissions` blocks, which produces empty agent
+patches. Use only the injected hook (or leave it `{}`).
+
+v1 exclusions (not yet supported): `@import` syntax in rule files is fail-closed
+(rejected); symlinks under `.claude/rules/` are fail-closed; only project rules
+under `.claude/rules/` are supported (no user/managed/plugin rules); the
+`config-diff` path does not apply to `claude_rules`; the workbench
+artifact-replay / monitor-replay path is not wired for `claude_rules` (rules-flow
+`eval rules repair`/`resume` is supported on the same footing as other
+instruction treatments).
 
 ## Decision Semantics
 

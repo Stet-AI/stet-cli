@@ -27,10 +27,47 @@ discover (fetch change requests -> prefilter -> LLM scoring -> manifest)
 default; `stet suite build --harbor-backend worktree --repo <path>` runs
 base-fail/gold-pass verification in local git worktrees instead, no Docker
 daemon needed, but requires a local repo with every task base commit).
+For explicit `--base/--head` or fresh manifest builds, the default
+`--source-mode auto` selects `reference` when the local worktree route proves
+all reference prerequisites; rev-range builds stay portable until their
+candidates are resolved. Every fallback is recorded in `build-summary.json`.
+`--source-mode reference` keeps only
+patches, task metadata, and verified local Git-authority
+receipts in each task; it writes no task tarball, bundle, Docker collateral, or
+snapshot. One shared shallow authority retains the complete selected base trees
+but excludes unrelated history, so a large selected tree still needs equivalent
+authority storage plus active verification worktrees.
+Manifest and rev-range tasks share one authority while retaining exact per-task
+commit/tree identity. This alpha path requires the worktree backend, L2 verification,
+deterministic non-Bazel tests, `--llm-install-config=false`, and a non-empty
+test patch. It is local and not Docker-portable. Reference manifest builds may
+use `--retry-rejected`; direct rev-range retry remains outside the reference
+path and must use a portable manifest workflow. Docker, Bazel, non-L2, and
+generated install-config routes automatically stay portable; explicit
+`--source-mode reference` remains fail-closed when they are incompatible.
+
+For a repository disk budget, configure `build.storage_admission.mode: enforce`
+with a positive `budget_bytes`. Stet decides before it creates or restarts the
+dataset root, charges the logical union of `.stet`, registered external roots,
+and the prospective output root, and records requested, backend-capped, and
+effective validation workers in `storage-admission.json`. It can reduce
+worktree concurrency only after the exact Git authority for the selected bases
+has already been published and verified. First reference builds should use the
+default `shadow` mode, which can publish that authority; enforced `auto` falls
+portable when it is absent, while explicit reference refuses before output
+creation. Enforcement is conservative logical/free-space admission, not a
+physical-byte claim: portable source history and Docker/BuildKit runtime peaks
+remain unknown, so portable builds refuse until those exposures have exact
+bounds. Use `shadow` to inspect those receipts without blocking.
+An enabled artifact-budget policy may compact or archive eligible completed
+evidence as its separate, reviewed pre-build reconciliation step. A storage
+admission refusal guarantees that Stet has not created or restarted the new
+dataset output root or created a new Git authority.
 `suite select` is the bridge from historically merged / selected task
 candidates to a launchable rules slice: it oversamples built task dirs, runs
 gold replay preflight, drops replay-invalid or unchecked tasks, and writes a
 derived `stet.suite.yaml` with only gold replay valid `selection.task_ids`.
+Bazel F2P selector receipts retain only query-proven positive labels; repo-relative patterns such as `src/...` are replaced before base/gold proof runs. When that focused proof succeeds and P2P would otherwise only fall back to the original broad command, P2P reuses its existing gold trial while the receipt retains the original broad command identity.
 PR/MR-backed flows keep the `prs` source vocabulary for compatibility. GitHub
 PRs use `gh`; GitLab MRs use `glab`. When an enterprise remote is ambiguous
 such as `code.company.com`, pass `--change-provider github|gitlab` and, if
@@ -160,11 +197,20 @@ metadata.
 egress) and is rejected for model-backed agents, which cannot reach their
 provider API offline; it is valid only for offline agents (oracle, nop).
 
+The active Harbor export cache automatically converges to its 5 GiB ceiling and
+reconciles toward 4 GiB using deterministic least-recently-used entries, except
+for locked, in-flight, malformed, or unaccountable protected bytes. An
+oversized new export is still delivered but bypasses retention; maintenance is
+best effort and does not fail the requested export.
+
 For Go tasks, build bakes the toolchain at the recipe's `runtime_version` and
 freezes it (`GOTOOLCHAIN=local`) so the offline run never auto-downloads a
 toolchain. A `go.mod`/`go.work` `toolchain goX.Y.Z` directive higher than
 `runtime_version` now fails the build instead of silently fetching — raise
 `runtime_version` to that patch level (a bare `1.25` resolves to `go1.25.0`).
+Recognized standard worktree probes use authoritative runtime records
+(including Bazel `Build label`) so wrapper banners and diagnostics cannot
+satisfy strict version pins; custom probes retain legacy parsing.
 
 Minimal harness contract:
 
@@ -221,9 +267,34 @@ stet suite build --repo /path/to/local/repo --manifest $MANIFEST_DIR/manifest.ya
   --out $OUT --workers 2 --require-f2p=false
 ```
 
-Build snapshots a compressed committed-repository archive at each task's base.
-It follows `git archive` semantics, so Git metadata, untracked files, and paths
-excluded by `export-ignore` are absent; Stet also sanitizes escaping symlinks.
+Portable builds publish one immutable repository source pack per unique base
+commit under the dataset, then give each task a small receipt instead of a
+task-local archive and history bundle. Tasks that share a base share those
+bytes, including rejected tasks; Harbor materializes private compatibility
+copies only while it runs.
+Eligible Harbor tasks also share one labeled source-base image for the same
+pack/platform recipe; each task keeps its post-source Dockerfile instructions.
+Custom pre-source copies, behavior-mutated inputs, and command overrides fall
+back to the legacy per-task image path rather than changing execution semantics.
+
+For an older portable dataset that still has duplicate task-local
+`repo.tar.gz` and `repo.bundle` files, preview a verified conversion first:
+`stet artifacts sources migrate --dataset <dataset> --json`. It selects only
+byte-identical, bundle-verified base commit/tree groups, leaves ambiguous files
+protected, and reports logical reduction separately from unknown physical
+reclaim. Apply only with its exact returned `--plan-id --apply`. The paired
+`stet artifacts sources restore` preview/apply path recreates the exact legacy
+files and prior receipt if a rollback is needed.
+
+The source pack contains the tracked base tree, excluding Git metadata and
+untracked files, and sanitizes escaping symlinks. New portable packs recursively
+include exact locally available pinned submodule commit contents, subject to the
+same escaping-symlink sanitization, without fetching; missing pinned objects fail
+closed. Reference/Git-authority builds with gitlinks remain unsupported until
+that authority carries recursive closure. Fresh builds automatically bypass
+legacy snapshot cache generations without deleting them. Rebuild pre-fix packs,
+including packs reused by a resumed build, because their receipts cannot prove
+that closure.
 The default cap is 500 MiB (524288000 bytes). For a larger monorepo, set
 `build.max_snapshot_bytes` in `.stet/stet.yaml` or pass
 `--max-snapshot-bytes N`; the flag wins over config. Any positive int64 value is
@@ -231,6 +302,18 @@ accepted, but raising the cap is operator-owned and can materially increase
 disk use, extraction cost, and runtime. After changing the cap, rerun with
 `--restart` or choose a fresh output directory so an existing build summary is
 not reused.
+
+Keep the output root operator-controlled for the full build. Stet rejects a
+symlinked output root and unsafe physical ancestry, and serializes concurrent
+Stet builds on the resolved physical root, but is not an OS security boundary
+against another process able to replace that root.
+
+The shadow `storage-admission.json` preview models logical exposure, not
+physical allocation or reclaim. For portable builds it applies the snapshot
+cap and Git-history proxy per unique source base. Base/head cardinality is
+exact; manifest builds use parsed base identities; rev-range estimates remain
+an upper bound until discovery resolves the slice. Docker/BuildKit, install
+caches, and cross-filesystem copies remain explicitly unknown.
 
 `--llm-install-config` defaults on (see the test_cmd-relevance note below), so
 build needs a model client. Like `discover`, it resolves one from
@@ -457,11 +540,49 @@ shared cache and Docker objects:
 stet artifacts doctor --repo . --roots .stet,.tmp --global-caches --docker --json
 ```
 
+Doctor inventories published reference-mode Git authorities as fully protected
+storage with observed task reference counts. Compact cannot remove them yet;
+`no_observed_reference` is diagnostic and is not deletion permission.
+Doctor also emits a read-only lifecycle plan for managed roots, including the
+valid `hot|compacted|archived|retired` state (or protected `unknown` for an
+invalid/ambiguous receipt), local/restore-required/unavailable
+capabilities, evidence consequences, and a metadata-bound preview ID. It does
+not hash all artifact contents and is not mutation authority. Treat pins and
+leases as separate safety constraints. An `unknown` exclusive physical reclaim
+estimate is informational and never promises freed filesystem blocks.
+
 Successful compare/run completions now auto-drop their regeneratable scratch
 (`.harbor-dataset/` and `.smoke/`) while preserving evidence; set
 `STET_KEEP_SCRATCH=1` to keep it for debugging. To reclaim a backlog, prefer the
 native compact engine over manual `rm` so retention contracts and seals are
 honored. Scope it to one root or the whole repo, and always preview first:
+
+For a configured filesystem archive backend, `stet artifacts archive --repo .
+--root <completed-root> --backend <id> --json` previews moving only raw replay
+trajectories while keeping canonical reports, decisions, provenance, compact
+patches, validation evidence, source packs, and Git authorities local. Apply
+only with the returned current `--plan-id` plus `--apply`; restore uses the same
+preview/review/apply flow. Physical reclaim remains `unknown`, so do not present
+same-filesystem archival as disk-budget relief.
+
+To prevent buildup, opt in with `stet artifacts policy --repo . --max-bytes N
+--high-watermark-bytes N --low-watermark-bytes N` plus age and batch limits.
+Admission and successful completion run one bounded pass. Stet compacts first
+and archives only through a configured, validated backend; it never retires
+automatically. `stet artifacts reconcile --repo . --json` reports logical
+local reduction separately from unknown physical reclaim. New admission is
+refused if the bounded pass still exceeds the hard budget.
+
+Before considering retirement, refresh the stable-ID dependency graph with
+`stet artifacts reachability --repo . --json`. Use expiring `stet artifacts
+lease` records for active consumers; leases and pins are independent. `stet
+artifacts retire --repo . --root <root> --json` persists a content-bound review
+plan. Apply only with its exact `--approve PLAN_ID`; the command immediately
+rechecks mutable safety inputs and exact deletion targets. Minimal local
+reports, decisions, provenance, compact patches, and shared stores remain.
+Receipt-only retirement is off by default and requires policy opt-in plus
+explicit `--receipt-only --approve-receipt-only`; replay, repair, and regrade
+then become unavailable and require a rerun.
 
 ```bash
 # One root: status, preview, then reclaim (default --level all = compact bounded
@@ -539,6 +660,11 @@ without deleting prior receipts, and refuses a retry if the on-disk patch no
 longer matches the manifest's recorded checksum. Build verification reruns
 default to 2 attempts (`--flake-reruns N` to override); a divergent outcome
 across attempts is rejected, never silently accepted.
+
+For `--source-mode reference`, retry is still manifest-only: it reopens the
+recorded immutable git authority and refuses altered patches, task identity, or
+authority evidence before touching rejected evidence. It never recreates a
+portable snapshot or rediscovers a rev-range.
 
 Inline audit at target count:
 1. Empty test patches -> flag for removal

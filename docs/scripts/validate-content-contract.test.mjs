@@ -243,7 +243,7 @@ test('authorized public collateral change fails when required content is removed
   const result = await runCopy(async (root) => {
     const path = join(root, '..', 'README.md');
     const text = await readFile(resolve(DOCS_DIR, '..', 'README.md'), 'utf8');
-    await writeFile(path, text.replace('# Improve the instructions, skills, and model settings your coding agents use', '# Improve coding workflows'));
+    await writeFile(path, text.replace('# Improve the instructions, skills, and model settings your coding agents actually use', '# Improve coding workflows'));
   }, {
     baseSha: 'base',
     headSha: 'head',
@@ -266,6 +266,80 @@ test('authorized public collateral change rejects static Stet CLI versions', asy
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join('\n'), /PROMPT_COOKBOOK\.md contains a hard-coded Stet CLI semver token/);
+});
+
+test('stable-incompatible --target-ready claim fails on a Mintlify page', async () => {
+  const result = await runCopy(async (root) => {
+    const path = join(root, 'quickstart.mdx');
+    await writeFile(path, `${await readFile(path, 'utf8')}\nRun stet suite build --target-ready 20.\n`);
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /quickstart\.mdx contains unsupported claim/);
+});
+
+test('stable-incompatible automatic canary claims fail in public collateral', async () => {
+  for (const claim of [
+    'Stet automatically runs one canary.',
+    'Use the canary controller to manage the build.',
+    'Run one canary before fan-out.',
+  ]) {
+    const result = await runCopy(async (root) => {
+      const path = join(root, '..', 'PROMPT_COOKBOOK.md');
+      const text = await readFile(resolve(DOCS_DIR, '..', 'PROMPT_COOKBOOK.md'), 'utf8');
+      await writeFile(path, `${text}\n${claim}\n`);
+    }, {
+      baseSha: 'base',
+      headSha: 'head',
+      existsCommit: () => true,
+      changedFiles: ['PROMPT_COOKBOOK.md'],
+    });
+    assert.equal(result.ok, false, claim);
+    assert.match(result.errors.join('\n'), /PROMPT_COOKBOOK\.md contains unsupported claim/, claim);
+  }
+});
+
+test('postfixed automatic canary claim fails in public collateral', async () => {
+  const result = await runCopy(async (root) => {
+    const path = join(root, '..', 'PROMPT_COOKBOOK.md');
+    const text = await readFile(resolve(DOCS_DIR, '..', 'PROMPT_COOKBOOK.md'), 'utf8');
+    await writeFile(path, `${text}\nStet runs one canary automatically.\n`);
+  }, {
+    baseSha: 'base',
+    headSha: 'head',
+    existsCommit: () => true,
+    changedFiles: ['PROMPT_COOKBOOK.md'],
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /PROMPT_COOKBOOK\.md contains unsupported claim/);
+});
+
+test('fully hyphenated canary-before-fan-out claim fails in public collateral', async () => {
+  const result = await runCopy(async (root) => {
+    const path = join(root, '..', 'PROMPT_COOKBOOK.md');
+    const text = await readFile(resolve(DOCS_DIR, '..', 'PROMPT_COOKBOOK.md'), 'utf8');
+    await writeFile(path, `${text}\nStet runs one canary-before-fan-out.\n`);
+  }, {
+    baseSha: 'base',
+    headSha: 'head',
+    existsCommit: () => true,
+    changedFiles: ['PROMPT_COOKBOOK.md'],
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /PROMPT_COOKBOOK\.md contains unsupported claim/);
+});
+
+test('generic human-controlled canary wording remains allowed in public collateral', async () => {
+  const result = await runCopy(async (root) => {
+    const path = join(root, '..', 'PROMPT_COOKBOOK.md');
+    const text = await readFile(resolve(DOCS_DIR, '..', 'PROMPT_COOKBOOK.md'), 'utf8');
+    await writeFile(path, `${text}\nA human can run a bounded canary after reviewing the onboarding receipt.\n`);
+  }, {
+    baseSha: 'base',
+    headSha: 'head',
+    existsCommit: () => true,
+    changedFiles: ['PROMPT_COOKBOOK.md'],
+  });
+  assert.deepEqual(result, { ok: true, errors: [] });
 });
 
 test('extra hidden MDX page fails', async () => {

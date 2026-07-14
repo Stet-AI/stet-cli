@@ -24,7 +24,7 @@ export const PROTECTED_FALLBACKS = [
 // legacy byte-protected file and is intentionally excluded from this map.
 export const PUBLIC_COLLATERAL_REQUIREMENTS = {
   'README.md': [
-    '# Improve the instructions, skills, and model settings your coding agents use',
+    '# Improve the instructions, skills, and model settings your coding agents actually use',
     '## Example Trial Result',
     'Historical April 2026 model comparison across 28 paired Zod tasks',
     '## Install and get a first result',
@@ -38,8 +38,8 @@ export const PUBLIC_COLLATERAL_REQUIREMENTS = {
   ],
   'PROMPT_COOKBOOK.md': [
     '# Prompt cookbook',
-    'narrowest credible bounded',
-    'Pass it explicitly with `--test`',
+    'narrowest credible verifier',
+    'pass it explicitly with `--test`',
     'stop before model smoke, probe, or rules evals',
   ],
   'TROUBLESHOOTING.md': [
@@ -51,7 +51,7 @@ export const PUBLIC_COLLATERAL_REQUIREMENTS = {
 };
 
 const EXPECTED_DOCS_REVIEW = {
-  content_base_commit: '1bc5af5dae96d602395df2239976eb5f5533abe3',
+  content_base_commit: 'ce0aef110469d8d7dab37566cef99d8a7dee67e1',
   reviewed_at: '2026-07-14',
 };
 
@@ -160,6 +160,11 @@ const UNSUPPORTED_CLAIMS = [
   /universal model ranking/i,
   /generalized improvement/i,
   /percentage savings/i,
+  /--target-ready(?:\b|=)/i,
+  /\bautomatic(?:ally)?(?:[-\s]+(?:run|runs|launch|launches|start|starts|execute|executes))?[-\s]+(?:(?:a|the|one)[-\s]+)?canary\b/i,
+  /\bcanary(?:[-\s]+(?:is[-\s]+)?(?:run|runs|launched|started|executed))?[-\s]+automatic(?:ally)?\b/i,
+  /\bcanary[-\s]+controller\b/i,
+  /\bcanary[-\s]+before[-\s]+fan[-\s]?out\b/i,
 ];
 
 const APPROVED_NEGATIONS = [
@@ -431,6 +436,14 @@ function validateAssets(rootDir, errors) {
   }
 }
 
+function validateUnsupportedClaims(text, rel, errors) {
+  let safeText = text;
+  for (const phrase of APPROVED_NEGATIONS) safeText = safeText.replaceAll(phrase, '');
+  for (const pattern of UNSUPPORTED_CLAIMS) {
+    if (pattern.test(safeText)) addError(errors, `${rel} contains unsupported claim: ${pattern}`);
+  }
+}
+
 function validatePublicText(rootDir, errors) {
   const pages = EXPECTED_PAGES.map((page) => findPagePath(rootDir, page)).filter(Boolean);
   for (const path of pages) {
@@ -438,9 +451,7 @@ function validatePublicText(rootDir, errors) {
     const text = readFileSync(path, 'utf8');
     for (const pattern of FORBIDDEN_PATHS) if (pattern.test(text)) addError(errors, `${rel} contains forbidden private path pattern: ${pattern}`);
     for (const pattern of SECRET_PATTERNS) if (pattern.test(text)) addError(errors, `${rel} contains a secret assignment or token prefix`);
-    let safeText = text;
-    for (const phrase of APPROVED_NEGATIONS) safeText = safeText.replaceAll(phrase, '');
-    for (const pattern of UNSUPPORTED_CLAIMS) if (pattern.test(safeText)) addError(errors, `${rel} contains unsupported claim: ${pattern}`);
+    validateUnsupportedClaims(text, rel, errors);
     PUBLIC_CLI_SEMVER.lastIndex = 0;
     if (PUBLIC_CLI_SEMVER.test(text)) addError(errors, `${rel} contains a hard-coded Stet CLI semver token`);
     if (PROMPT_PAGES.has(rel.replace(/\.(?:md|mdx)$/i, ''))) validatePromptFences(text, rel, errors);
@@ -498,6 +509,7 @@ function validateChangedFallbacks(rootDir, errors, options) {
     for (const phrase of PUBLIC_COLLATERAL_REQUIREMENTS[file]) {
       if (!text.includes(phrase)) addError(errors, `${file} is missing required public content: ${phrase}`);
     }
+    validateUnsupportedClaims(text, file, errors);
     PUBLIC_CLI_SEMVER.lastIndex = 0;
     if (PUBLIC_CLI_SEMVER.test(text)) addError(errors, `${file} contains a hard-coded Stet CLI semver token`);
   }

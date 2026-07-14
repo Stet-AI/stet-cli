@@ -44,6 +44,10 @@ If you have not installed Stet yet, start with [README.md](README.md).
 
 Recommendations for the first build:
 
+- Do not start unfamiliar-repo onboarding with a repository-wide verifier such
+  as `bazel test //...`, unfiltered `pytest`, `go test ./...`, or a
+  workspace-wide test script. Ask your agent to pass a bounded package,
+  directory, project, or target command explicitly with `--test`.
 - If your repo's tests are awkward to run in Docker (large monorepos, Bazel or
   other hermetic build systems), use the worktree backend
   (`--harbor-backend worktree`): verification runs in local git worktrees
@@ -91,11 +95,21 @@ verifiers. If only a broad verifier exists, stop before the dataset build and
 propose bounded alternatives; do not broaden verification merely to increase
 yield.
 
-Use read-only subagents when available to sample merged PRs/commits and map
-important subsystems. Create or update the harness, run init/discover/build as
-needed, and wait for `build-summary.json`. Report ready count, skip reasons,
-verifier scope, skipped scope, representativeness, setup validation,
-confidence, and the next action. Stop before model evals.
+Use read-only subagents when available to sample merged PRs/commits, map
+important subsystems, and assess starter-slice representativeness. Integrate
+their findings yourself. If subagents are unavailable, do the same bounded
+sampling yourself and say so.
+
+Prefer a starter dataset that covers several important subsystems and a mix of
+features, fixes, refactors, infra/setup work, and tests. Create or update the
+harness and run init/discover/build as needed with conservative concurrency.
+If yield is low, widen or shift candidate history or add another bounded
+subsystem cohort; keep the approved verifier boundary fixed.
+
+Run the dataset build in the foreground and wait for `build-summary.json`.
+Report ready count, skip-reason distribution, verifier scope, skipped scope,
+representativeness, setup validation, confidence, and the next action. Return
+the onboarding receipt and stop before model evals.
 ```
 
 On large repos a dataset build can take one to two hours, and it is normal for
@@ -103,6 +117,12 @@ many candidate tasks to be rejected: Stet only keeps tasks whose test signal it
 can actually demonstrate, and each rejection has a receipt explaining why. A
 small first corpus is a legitimate day-one outcome; the onboarding receipt will
 say whether it is enough for the decision you want, or what to expand next.
+
+Keep the verifier boundary fixed while building the starter dataset. If yield
+is low, widen the commit window or add another bounded subsystem cohort. The
+current beta safety boundary is the original verifier command: an agent prompt
+cannot reliably intercept an internal fallback after the build has launched,
+so the command supplied to Stet must already be affordable.
 
 Your agent should inspect CI first. CI is more trustworthy than README prose for
 test setup
@@ -232,6 +252,8 @@ ship/no-ship claim.
 
 ## What not to do on day one
 
+- Do not launch repository-wide verification during unfamiliar-repo onboarding
+  without explicit approval.
 - Do not start with a 50+ task dataset unless you are deliberately doing heavy
   dataset onboarding.
 - Do not compare many models at once.

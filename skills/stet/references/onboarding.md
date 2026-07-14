@@ -60,14 +60,15 @@ rules, or selector internals before Stet can do useful work.
   Ask the operator about product-area weighting only when they request a
   reusable production dataset or the inferred slice would be misleading.
 - Before task building, choose the narrowest credible bounded verifier from CI
-  and pass it explicitly with `--test` to the init/build flow. Read CI first;
-  examples such as
-  `bazel test //...`, an unfiltered `pytest`, `go test ./...`, or a
-  workspace-wide script are broad, not bounded. If only a broad verifier is
-  available, stop before build and propose bounded alternatives; do not broaden
-  verification merely to increase yield. Record verifier scope and skipped
-  scope in the receipt. Validate one representative task when possible, then
-  expand only when the bounded slice needs more coverage.
+  and pass it explicitly with `--test` to the init/build flow. The verifier
+  should be affordable to run repeatedly. A bounded package, directory,
+  project, or target command is appropriate; `bazel test //...`, unfiltered
+  `pytest`, `go test ./...`, and workspace-wide scripts are broad. If no
+  bounded verifier is credible, stop before build and ask the operator to
+  approve an alternative. Do not broaden verification merely to increase
+  yield. Record verifier scope and skipped scope in the receipt. If yield is
+  low, widen or shift candidate history or use another bounded subsystem cohort
+  while keeping the approved verifier fixed.
 - If discovery, build, probe, or config-diff returns zero ready tasks, or fewer
   than 10 retained ready tasks for AGENTS.md/CLAUDE.md, continue setup: follow
   `next_command`, widen or shift `--rev-range`, use `--allow-no-test-changes`
@@ -112,9 +113,9 @@ For most repos, the quick path is enough:
 # 2. Resolve test setup from CI evidence
 #    Read GitHub Actions, GitLab CI, or equivalent repo CI config, then
 #    Makefile, package.json scripts, README.
-#    Pick the narrowest credible bounded verifier from CI. CI is ground truth,
-#    not README. If only a repo-wide verifier exists, stop before build and
-#    propose bounded alternatives.
+#    Pick the narrowest credible bounded verifier. CI is ground truth, not
+#    README. Pass it explicitly with --test. If only a repository-wide command
+#    is available, stop before build and propose alternatives for approval.
 
 # 3. Author the Harbor environment
 #    Write .stet/harbor.Dockerfile for this repo and reference it from
@@ -146,14 +147,31 @@ stet suite discover --repo . --rev-range main~200..main --limit 200 --target-pas
 
 # 7. Build dataset
 stet suite build --repo . --manifest .stet/discover-manifest.yaml --test "<bounded verifier>" --workers 2
+#    When Stet must synthesize install_config, --setup-agent auto releases the
+#    same configured AI provider into a disposable copy of the historical
+#    snapshot under .stet/setup-sessions and asks it for schema-constrained
+#    setup JSON. The agent may modify that copy, never the authoritative checkout.
+#    Use --setup-agent none for the legacy
+#    prompt-only fallback, or codex|claude|cursor to choose explicitly. Default
+#    auto also preserves legacy synthesis for a custom --ai-cmd wrapper whose
+#    provider cannot be identified; explicit/configured auto fails closed. The
+#    agent only proposes: Stet pins configured tests and validates every root,
+#    command, evidence digest, environment fingerprint, and gold result.
 #    Requires Docker by default. Add --harbor-backend worktree to verify
 #    base-fail/gold-pass in local git worktrees from --repo instead — no
-#    Docker daemon needed; the built dataset is still Docker-portable.
+#    Docker daemon needed. Worktree-built tasks are explicitly worktree-only:
+#    Docker validation and Harbor export refuse them. Use Docker for portable output.
 #    Build is complete only when the dataset root has build-summary.json.
+#    Interrupting suite build cancels active verifier subprocesses; the output
+#    remains partial until a terminal build summary exists.
 #    During onboarding, if task directories exist but build-summary.json is
 #    missing, treat the dataset as partial/interrupted setup output. Rerun
 #    `suite build --restart` or use a fresh --out; do not create a rules suite
 #    from those directories.
+#    If an interrupted manifest build contains only accepted task directories,
+#    use `--resume` to validate and keep them while building the remaining
+#    tasks. It refuses rejected or mismatched evidence; use `--retry-rejected`
+#    or `--restart` for those cases.
 
 # 8. Validate setup with one cheap local replay/test smoke when available
 #    Confirm at least one representative task can execute in Docker before
