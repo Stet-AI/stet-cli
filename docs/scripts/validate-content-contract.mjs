@@ -51,7 +51,7 @@ export const PUBLIC_COLLATERAL_REQUIREMENTS = {
 };
 
 const EXPECTED_DOCS_REVIEW = {
-  content_base_commit: 'b605fbeb8ef46044a0c7df161b38fc964e547d95',
+  content_base_commit: '7a6fa80657d7c06ea32453bf6b7a4c2c4dea17bb',
   reviewed_at: '2026-07-14',
 };
 
