@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.10.0-rc.4] - 2026-07-14
+
+This candidate makes dataset builds safer to operate by bounding temporary work
+and cache lifecycles to Stet-owned roots while preserving intentional Go module
+cache reuse. It also makes runtime fingerprints authoritative and fail closed
+on ambiguous standard probes so trial evidence stays trustworthy across
+platforms.
+
+### Fixed
+- Bound worktree-agent, verifier, and scratch/cache lifecycles to Stet-owned roots with fail-closed admission and cleanup receipts that distinguish logical deletion, allocated blocks, and observed filesystem recovery while preserving `GOMODCACHE` reuse ([f5411acf], [696cfbd5])
+- Stabilize runtime fingerprints with authoritative versions and normalized Windows executable paths; fail closed on missing or ambiguous standard probes while preserving custom diagnostics ([c78bfa22])
+
+[v0.10.0-rc.4]: https://github.com/Stet-AI/stet/compare/v0.10.0-rc.3...v0.10.0-rc.4
+[f5411acf]: https://github.com/Stet-AI/stet/commit/f5411acfe4c9390d8568c8570601a655431c325f
+[696cfbd5]: https://github.com/Stet-AI/stet/commit/696cfbd58ff28f8f048ec3aea0218c9c7b2afec5
+[c78bfa22]: https://github.com/Stet-AI/stet/commit/c78bfa2217e19875461c794bfa20caf938ef31a3
+
 ## [v0.10.0-rc.3] - 2026-07-14
 
 ### Internal
