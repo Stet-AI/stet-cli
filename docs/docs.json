@@ -1,0 +1,36 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Stet",
+  "description": "Change control for AI coding agents.",
+  "theme": "willow",
+  "colors": {
+    "primary": "#df3328",
+    "light": "#e8352a",
+    "dark": "#df3328"
+  },
+  "appearance": {
+    "default": "dark",
+    "strict": false
+  },
+  "logo": {
+    "light": "/assets/stet-mark.svg",
+    "dark": "/assets/stet-mark.svg"
+  },
+  "favicon": "/assets/stet-mark.svg",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Stet",
+        "pages": [
+          "index",
+          "quickstart",
+          "workflows",
+          "concepts/how-stet-works",
+          "concepts/trial-result",
+          "prompts",
+          "troubleshooting"
+        ]
+      }
+    ]
+  }
+}

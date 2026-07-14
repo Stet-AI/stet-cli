@@ -1,0 +1,63 @@
+---
+title: How Stet works
+sidebarTitle: How Stet works
+description: From accepted repository work to a scoped Trial Result
+---
+
+Stet is a measurement function for AI coding behavior. The coding agent makes a
+bounded change; Stet evaluates that change against replayable repository work
+and records what the evidence supports.
+
+![The Stet evaluation loop: real merged work becomes replayable tasks, baseline and candidate are evaluated with tests and graders, and a Trial Result returns a bounded decision.](/assets/stet-loop.svg)
+
+## 1. Accepted work becomes a task corpus
+
+Stet starts from real merged repository work rather than synthetic benchmark
+prompts. Each selected task keeps:
+
+- the repository snapshot before the change;
+- a prompt describing the work;
+- the tests or validation signal that judged success; and
+- the original shipped change hidden from the agent under test.
+
+The retained slice is a declared part of the evidence. Your agent should inspect
+CI and history, ask what work matters, and explain coverage and gaps before a
+large evaluation.
+
+## 2. Replay holds the world steady
+
+For the default path, Stet launches an isolated container with the task snapshot
+and prompt. The agent can inspect files, edit code, and run commands as usual,
+but it does not see the hidden gold patch or hidden judging tests. Supported local
+runs can use an explicitly selected worktree backend; that is still a local mode,
+not Docker-equivalent isolation. Treat worktree-backed evidence as inspect-only
+by default. It should support a decision only when the Trial Result explicitly
+says that the evidence is decision-grade; use Docker-backed replay otherwise.
+
+## 3. Baseline and candidate are matched
+
+Stet declares the behavior being tested and runs a baseline and candidate against
+the same task slice. Keep unrelated model, instruction, tool, and environment
+settings stable when the goal is to attribute an observed difference to one
+lever.
+
+The coding agent proposes and applies the change. Stet is the evaluator: it
+applies the produced patch, runs the declared checks, and records evidence.
+
+## 4. Tests come first; graders add quality
+
+Tests provide correctness signal. Graders can then assess dimensions such as
+equivalence, clarity, simplicity, coherence, intentionality, robustness,
+instruction adherence, scope discipline, and diff minimality. A patch can pass
+tests and still be broader or harder to review than the task called for.
+
+The grader model may be separate from the model under test. What matters is that
+the rubric and coverage are declared and that missing or failed grader evidence
+stays visible.
+
+## 5. Stet writes a Trial Result
+
+The result names the task corpus, treatments, tests and graders, per-dimension
+observations, evidence quality, lifecycle posture, and next action. Read those
+fields together on [Read a Trial Result](/concepts/trial-result); a single score
+is not the decision.

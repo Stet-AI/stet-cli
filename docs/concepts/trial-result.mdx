@@ -1,0 +1,52 @@
+---
+title: Read a Trial Result
+sidebarTitle: Read a Trial Result
+description: Interpret recommendation, evidence quality, and the next action
+---
+
+A Trial Result is the canonical decision artifact for one declared comparison.
+It tells you what was tested, how much evidence exists, and what action that
+evidence supports. Do not reconstruct the verdict from a pass rate alone.
+
+## Read the decision first
+
+The lifecycle recommendation is one of:
+
+- **promote** — the evidence supports keeping the candidate for the declared
+  change, corpus, and harness;
+- **hold** — the evidence does not support promotion; or
+- **inspect** — the result is useful for diagnosis or iteration but is not strong
+  enough for a rollout decision.
+
+The recommendation is scoped. It is not a universal model ranking or a promise
+that the same change will behave identically on another repository.
+
+## Then check the evidence
+
+Read these fields before acting:
+
+| Field | Question it answers |
+| --- | --- |
+| Decision and confidence | What action is proposed, and how strongly? |
+| Evidence quality | Is the evidence fresh, complete, and suitable for the decision? |
+| Validity | Did replay and verification execute as intended? |
+| Task coverage | How many declared tasks and arm-task signals were usable? |
+| Grader coverage | Which declared quality graders actually ran and parsed? |
+| Uncertainty | What variability or limitation remains visible? |
+| Next action | What bounded step should happen now? |
+
+Missing, stale, partial, under-graded, or replay-invalid evidence should fail
+closed. That is a reason to repair the evidence or narrow the claim, not a reason
+to infer readiness from a favorable number.
+
+## Decide what to do
+
+1. Confirm the result is for the intended change and task slice.
+2. Check validity, task coverage, and grader coverage.
+3. Read correctness, quality dimensions, cost, uncertainty, and residual risk
+   separately.
+4. Follow the recorded next action: promote, hold, inspect, repair, or run one
+   bounded follow-up.
+
+For a small or directional run, keep the label directional. For a gateable
+decision, use matched runs and the complete declared evidence contract.

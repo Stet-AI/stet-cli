@@ -59,17 +59,15 @@ rules, or selector internals before Stet can do useful work.
 - Infer the first starter slice from CI, repo history, and recent product work.
   Ask the operator about product-area weighting only when they request a
   reusable production dataset or the inferred slice would be misleading.
-- Choose the real test command from CI evidence, write starter Stet config,
-  discover/build the dataset, and validate at least one representative replay
-  when possible.
-- Before parallel task building, rank test-bearing publish candidates first
-  and prove one representative gold canary end to end. Repair a shared
-  environment failure before widening the build; when the environment is
-  valid but the oracle is unsuitable, try at most two more canary candidates.
-  Only fan out after one canary proves gold, and stop adding work once the
-  requested retained ready-task floor is met. For manifest-backed instruction
-  onboarding, run `stet suite build ... --target-ready 10`; this canary/floor
-  controller is implemented for manifest mode, not rev-range builds.
+- Before task building, choose the narrowest credible bounded verifier from CI
+  and pass it explicitly with `--test` to the init/build flow. Read CI first;
+  examples such as
+  `bazel test //...`, an unfiltered `pytest`, `go test ./...`, or a
+  workspace-wide script are broad, not bounded. If only a broad verifier is
+  available, stop before build and propose bounded alternatives; do not broaden
+  verification merely to increase yield. Record verifier scope and skipped
+  scope in the receipt. Validate one representative task when possible, then
+  expand only when the bounded slice needs more coverage.
 - If discovery, build, probe, or config-diff returns zero ready tasks, or fewer
   than 10 retained ready tasks for AGENTS.md/CLAUDE.md, continue setup: follow
   `next_command`, widen or shift `--rev-range`, use `--allow-no-test-changes`
@@ -114,7 +112,9 @@ For most repos, the quick path is enough:
 # 2. Resolve test setup from CI evidence
 #    Read GitHub Actions, GitLab CI, or equivalent repo CI config, then
 #    Makefile, package.json scripts, README.
-#    Pick the real repo-level test command. CI is ground truth, not README.
+#    Pick the narrowest credible bounded verifier from CI. CI is ground truth,
+#    not README. If only a repo-wide verifier exists, stop before build and
+#    propose bounded alternatives.
 
 # 3. Author the Harbor environment
 #    Write .stet/harbor.Dockerfile for this repo and reference it from
@@ -130,7 +130,7 @@ For most repos, the quick path is enough:
 #    quality graders. Use standard/custom/no-quality only when explicitly
 #    requested; generic non-instruction setup may clarify ambiguous grader
 #    settings.
-stet init --repo . --yes --ai-provider <codex|claude|gemini|cursor> --quality recommended --test "<repo test cmd>"
+stet init --repo . --yes --ai-provider <codex|claude|gemini|cursor> --quality recommended --test "<bounded verifier>"
 
 # 6. Mine candidate pool
 stet suite discover --repo . --rev-range main~200..main --limit 200 --target-pass 25
@@ -145,7 +145,7 @@ stet suite discover --repo . --rev-range main~200..main --limit 200 --target-pas
 #    auto-clamps to all reachable history (prints a NOTE) instead of erroring.
 
 # 7. Build dataset
-stet suite build --repo . --manifest .stet/discover-manifest.yaml
+stet suite build --repo . --manifest .stet/discover-manifest.yaml --test "<bounded verifier>" --workers 2
 #    Requires Docker by default. Add --harbor-backend worktree to verify
 #    base-fail/gold-pass in local git worktrees from --repo instead — no
 #    Docker daemon needed; the built dataset is still Docker-portable.
@@ -241,9 +241,10 @@ Test-setup rules:
   > package.json scripts > README (lowest trust).
 - Avoid placeholder commands (`echo`, `true`, lint-only, build-only).
 - For monorepos or build-system-driven repos, preserve the real CI runner and
-  repo-level flags, then prefer one broad positive target pattern that Stet can
-  narrow or keep broad. Do not substitute a package-manager install or test
-  command merely because a leaf package file exists.
+  repo-level flags, then narrow verification to a credible package, directory,
+  project, or target. Do not substitute a package-manager install or test
+  command merely because a leaf package file exists. If narrowing is impossible,
+  stop before build and ask for approval to use the repo-wide verifier.
 - `stet init` writes `.stet/stet.harness.yaml` and `.stet/harbor.Dockerfile`
   when they are missing. Treat the generated harness as starter setup only. It
   does not choose or pin repo runtime versions. Read CI plus repo runtime files

@@ -1,0 +1,122 @@
+---
+title: Prompt cookbook
+sidebarTitle: Prompt cookbook
+description: Copy-paste prompts for common Stet workflows
+---
+
+These prompts keep the agent in charge of choosing the right Stet surface. Use
+[Choose a workflow](/workflows) for the evidence expectation behind each one.
+
+## Primary workflows
+
+Use the matching workflow page for the evidence expectation and decision
+boundary. These are the four core prompts.
+
+### AGENTS.md A/B test
+
+```text wrap
+Use the Stet skill to A/B test my proposed AGENTS.md change. Keep the model
+fixed, plan before launch, and return the canonical Trial Result with its
+recommendation, evidence limitations, and next action.
+```
+
+See [Is my AGENTS.md change helping?](/workflows#agents-md-ab).
+
+### Iterative AGENTS.md improvement
+
+```text wrap
+Use the Stet skill to improve AGENTS.md within a bounded search space and stop
+rule. Test one change at a time and ask before using holdout evidence or
+promoting a finalist.
+```
+
+See [Improve my AGENTS.md](/workflows#iterative-instruction-improvement).
+
+### Skill evaluation
+
+```text wrap
+Use the Stet skill to test whether this repo-managed skill helps. Plan before
+launch, use the right baseline, and report promote, hold, or inspect.
+```
+
+See [Is this skill helping?](/workflows#skill-evaluation).
+
+### Model or reasoning comparison
+
+```text wrap
+Use the Stet skill to compare these configurations on the same repository
+tasks. First ask whether I want a cheap diagnostic read or a gateable rollout
+decision. Keep diagnostic evidence labeled directional; for a gateable choice,
+use matched runs and return the canonical Trial Result.
+```
+
+See [Which model or reasoning effort should I use?](/workflows#model-reasoning-comparison).
+
+## Onboard a repository
+
+```text wrap
+Use the Stet skill. Onboard this repo for Stet evals. Ask what work I want
+Stet to track, read CI first, and choose the real test command. Inspect merged
+PRs/commits for representative work (use read-only subagents for this
+investigation when available), create the Harbor setup, and build a
+representative starter dataset. Choose and pass the narrowest credible bounded
+verifier to `stet suite build` with `--test` (alongside the manifest and a
+bounded `--workers` value). Treat `bazel test //...`, unfiltered `pytest`,
+`go test ./...`, and workspace-wide scripts as broad; do not launch one without
+my explicit approval. If no credible bounded verifier exists, stop before
+building and propose alternatives. Do not broaden merely to increase yield.
+Report scope, skipped tasks and reasons, then stop before any model eval. Treat
+Docker or replay checks as setup validation, not a model eval.
+Wait for `build-summary.json` before treating the build as complete, then return
+the onboarding receipt with the selected slice, scope, skips, and confidence.
+```
+
+By default, `stet suite build` may use model-assisted `install_config`
+synthesis to improve verifier fidelity. If this onboarding must spend no model
+calls, add `--llm-install-config=false` to the suite-build step and state in the
+receipt that the no-model path can produce lower-fidelity broad verifiers.
+
+## Expand one bounded slice
+
+```text wrap
+Use the Stet skill. Expand the existing onboarding slice by one bounded
+subsystem or task family. Read the current receipt first, preserve its test
+command with an explicit `--test`, and explain the expected coverage gain.
+Use read-only investigation where useful; do not broaden just to increase
+yield. Stop before building if no narrow verifier is credible, and propose
+alternatives. Report added scope and skips, then stop before any model eval.
+```
+
+## Check setup without evaluating
+
+```text wrap
+Use the Stet skill. Check whether this repo is ready for Stet. Inspect CI,
+build files, test commands, Docker assumptions, and model-provider auth. Report
+blockers before editing files or launching evals.
+```
+
+## Read the current result
+
+```text wrap
+Use the Stet skill. Read the current Stet result from status/report surfaces.
+Tell me the recommendation, confidence, evidence quality, grader coverage,
+task coverage, next action, and residual risk. Do not reconstruct the verdict
+from pass rate alone.
+```
+
+## Recover a stalled run
+
+```text wrap
+Use the Stet skill. Check the current Stet run. Use status/report surfaces
+only, tell me whether it is running, stalled, exited, repairable, or complete,
+and give the exact next command.
+```
+
+## Keep the loop bounded
+
+```text wrap
+Use the Stet skill. Keep the workflow bounded. Read status/report artifacts as
+the source of truth, change one lever at a time, treat inspect as a diagnostic
+state, and ask before launching expensive evals or discarding existing
+evidence.
+```
