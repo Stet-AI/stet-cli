@@ -11,8 +11,9 @@ an `AGENTS.md` change, shared skill, model, or reasoning setting improves agent
 behavior before rollout. The coding agent proposes and applies changes; Stet
 measures the result against matched repository work and gates scoped promotion.
 
-[Get started](BETA_QUICKSTART.md) · [Quickstart source](docs/quickstart.mdx) ·
-[Understand the workflow](docs/workflows.mdx)
+[Read the docs](https://docs.stet.sh/) ·
+[Get started](https://docs.stet.sh/quickstart) ·
+[See an example result](#example-trial-result)
 
 ## What do you want to improve?
 
@@ -165,11 +166,12 @@ telemetry opt-out. Stet does not claim a universal network sandbox.
 
 ## Learn more
 
-- [Beta quickstart](BETA_QUICKSTART.md) · [source](docs/quickstart.mdx)
-- [Prompt cookbook](PROMPT_COOKBOOK.md) · [source](docs/prompts.mdx)
-- [How Stet works](docs/concepts/how-stet-works.mdx)
-- [Workflows](docs/workflows.mdx)
-- [Troubleshooting](TROUBLESHOOTING.md)
+- [Documentation](https://docs.stet.sh/)
+- [Beta quickstart](https://docs.stet.sh/quickstart) · [repository fallback](BETA_QUICKSTART.md)
+- [Prompt cookbook](https://docs.stet.sh/prompts) · [repository fallback](PROMPT_COOKBOOK.md)
+- [How Stet works](https://docs.stet.sh/concepts/how-stet-works)
+- [Workflows](https://docs.stet.sh/workflows)
+- [Troubleshooting](https://docs.stet.sh/troubleshooting) · [repository fallback](TROUBLESHOOTING.md)
 
 The install script and agent skill are available under the [MIT License](LICENSE).
 The distributed Stet binary is governed by the [Stet Binary Terms](TERMS.md).
