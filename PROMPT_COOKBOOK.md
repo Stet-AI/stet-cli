@@ -21,7 +21,11 @@ Use the Stet skill. Docker is intentionally unavailable for this check. Use the 
 ## Repo onboarding
 
 ```text
-Use the Stet skill. Onboard this repo for Stet evals. First ask what product areas, PR types, and difficulty mix I want Stet to track. Read CI and package/build files, choose the real repo-level test command, then use read-only subagents when available to sample merged PRs/commits and map where representative work happens in the repo. Create the Harbor Dockerfile and harness manifest with the CI dependencies needed for those tasks, run Stet init/discover/build, run the smallest local replay or test smoke needed to confirm one representative task can execute in Docker, and report the onboarding receipt. Stop before launching model smoke, probe, or rules evals.
+Use the Stet skill. Onboard this repo for Stet evals. First ask what product areas, PR types, and difficulty mix I want Stet to track. Read CI, documentation, package/build files, and build graphs. Identify the narrowest credible verifier that is affordable to run repeatedly, and pass it explicitly with `--test`. Treat `bazel test //...`, unfiltered `pytest`, `go test ./...`, and workspace-wide test scripts as broad. If no credible bounded verifier exists, stop before `stet suite build` and report the broad command you withheld plus two or three bounded alternatives for my approval. Use read-only subagents when available to sample merged PRs/commits and map where representative work happens. Create the Harbor Dockerfile and harness manifest, then use a manifest-backed build with `--target-ready 20` and conservative concurrency. Let Stet prove one canary before fan-out. Do not broaden the verifier merely to increase task yield. Wait for `build-summary.json`, report the onboarding receipt, and stop before model smoke, probe, or rules evals.
+```
+
+```text
+Use the Stet skill. Expand this bounded onboarding slice toward 20 ready tasks. Keep the approved verifier boundary fixed and use manifest-backed `--target-ready 20`; the first retained task is the canary gate before fan-out. If yield is low, widen or shift the candidate history or propose another bounded subsystem cohort. Do not switch to a repository-wide verifier without my explicit approval. Report ready count, skipped-candidate reasons, verifier scope, subsystem coverage, and whether the resulting slice is representative enough for the intended decision.
 ```
 
 ```text
@@ -29,7 +33,7 @@ Use the Stet skill. Read the Stet onboarding receipt. Summarize the candidate-ta
 ```
 
 ```text
-Use the Stet skill. The onboarding confidence is low. Diagnose whether the blocker is test setup, Docker/Harbor setup, weak task history, path-sensitive tests, or task selection. Propose the smallest fix before running more Stet work.
+Use the Stet skill. The onboarding confidence is low. Diagnose whether the blocker is test setup, Docker/Harbor setup, weak task history, path-sensitive tests, verifier scope, or task selection. Propose the smallest fix before running more Stet work. Do not increase yield by switching to an unapproved repository-wide verifier.
 ```
 
 ## First evaluation
@@ -125,5 +129,5 @@ Use the Stet skill. Evaluate this research or plan artifact with Stet. Choose or
 ## Good default instruction to your agent
 
 ```text
-Use the Stet skill. Keep the workflow bounded. Read status/report artifacts as the source of truth, change one lever at a time, treat inspect as a diagnostic state, and ask before launching expensive evals or discarding existing evidence.
+Use the Stet skill. Keep the workflow bounded. During unfamiliar-repo onboarding, never launch a repository-wide verifier without explicit approval. Read status/report artifacts as the source of truth, change one lever at a time, treat inspect as a diagnostic state, and ask before launching expensive evals or discarding existing evidence.
 ```

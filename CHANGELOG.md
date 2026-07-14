@@ -6,6 +6,81 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.10.0-rc.3] - 2026-07-14
+
+### Internal
+- Provision pinned pytest in fresh GitHub Actions release runners so release-surface checks execute before publication ([d1ced74c])
+
+[v0.10.0-rc.3]: https://github.com/Stet-AI/stet/compare/v0.10.0-rc.2...v0.10.0-rc.3
+[d1ced74c]: https://github.com/Stet-AI/stet/commit/d1ced74c43e98561061a5a845d5fd55381aaa830
+
+## [v0.10.0-rc.2] - 2026-07-14
+
+This candidate adds cost-aware GPT-5.6 model support, headless setup sessions, and reusable reference-build inputs. It also makes artifact storage and execution authority more explicit so operators can bound disk use and keep task evidence tied to the correct sources.
+
+### Added
+- Add GPT-5.6 Sol, Terra, and Luna model pricing and resolution support ([ed5e05de])
+- Add immutable portable source packs and reference-source build modes for rev-range and base/head task generation, with safe harness consumption ([7e1457fd], [0dce6f34], [553a6369], [f60d42f8], [82587cfb], [b421a5a5], [567d31a7])
+- Add headless setup sessions for resumable environment preparation and verification ([b34802f0])
+- Add raw replay archive and restore, lifecycle-safe source migration, dependency-aware retirement previews, budgeted admission, and bounded Harbor export caches ([c3720570], [311ec823], [5663da83], [8287ed54], [74a222fb], [7e7c73de], [f8b3af75])
+
+### Changed
+- Share Git authorities, portable source packs, and Harbor base images across manifest tasks to reduce repeated setup work ([bc84292c], [0de53704], [9c2f4109], [4905d484])
+- Account for managed bytes across roots and report unique-base storage exposure for admission planning ([942f2996], [c46bee0a])
+- Reconcile storage budgets before retiring replay artifacts and apply dependency-aware retirement semantics ([c7c07574], [74a222fb], [27767fbe])
+
+### Fixed
+- Bind task snapshots and resumed tasks to repository source authority while preserving tracked files and pinned submodule contents ([311620a4], [a3fb4463], [70107871], [2892dead])
+- Isolate Bazel output roots, verifier caches, query environments, target selection, and pinned-Docker uv caches across worktree stages ([1bc611cb], [eeccee5e], [b4b8ff4c], [26747989], [1cd5e17b], [0e6d2f86])
+- Run install recipes from task snapshots and resolve provider binaries, Dockerfiles, and runtime versions from authoritative sources ([3a72cdc7], [c5994be1], [e70a06ad], [05955b43], [444b476e], [a0a6eaed])
+- Preserve logical output paths, make interrupted verifier cleanup atomic, cancel verifier groups on interrupt, and refuse unsafe source-overlay growth ([542c0ed4], [d1330b10], [280d28bb], [588233ee])
+
+[v0.10.0-rc.2]: https://github.com/Stet-AI/stet/compare/v0.10.0-rc.1...v0.10.0-rc.2
+[ed5e05de]: https://github.com/Stet-AI/stet/commit/ed5e05dee0412b64cc43b650478a38504dcf2a09
+[7e1457fd]: https://github.com/Stet-AI/stet/commit/7e1457fd9096f18eae8cbe3e1ba0f41dfa6de4eb
+[0dce6f34]: https://github.com/Stet-AI/stet/commit/0dce6f3420cf6425b0fc5e3a6e52c6e5f845bdcb
+[553a6369]: https://github.com/Stet-AI/stet/commit/553a636983a6004773a5b5f59ad048eb3aca598d
+[f60d42f8]: https://github.com/Stet-AI/stet/commit/f60d42f82ddcb1c686517465289f3cbb9fb12df1
+[82587cfb]: https://github.com/Stet-AI/stet/commit/82587cfba5d83eda4b2f24085c9ef4a4770557f5
+[b421a5a5]: https://github.com/Stet-AI/stet/commit/b421a5a5ab0ade2d402f07c6bb6e013f9f59996b
+[567d31a7]: https://github.com/Stet-AI/stet/commit/567d31a7f2ce4f171dd11a3fc666b1c687812a3b
+[b34802f0]: https://github.com/Stet-AI/stet/commit/b34802f092489cc30204afcc5b1462cd4a1bb355
+[c3720570]: https://github.com/Stet-AI/stet/commit/c37205709449f7cd6dec4f71c26d62762bc72ab8
+[311ec823]: https://github.com/Stet-AI/stet/commit/311ec823cdc24019d2f605766935a2821c756bdd
+[8287ed54]: https://github.com/Stet-AI/stet/commit/8287ed543adf10d1e4cc6d29cbd5f8cad46e31d2
+[74a222fb]: https://github.com/Stet-AI/stet/commit/74a222fb7ef46a9c6041d49ed9bd4d393c20651c
+[7e7c73de]: https://github.com/Stet-AI/stet/commit/7e7c73def638dd63dbffee2311df89686eb290de
+[f8b3af75]: https://github.com/Stet-AI/stet/commit/f8b3af75866849b1cdfc634236a43513b36fc68e
+[5663da83]: https://github.com/Stet-AI/stet/commit/5663da8304fbaa4e40bf85671866a8ba2a256eba
+[bc84292c]: https://github.com/Stet-AI/stet/commit/bc84292c1b89adc29cd6d7f408a16294dbaf7ae3
+[0de53704]: https://github.com/Stet-AI/stet/commit/0de537044e267a66bbd406636656e8fb1d119ae6
+[9c2f4109]: https://github.com/Stet-AI/stet/commit/9c2f4109d2a8c60b1fd76442ef48c4b0e840711d
+[4905d484]: https://github.com/Stet-AI/stet/commit/4905d4843f4b9169118b79c2a3e657f3830b6c0d
+[942f2996]: https://github.com/Stet-AI/stet/commit/942f2996a624ca9b60031de43ba68e7a5a9747a0
+[c46bee0a]: https://github.com/Stet-AI/stet/commit/c46bee0a3c4835174c3daec516de8ff4bfb96ed6
+[c7c07574]: https://github.com/Stet-AI/stet/commit/c7c07574ab11dae460e0d3ec0d4b52e1c46edd0c
+[27767fbe]: https://github.com/Stet-AI/stet/commit/27767fbefa904e69419295a776032464d95ee8d7
+[311620a4]: https://github.com/Stet-AI/stet/commit/311620a4d4f3e499028b7624869b0cce42ee6c76
+[a3fb4463]: https://github.com/Stet-AI/stet/commit/a3fb446384f4fd2646d87648aa1fa61057edd1e9
+[70107871]: https://github.com/Stet-AI/stet/commit/7010787132751d98e8f82e9673602c309e25cd48
+[2892dead]: https://github.com/Stet-AI/stet/commit/2892dead20df58b0f698cd62bab28402d907df48
+[1bc611cb]: https://github.com/Stet-AI/stet/commit/1bc611cbbfccdb307fe59517086d9ac9f1cb209b
+[eeccee5e]: https://github.com/Stet-AI/stet/commit/eeccee5ec8edb229c9554d42bca91f21276eede4
+[b4b8ff4c]: https://github.com/Stet-AI/stet/commit/b4b8ff4c1f53c603cdcc4998ac758953d775cd59
+[26747989]: https://github.com/Stet-AI/stet/commit/26747989e783005460abada726231b4117b16d9e
+[1cd5e17b]: https://github.com/Stet-AI/stet/commit/1cd5e17ba7473142dde68b294149e01ea302a7a9
+[0e6d2f86]: https://github.com/Stet-AI/stet/commit/0e6d2f86a66bef16a54b3f073eb83e0d3ea6ef4e
+[3a72cdc7]: https://github.com/Stet-AI/stet/commit/3a72cdc7f8657c752fd02444d598230552065a2d
+[c5994be1]: https://github.com/Stet-AI/stet/commit/c5994be14a33f00fa64a9b922682ed07835ba118
+[e70a06ad]: https://github.com/Stet-AI/stet/commit/e70a06ad9f2b46167b052e838d863d3452e60c7e
+[05955b43]: https://github.com/Stet-AI/stet/commit/05955b43be63e5d91386d02c56eeee1aa3f90aa7
+[444b476e]: https://github.com/Stet-AI/stet/commit/444b476e0c3787eaf3aa35fdad2a578fadfd6667
+[a0a6eaed]: https://github.com/Stet-AI/stet/commit/a0a6eaed55a7c2cc6fc4f7d2748e9037adf8d085
+[542c0ed4]: https://github.com/Stet-AI/stet/commit/542c0ed4a4004697c734c3022310a0acc53480f1
+[d1330b10]: https://github.com/Stet-AI/stet/commit/d1330b10793845b7a827ac9dfcedce4185fd049e
+[280d28bb]: https://github.com/Stet-AI/stet/commit/280d28bb57d7ade5caee4a74e7e60a58fe62c03c
+[588233ee]: https://github.com/Stet-AI/stet/commit/588233ee165d8eca053b5eae6b11cdb2984e956d
+
 ## [v0.10.0-rc.1] - 2026-07-11
 
 This candidate makes large Bazel-backed task corpora faster and more reliable by reusing per-task caches, failing fast on non-progressing flake loops, and preserving durable verifier evidence for repair. It also hardens task selection and gate parsing, isolates worktree agents from source-repo rules, and moves Stet's source and public CLI distribution to their org-owned repositories.

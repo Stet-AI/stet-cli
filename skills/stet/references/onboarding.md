@@ -59,17 +59,23 @@ rules, or selector internals before Stet can do useful work.
 - Infer the first starter slice from CI, repo history, and recent product work.
   Ask the operator about product-area weighting only when they request a
   reusable production dataset or the inferred slice would be misleading.
-- Choose the real test command from CI evidence, write starter Stet config,
-  discover/build the dataset, and validate at least one representative replay
-  when possible.
+- Choose the narrowest credible verifier from CI evidence that is affordable to
+  run repeatedly. Pass the bounded package, directory, project, or target
+  command explicitly; do not begin unfamiliar-repo onboarding with a
+  repository-wide verifier. If no bounded verifier is credible, stop before
+  build and ask the operator to approve an alternative.
 - Before parallel task building, rank test-bearing publish candidates first
   and prove one representative gold canary end to end. Repair a shared
-  environment failure before widening the build; when the environment is
-  valid but the oracle is unsuitable, try at most two more canary candidates.
-  Only fan out after one canary proves gold, and stop adding work once the
-  requested retained ready-task floor is met. For manifest-backed instruction
-  onboarding, run `stet suite build ... --target-ready 10`; this canary/floor
-  controller is implemented for manifest mode, not rev-range builds.
+  environment failure once and fail fast if the repaired attempt is still
+  shared-failing; when the environment is
+  valid but the oracle is unsuitable, search the bounded starter pool (at
+  most `max(15, --target-ready)` ranked candidates). Only fan out after one
+  canary proves gold, and stop adding work once the requested retained
+  ready-task floor is met. For manifest-backed instruction onboarding, use a
+  10-20 task floor, for example `stet suite build ... --target-ready 20`; this
+  canary/floor controller is implemented for manifest mode, not rev-range
+  builds. If yield is low, widen or shift candidate history or use another
+  bounded subsystem cohort instead of silently widening the verifier.
 - If discovery, build, probe, or config-diff returns zero ready tasks, or fewer
   than 10 retained ready tasks for AGENTS.md/CLAUDE.md, continue setup: follow
   `next_command`, widen or shift `--rev-range`, use `--allow-no-test-changes`
@@ -114,7 +120,8 @@ For most repos, the quick path is enough:
 # 2. Resolve test setup from CI evidence
 #    Read GitHub Actions, GitLab CI, or equivalent repo CI config, then
 #    Makefile, package.json scripts, README.
-#    Pick the real repo-level test command. CI is ground truth, not README.
+#    Pick the narrowest credible bounded verifier. CI is ground truth, not
+#    README. Stop before build if only a repository-wide command is available.
 
 # 3. Author the Harbor environment
 #    Write .stet/harbor.Dockerfile for this repo and reference it from
@@ -146,14 +153,31 @@ stet suite discover --repo . --rev-range main~200..main --limit 200 --target-pas
 
 # 7. Build dataset
 stet suite build --repo . --manifest .stet/discover-manifest.yaml
+#    When Stet must synthesize install_config, --setup-agent auto releases the
+#    same configured AI provider into a disposable copy of the historical
+#    snapshot under .stet/setup-sessions and asks it for schema-constrained
+#    setup JSON. The agent may modify that copy, never the authoritative checkout.
+#    Use --setup-agent none for the legacy
+#    prompt-only fallback, or codex|claude|cursor to choose explicitly. Default
+#    auto also preserves legacy synthesis for a custom --ai-cmd wrapper whose
+#    provider cannot be identified; explicit/configured auto fails closed. The
+#    agent only proposes: Stet pins configured tests and validates every root,
+#    command, evidence digest, environment fingerprint, and gold result.
 #    Requires Docker by default. Add --harbor-backend worktree to verify
 #    base-fail/gold-pass in local git worktrees from --repo instead — no
-#    Docker daemon needed; the built dataset is still Docker-portable.
+#    Docker daemon needed. Worktree-built tasks are explicitly worktree-only:
+#    Docker validation and Harbor export refuse them. Use Docker for portable output.
 #    Build is complete only when the dataset root has build-summary.json.
+#    Interrupting suite build cancels active verifier subprocesses; the output
+#    remains partial until a terminal build summary exists.
 #    During onboarding, if task directories exist but build-summary.json is
 #    missing, treat the dataset as partial/interrupted setup output. Rerun
 #    `suite build --restart` or use a fresh --out; do not create a rules suite
 #    from those directories.
+#    If an interrupted manifest build contains only accepted task directories,
+#    use `--resume` to validate and keep them while building the remaining
+#    tasks. It refuses rejected or mismatched evidence; use `--retry-rejected`
+#    or `--restart` for those cases.
 
 # 8. Validate setup with one cheap local replay/test smoke when available
 #    Confirm at least one representative task can execute in Docker before

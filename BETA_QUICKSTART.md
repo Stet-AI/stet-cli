@@ -9,7 +9,8 @@ By the end of this session, your agent should have:
 
 1. Verified the Stet CLI, Stet auth, Docker/Harbor or an explicitly selected
    worktree backend, GitHub auth, and the Stet skill.
-2. Read your repo's CI and selected the real repo-level test command.
+2. Read your repo's CI and selected the narrowest credible verifier that is
+   affordable to run repeatedly.
 3. Created or reviewed the repo's Stet harness files.
 4. Built a representative starter dataset from real merged work.
 5. Verified enough Docker/test setup to trust the starter slice.
@@ -41,6 +42,10 @@ If you have not installed Stet yet, start with [README.md](README.md).
 
 Recommendations for the first build:
 
+- Do not start unfamiliar-repo onboarding with a repository-wide verifier such
+  as `bazel test //...`, unfiltered `pytest`, `go test ./...`, or a
+  workspace-wide test script. Ask your agent to pass a bounded package,
+  directory, project, or target command explicitly with `--test`.
 - If your repo's tests are awkward to run in Docker (large monorepos, Bazel or
   other hermetic build systems), use the worktree backend
   (`--harbor-backend worktree`): verification runs in local git worktrees
@@ -82,9 +87,13 @@ Your first and main priority is to build a high-quality representative starter d
 
 Use subagents when available to make this efficient: delegate independent read-only checks for CI/test setup, merged PR/commit sampling, important subsystems, and starter-slice representativeness. Integrate their findings yourself. If subagents are unavailable, do the same bounded sampling yourself and say so.
 
-Read CI and package/build files, choose the real repo-level test command, then sample merged PRs/commits to understand where meaningful work happens in this repo. Prefer a starter dataset that covers several important subsystems and a mix of features, fixes, refactors, infra/setup work, and tests, rather than many similar tasks from one package.
+Read CI, documentation, package/build files, and build graphs. Identify the narrowest credible verifier that is affordable to execute repeatedly. Treat repository-wide commands such as `bazel test //...`, unfiltered `pytest`, `go test ./...`, and workspace-wide test scripts as broad. Pass a bounded package, directory, project, or target verifier explicitly with `--test`. If no credible bounded verifier exists, stop before `stet suite build` and report the broad command you withheld plus two or three possible bounded alternatives for my approval.
 
-Create or update the Stet harness files, run init/discover/build as needed, and verify that the retained starter slice is executable enough to trust as onboarding evidence. Run the dataset build in the foreground and wait for build-summary.json, then report the ready count and the skip-reason distribution. Return an onboarding receipt that explains the task funnel, selected slice, representativeness, coverage, setup validation, confidence, and the next recommended action.
+Sample merged PRs/commits to understand where meaningful work happens in this repo. Prefer a starter dataset that covers several important subsystems and a mix of features, fixes, refactors, infra/setup work, and tests, rather than many similar tasks from one package.
+
+Create or update the Stet harness files and run init/discover as needed. Use a manifest-backed build with `--target-ready 20` and conservative concurrency. Stet should prove one representative canary before fan-out. If the bounded verifier produces fewer than 20 ready tasks, widen or shift the candidate history or use another bounded subsystem cohort; do not replace it with a repository-wide verifier merely to increase yield.
+
+Run the dataset build in the foreground and wait for build-summary.json, then report the ready count, skip-reason distribution, verifier scope, and representativeness. Return an onboarding receipt that explains the task funnel, selected slice, coverage, setup validation, confidence, and the next recommended action.
 
 Stop before launching evals.
 ```
@@ -94,6 +103,14 @@ many candidate tasks to be rejected: Stet only keeps tasks whose test signal it
 can actually demonstrate, and each rejection has a receipt explaining why. A
 small first corpus is a legitimate day-one outcome; the onboarding receipt will
 say whether it is enough for the decision you want, or what to expand next.
+
+The first retained task is the canary gate, not the final dataset. For a
+20-task starter target, keep the verifier boundary fixed and let the
+manifest-backed build continue searching after the canary. If yield is low,
+widen the commit window or add another bounded subsystem cohort. The current
+beta safety boundary is the original verifier command: an agent prompt cannot
+reliably intercept an internal fallback after the build has launched, so the
+command supplied to Stet must already be affordable.
 
 Your agent should inspect CI first. CI is more trustworthy than README prose for
 test setup
@@ -208,6 +225,8 @@ ship/no-ship claim.
 
 ## What not to do on day one
 
+- Do not launch repository-wide verification during unfamiliar-repo onboarding
+  without explicit approval.
 - Do not start with a 50+ task dataset unless you are deliberately doing heavy
   dataset onboarding.
 - Do not compare many models at once.
