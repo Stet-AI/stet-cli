@@ -59,23 +59,16 @@ rules, or selector internals before Stet can do useful work.
 - Infer the first starter slice from CI, repo history, and recent product work.
   Ask the operator about product-area weighting only when they request a
   reusable production dataset or the inferred slice would be misleading.
-- Choose the narrowest credible verifier from CI evidence that is affordable to
-  run repeatedly. Pass the bounded package, directory, project, or target
-  command explicitly; do not begin unfamiliar-repo onboarding with a
-  repository-wide verifier. If no bounded verifier is credible, stop before
-  build and ask the operator to approve an alternative.
-- Before parallel task building, rank test-bearing publish candidates first
-  and prove one representative gold canary end to end. Repair a shared
-  environment failure once and fail fast if the repaired attempt is still
-  shared-failing; when the environment is
-  valid but the oracle is unsuitable, search the bounded starter pool (at
-  most `max(15, --target-ready)` ranked candidates). Only fan out after one
-  canary proves gold, and stop adding work once the requested retained
-  ready-task floor is met. For manifest-backed instruction onboarding, use a
-  10-20 task floor, for example `stet suite build ... --target-ready 20`; this
-  canary/floor controller is implemented for manifest mode, not rev-range
-  builds. If yield is low, widen or shift candidate history or use another
-  bounded subsystem cohort instead of silently widening the verifier.
+- Before task building, choose the narrowest credible bounded verifier from CI
+  and pass it explicitly with `--test` to the init/build flow. The verifier
+  should be affordable to run repeatedly. A bounded package, directory,
+  project, or target command is appropriate; `bazel test //...`, unfiltered
+  `pytest`, `go test ./...`, and workspace-wide scripts are broad. If no
+  bounded verifier is credible, stop before build and ask the operator to
+  approve an alternative. Do not broaden verification merely to increase
+  yield. Record verifier scope and skipped scope in the receipt. If yield is
+  low, widen or shift candidate history or use another bounded subsystem cohort
+  while keeping the approved verifier fixed.
 - If discovery, build, probe, or config-diff returns zero ready tasks, or fewer
   than 10 retained ready tasks for AGENTS.md/CLAUDE.md, continue setup: follow
   `next_command`, widen or shift `--rev-range`, use `--allow-no-test-changes`
@@ -121,7 +114,8 @@ For most repos, the quick path is enough:
 #    Read GitHub Actions, GitLab CI, or equivalent repo CI config, then
 #    Makefile, package.json scripts, README.
 #    Pick the narrowest credible bounded verifier. CI is ground truth, not
-#    README. Stop before build if only a repository-wide command is available.
+#    README. Pass it explicitly with --test. If only a repository-wide command
+#    is available, stop before build and propose alternatives for approval.
 
 # 3. Author the Harbor environment
 #    Write .stet/harbor.Dockerfile for this repo and reference it from
@@ -137,7 +131,7 @@ For most repos, the quick path is enough:
 #    quality graders. Use standard/custom/no-quality only when explicitly
 #    requested; generic non-instruction setup may clarify ambiguous grader
 #    settings.
-stet init --repo . --yes --ai-provider <codex|claude|gemini|cursor> --quality recommended --test "<repo test cmd>"
+stet init --repo . --yes --ai-provider <codex|claude|gemini|cursor> --quality recommended --test "<bounded verifier>"
 
 # 6. Mine candidate pool
 stet suite discover --repo . --rev-range main~200..main --limit 200 --target-pass 25
@@ -152,7 +146,7 @@ stet suite discover --repo . --rev-range main~200..main --limit 200 --target-pas
 #    auto-clamps to all reachable history (prints a NOTE) instead of erroring.
 
 # 7. Build dataset
-stet suite build --repo . --manifest .stet/discover-manifest.yaml
+stet suite build --repo . --manifest .stet/discover-manifest.yaml --test "<bounded verifier>" --workers 2
 #    When Stet must synthesize install_config, --setup-agent auto releases the
 #    same configured AI provider into a disposable copy of the historical
 #    snapshot under .stet/setup-sessions and asks it for schema-constrained
@@ -265,9 +259,10 @@ Test-setup rules:
   > package.json scripts > README (lowest trust).
 - Avoid placeholder commands (`echo`, `true`, lint-only, build-only).
 - For monorepos or build-system-driven repos, preserve the real CI runner and
-  repo-level flags, then prefer one broad positive target pattern that Stet can
-  narrow or keep broad. Do not substitute a package-manager install or test
-  command merely because a leaf package file exists.
+  repo-level flags, then narrow verification to a credible package, directory,
+  project, or target. Do not substitute a package-manager install or test
+  command merely because a leaf package file exists. If narrowing is impossible,
+  stop before build and ask for approval to use the repo-wide verifier.
 - `stet init` writes `.stet/stet.harness.yaml` and `.stet/harbor.Dockerfile`
   when they are missing. Treat the generated harness as starter setup only. It
   does not choose or pin repo runtime versions. Read CI plus repo runtime files

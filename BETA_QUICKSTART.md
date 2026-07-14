@@ -1,7 +1,8 @@
 # Beta quickstart
 
-This guide is the first-session path for our customer. The goal is not to
-learn every Stet command, instead you will learn how to use your agent to drive Stet to receive actionable outcomes
+This guide is a first-session path for customers. You do not need to learn
+every Stet command; you will learn how to use your agent to drive Stet toward
+actionable outcomes.
 
 ## What you will accomplish
 
@@ -10,7 +11,8 @@ By the end of this session, your agent should have:
 1. Verified the Stet CLI, Stet auth, Docker/Harbor or an explicitly selected
    worktree backend, GitHub auth, and the Stet skill.
 2. Read your repo's CI and selected the narrowest credible verifier that is
-   affordable to run repeatedly.
+   affordable to run repeatedly. Do not use a repo-wide verifier without
+   explicit approval; propose a bounded alternative when one is available.
 3. Created or reviewed the repo's Stet harness files.
 4. Built a representative starter dataset from real merged work.
 5. Verified enough Docker/test setup to trust the starter slice.
@@ -62,7 +64,9 @@ Recommendations for the first build:
 In your coding agent, from the repo you want to evaluate, ask:
 
 ```text
-Use the Stet skill. Ensure Stet is setup correctly according to https://github.com/Stet-AI/stet-cli. Do not run an eval yet. If user is using worktree backend, skip Docker.
+Use the Stet skill. Verify setup using the public Stet CLI repository. Check
+CLI/auth, GitHub access, Docker or Harbor, provider auth, and the skill. Do not
+run an eval yet; skip Docker when the worktree backend is intentional.
 ```
 
 Expected checks:
@@ -81,21 +85,31 @@ npx skills list
 Use this prompt:
 
 ```text
-Use the Stet skill. Onboard this repo for Stet evals.
+Use the Stet skill to onboard this repo for Stet evals.
 
-Your first and main priority is to build a high-quality representative starter dataset from real merged work. First ask what product areas, PR types, and difficulty mix I want Stet to track. If I do not answer, infer a reasonable first-pass slice from repo history and say what you assumed.
+Ask what product areas, PR types, and difficulty mix I want Stet to track. Read
+CI and build files, then choose the narrowest credible bounded verifier for the
+selected tasks and pass it explicitly with `--test`. Treat `bazel test //...`,
+an unfiltered `pytest`, `go test ./...`, and workspace-wide scripts as broad
+verifiers. If only a broad verifier exists, stop before the dataset build and
+propose bounded alternatives; do not broaden verification merely to increase
+yield.
 
-Use subagents when available to make this efficient: delegate independent read-only checks for CI/test setup, merged PR/commit sampling, important subsystems, and starter-slice representativeness. Integrate their findings yourself. If subagents are unavailable, do the same bounded sampling yourself and say so.
+Use read-only subagents when available to sample merged PRs/commits, map
+important subsystems, and assess starter-slice representativeness. Integrate
+their findings yourself. If subagents are unavailable, do the same bounded
+sampling yourself and say so.
 
-Read CI, documentation, package/build files, and build graphs. Identify the narrowest credible verifier that is affordable to execute repeatedly. Treat repository-wide commands such as `bazel test //...`, unfiltered `pytest`, `go test ./...`, and workspace-wide test scripts as broad. Pass a bounded package, directory, project, or target verifier explicitly with `--test`. If no credible bounded verifier exists, stop before `stet suite build` and report the broad command you withheld plus two or three possible bounded alternatives for my approval.
+Prefer a starter dataset that covers several important subsystems and a mix of
+features, fixes, refactors, infra/setup work, and tests. Create or update the
+harness and run init/discover/build as needed with conservative concurrency.
+If yield is low, widen or shift candidate history or add another bounded
+subsystem cohort; keep the approved verifier boundary fixed.
 
-Sample merged PRs/commits to understand where meaningful work happens in this repo. Prefer a starter dataset that covers several important subsystems and a mix of features, fixes, refactors, infra/setup work, and tests, rather than many similar tasks from one package.
-
-Create or update the Stet harness files and run init/discover as needed. Use a manifest-backed build with `--target-ready 20` and conservative concurrency. Stet should prove one representative canary before fan-out. If the bounded verifier produces fewer than 20 ready tasks, widen or shift the candidate history or use another bounded subsystem cohort; do not replace it with a repository-wide verifier merely to increase yield.
-
-Run the dataset build in the foreground and wait for build-summary.json, then report the ready count, skip-reason distribution, verifier scope, and representativeness. Return an onboarding receipt that explains the task funnel, selected slice, coverage, setup validation, confidence, and the next recommended action.
-
-Stop before launching evals.
+Run the dataset build in the foreground and wait for `build-summary.json`.
+Report ready count, skip-reason distribution, verifier scope, skipped scope,
+representativeness, setup validation, confidence, and the next action. Return
+the onboarding receipt and stop before model evals.
 ```
 
 On large repos a dataset build can take one to two hours, and it is normal for
@@ -104,13 +118,11 @@ can actually demonstrate, and each rejection has a receipt explaining why. A
 small first corpus is a legitimate day-one outcome; the onboarding receipt will
 say whether it is enough for the decision you want, or what to expand next.
 
-The first retained task is the canary gate, not the final dataset. For a
-20-task starter target, keep the verifier boundary fixed and let the
-manifest-backed build continue searching after the canary. If yield is low,
-widen the commit window or add another bounded subsystem cohort. The current
-beta safety boundary is the original verifier command: an agent prompt cannot
-reliably intercept an internal fallback after the build has launched, so the
-command supplied to Stet must already be affordable.
+Keep the verifier boundary fixed while building the starter dataset. If yield
+is low, widen the commit window or add another bounded subsystem cohort. The
+current beta safety boundary is the original verifier command: an agent prompt
+cannot reliably intercept an internal fallback after the build has launched,
+so the command supplied to Stet must already be affordable.
 
 Your agent should inspect CI first. CI is more trustworthy than README prose for
 test setup
@@ -151,7 +163,10 @@ The agent should create or update:
 Ask:
 
 ```text
-Use the Stet skill. Read the Stet onboarding receipt. Summarize the candidate-task funnel, selected starter slice, representativeness rationale, subsystem/path coverage, difficulty mix, skipped-task reasons, Docker/test setup validation, confidence, and recommended next step. Note which rejections were environmental (disk, tooling) versus lack of test signal. Do not launch more work yet.
+Use the Stet skill. Read the onboarding receipt. Summarize the candidate
+funnel, selected slice, representativeness, path coverage, difficulty mix,
+skipped reasons, setup validation, confidence, and next step. Separate
+environmental rejections from missing test signal. Do not launch more work.
 ```
 
 The receipt should answer:
@@ -176,25 +191,35 @@ Use one of these paths.
 For a cheap calibration read:
 
 ```text
-Use the Stet skill. Run a small first Stet eval on this repo using the starter dataset. Keep it cheap, explain what evidence it produces.
+Use the Stet skill. Run a small first Stet eval on this repo using the starter
+dataset. Keep it cheap and explain what evidence it produces.
 ```
 
 For a directional read on a specific change:
 
 ```text
-Use the Stet skill. Probe this change with Stet on the starter dataset. Report whether the result is usable for iteration.
+Use the Stet skill. Probe this change with Stet on the starter dataset. Report
+whether the result is usable for iteration.
 ```
 
 For an `AGENTS.md`, `CLAUDE.md`, shared-skill, model, or harness-policy decision:
 
 ```text
-Use the Stet skill. Evaluate whether this shared behavior change is ready for a Stet rules decision.
+Use the Stet skill. Evaluate whether this shared behavior change is ready for a
+Stet rules decision.
 
-First read the onboarding receipt and confirm that the starter dataset is representative enough for this kind of change. Use subagents when available to inspect dataset coverage, task diversity, replay readiness, and plan blockers in parallel. Integrate their findings yourself.
+First read the onboarding receipt and confirm that the starter dataset is
+representative enough for this kind of change. Use subagents when available to
+inspect dataset coverage, task diversity, replay readiness, and plan blockers in
+parallel. Integrate their findings yourself.
 
-If the dataset is missing, too small, too narrow, replay-invalid, or low-confidence, treat that as onboarding work: expand or repair the dataset and report what changed before evaluating the behavior change.
+If the dataset is missing, too small, too narrow, replay-invalid, or
+low-confidence, treat that as onboarding work: expand or repair the dataset and
+report what changed before evaluating the behavior change.
 
-Once the dataset is credible, use the manifest-backed Stet rules flow. Run the plan first, explain task count, task coverage, graders, cost risk, evidence quality, and any blockers, then ask before launching the full run.
+Once the dataset is credible, use the manifest-backed Stet rules flow. Run the
+plan first, explain task count, task coverage, graders, cost risk, evidence
+quality, and any blockers, then ask before launching the full run.
 ```
 
 The rules path is the right path when you intend to keep, recommend, baseline,
@@ -208,7 +233,9 @@ dataset. A blocked plan usually means "continue onboarding the dataset," not
 Ask your agent:
 
 ```text
-Use the Stet skill. Read the current Stet result from status/report surfaces. Tell me the recommendation, confidence, evidence quality, grader coverage, task coverage, next action, and residual risk. Interpret the results for me.
+Use the Stet skill. Read the current Stet result from status/report surfaces.
+Tell me the recommendation, confidence, evidence quality, grader coverage, task
+coverage, next action, and residual risk. Interpret the result for me.
 ```
 
 The important lifecycle words are:

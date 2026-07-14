@@ -1,0 +1,125 @@
+---
+title: Quickstart
+sidebarTitle: Quickstart
+description: Install Stet, verify prerequisites, and onboard one repository
+---
+
+This first session verifies setup and creates an onboarding receipt. It stops
+before a model smoke, probe, or rules evaluation.
+
+## 1. Install the CLI
+
+macOS and Linux:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.sh | sh
+stet --version
+```
+
+Windows PowerShell:
+
+```powershell
+$installer = Join-Path $env:TEMP "stet-install.ps1"
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.ps1 -OutFile $installer
+try { & $installer } finally { Remove-Item -Force $installer }
+stet --version
+```
+
+The installer scripts and agent skill come from the current public
+`Stet-AI/stet-cli/main` source. The installers select the latest stable CLI by
+default; verify the installed binary with `stet --version`.
+
+## 2. Sign in and install the skill
+
+Commercial Stet workflows require local authentication:
+
+```sh
+stet auth login
+stet auth status
+```
+
+Install the agent skill separately:
+
+```sh
+npx skills add https://github.com/Stet-AI/stet-cli.git --skill stet --all
+npx skills list
+```
+
+The CLI runs evaluations and manages artifacts. The skill tells your coding
+agent how to choose a workflow and read the canonical result.
+
+## 3. Verify prerequisites
+
+Run the checks that match the backend you plan to use:
+
+```sh
+gh auth status
+stet --version
+stet auth status
+npx skills list
+docker info
+command -v uv
+```
+
+The default isolated path needs Docker, Python 3.12 or newer, `uv`, and
+authentication for the model provider you eventually plan to evaluate. GitHub
+CLI access is needed for private release overrides or PR-backed discovery.
+
+## 4. Ask your agent to onboard one repository
+
+From the repository you want to measure, ask:
+
+```text wrap
+Use the Stet skill. Onboard this repo for Stet evals. Ask what work I want
+Stet to track, read CI first, and choose the real test command. Inspect merged
+PRs/commits for representative work (use read-only subagents for this
+investigation when available), create the Harbor setup, and build a
+representative starter dataset. Choose and pass the narrowest credible bounded
+verifier to `stet suite build` with `--test` (alongside the manifest and a
+bounded `--workers` value). Treat `bazel test //...`, unfiltered `pytest`,
+`go test ./...`, and workspace-wide scripts as broad; do not launch one without
+my explicit approval. If no credible bounded verifier exists, stop before
+building and propose alternatives. Do not broaden merely to increase yield.
+Report scope, skipped tasks and reasons, then stop before any model eval. Treat
+Docker or replay checks as setup validation, not a model eval.
+Wait for `build-summary.json` before treating the build as complete, then return
+the onboarding receipt with the selected slice, scope, skips, and confidence.
+```
+
+Your agent should inspect CI and build files, ask about the product areas and
+work mix you care about, select real merged work, and create the repository's
+Stet harness files. A starter slice should cover the work you intend to track;
+it is not automatically representative just because it was recent.
+
+`stet suite build` may use model-assisted `install_config` synthesis by default
+to improve verifier fidelity. If this onboarding must spend no model calls,
+have the agent pass `--llm-install-config=false` to the suite build and record
+that choice in the receipt; the no-model path can produce lower-fidelity broad
+verifiers.
+
+## 5. Inspect the onboarding receipt
+
+Ask your agent to summarize the receipt before doing more work:
+
+```text wrap
+Use the Stet skill. Read the Stet onboarding receipt. Summarize the
+candidate-task funnel, selected starter slice, representativeness rationale,
+subsystem/path coverage, difficulty mix, skipped-task reasons, Docker/test
+setup validation, confidence, and recommended next step. Do not launch more
+work yet.
+```
+
+If setup or task selection is blocked, use [Troubleshooting](/troubleshooting).
+When the receipt is credible, choose a bounded workflow from [Choose a
+workflow](/workflows). Do not treat this setup check as a model result.
+
+To expand a credible starter slice, ask for a bounded follow-up:
+
+```text wrap
+Use the Stet skill. Expand the existing onboarding slice by one bounded
+subsystem or task family. Read the current receipt first, preserve its test
+command with an explicit `--test`, and explain the expected coverage gain.
+Use read-only investigation where useful; do not broaden just to increase
+yield. Stop before building if no narrow verifier is credible, and propose
+alternatives. Report added scope and skips, then stop before any model eval.
+```

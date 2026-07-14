@@ -1,0 +1,142 @@
+---
+title: Change control for AI coding agents
+sidebarTitle: Overview
+description: Change control for AI coding agents
+---
+
+Stet replays accepted repository work so you can measure whether a change to an
+`AGENTS.md` file, shared skill, model, reasoning setting, or tool policy is safe
+to keep. Your coding agent proposes and applies changes; Stet evaluates matched
+work and returns a scoped decision.
+
+## Find your next answer
+
+<CardGroup cols={2}>
+  <Card title="Is my AGENTS.md change helping?" icon="file-lines" href="/workflows#agents-md-ab">
+    Compare current and proposed instructions on the same retained tasks.
+  </Card>
+  <Card title="Improve my AGENTS.md" icon="wand-magic-sparkles" href="/workflows#iterative-instruction-improvement">
+    Iterate one instruction lever at a time with a bounded stop rule.
+  </Card>
+  <Card title="Is this skill helping?" icon="puzzle-piece" href="/workflows#skill-evaluation">
+    Test a skill against an appropriate absent or committed baseline.
+  </Card>
+  <Card title="Which model or reasoning effort should I use?" icon="scale-balanced" href="/workflows#model-reasoning-comparison">
+    Compare configurations on the same repository task slice.
+  </Card>
+</CardGroup>
+
+## The loop
+
+Accepted repository work becomes replayable tasks. Stet runs a baseline and a
+candidate against the same task slice, evaluates their patches with tests and
+graders, and writes a Trial Result with one scoped recommendation.
+
+![The Stet evaluation loop: real merged work becomes replayable tasks, baseline and candidate are evaluated with tests and graders, and a Trial Result returns a bounded decision.](/assets/stet-loop.svg)
+
+The evaluator is separate from the coding agent that made the change. That
+separation keeps the question clear: did this bounded harness change improve
+behavior on the declared work, and is the evidence strong enough for the next
+action?
+
+## Example Trial Result
+
+This is a historical April 2026 model comparison across 28 paired Zod tasks,
+with Opus 4.6 and Opus 4.7 both using high reasoning. It is a scoped example,
+not a current or universal model ranking.
+
+| Observed measure | Opus 4.6 | Opus 4.7 |
+| --- | ---: | ---: |
+| Test pass rate | 42.9% | 42.9% |
+| Equivalence rate | 32.1% | 46.4% |
+| Observed cost per task | $19.96 | $8.11 |
+| Mean agent duration | 7m 58s | 3m 12s |
+
+<Callout type="success" title="Historical receipt">
+  **PROMOTE** candidate **Opus 4.7**, high confidence, for this recorded
+  harness and task corpus.
+</Callout>
+
+On this task corpus, the historical receipt held observed test pass rate steady,
+showed higher observed equivalence, and used less observed cost and time. The
+receipt also used declared grader evidence that is not reproduced here.
+
+The scope and evidence limits are part of the result:
+
+- Historical April 2026 result, scoped to this 28-task Zod corpus and recorded harness.
+- The legacy report predates Stet's current calibration and claim-readiness fields.
+- The displayed metric values are observations, not generalized or uncertainty-calibrated improvement claims.
+- The receipt also used declared grader evidence not reproduced here.
+
+<Accordion title="Machine-readable receipt">
+{/* <!-- stet-receipt:start --> */}
+```json
+{
+  "schema_version": "stet.receipt/v1",
+  "source_commit": "e1980547",
+  "report_sha256": "88ca838e3098ae99043bb7d71454e608490938e05f17116352a929a4c2f8bf74",
+  "historical": true,
+  "historical_period": "April 2026",
+  "corpus": {
+    "name": "Zod",
+    "task_count": 28,
+    "paired": true,
+    "invalid_task_count": 0
+  },
+  "baseline": {
+    "model": "Opus 4.6",
+    "reasoning": "high"
+  },
+  "candidate": {
+    "model": "Opus 4.7",
+    "reasoning": "high"
+  },
+  "decision": {
+    "recommendation": "PROMOTE",
+    "candidate": "Opus 4.7",
+    "confidence": "high"
+  },
+  "metrics": [
+    {
+      "name": "Test pass rate",
+      "baseline": "42.9%",
+      "candidate": "42.9%"
+    },
+    {
+      "name": "Equivalence rate",
+      "baseline": "32.1%",
+      "candidate": "46.4%"
+    },
+    {
+      "name": "Observed cost per task",
+      "baseline": "$19.96",
+      "candidate": "$8.11"
+    },
+    {
+      "name": "Mean agent duration",
+      "baseline": "7m 58s",
+      "candidate": "3m 12s"
+    }
+  ],
+  "caveats": [
+    "Historical April 2026 result, scoped to this 28-task Zod corpus and recorded harness.",
+    "The legacy report predates Stet's current calibration and claim-readiness fields.",
+    "The displayed metric values are observations, not generalized or uncertainty-calibrated improvement claims.",
+    "The receipt also used declared grader evidence not reproduced here."
+  ],
+  "publication_approved_at": "2026-07-14",
+  "publication_approved_by": "benredmond"
+}
+```
+{/* <!-- stet-receipt:end --> */}
+</Accordion>
+
+Read [how Stet works](/concepts/how-stet-works) for the mechanism, then use
+[Read a Trial Result](/concepts/trial-result) when you have a result to
+interpret.
+
+## Start with a bounded first session
+
+[Follow the quickstart](/quickstart) to install the CLI and skill, verify your
+machine, onboard one repository, and stop with an onboarding receipt before an
+expensive evaluation.

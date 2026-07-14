@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+  <title id="title">The Stet evaluation loop</title>
+  <desc id="desc">Real merged work becomes replayable tasks. A matched baseline and candidate are evaluated with tests and graders to produce a Trial Result with a promote, hold, or inspect decision.</desc>
+  <rect width="1200" height="430" rx="24" fill="#111315"/>
+  <g fill="#f4efe6" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" text-anchor="middle">
+    <g font-size="21" font-weight="600">
+      <rect x="44" y="92" width="200" height="86" rx="12" fill="#171a1d" stroke="#4c5157"/>
+      <text x="144" y="127"><tspan x="144">Real merged</tspan><tspan x="144" dy="28">work</tspan></text>
+      <rect x="316" y="92" width="200" height="86" rx="12" fill="#171a1d" stroke="#4c5157"/>
+      <text x="416" y="127"><tspan x="416">Replayable</tspan><tspan x="416" dy="28">tasks</tspan></text>
+      <rect x="588" y="42" width="200" height="76" rx="12" fill="#171a1d" stroke="#4c5157"/>
+      <text x="688" y="88">Baseline</text>
+      <rect x="588" y="152" width="200" height="76" rx="12" fill="#171a1d" stroke="#4c5157"/>
+      <text x="688" y="198">Candidate</text>
+      <rect x="860" y="92" width="200" height="86" rx="12" fill="#171a1d" stroke="#4c5157"/>
+      <text x="960" y="127"><tspan x="960">Tests +</tspan><tspan x="960" dy="28">graders</tspan></text>
+    </g>
+    <g fill="none" stroke="#777d84" stroke-width="3">
+      <path d="M244 135H300"/>
+      <path d="M516 135H548V80H572"/>
+      <path d="M548 135V190H572"/>
+      <path d="M788 80H820V135H844"/>
+      <path d="M788 190H820V135"/>
+      <path d="M960 178V252"/>
+    </g>
+    <g fill="#777d84">
+      <path d="M300 135l-12-7v14z"/><path d="M572 80l-12-7v14z"/>
+      <path d="M572 190l-12-7v14z"/><path d="M844 135l-12-7v14z"/>
+      <path d="M960 252l-7-12h14z"/>
+    </g>
+    <rect x="810" y="268" width="300" height="112" rx="14" fill="#e8352a"/>
+    <text x="960" y="311" font-size="24" font-weight="700">TRIAL RESULT</text>
+    <text x="960" y="350" font-size="19">promote · hold · inspect</text>
+    <text x="44" y="354" fill="#aeb4bb" text-anchor="start" font-size="17"><tspan x="44">Same task slice.</tspan><tspan x="44" dy="26">Recorded harness.</tspan><tspan x="44" dy="26">Bounded decision.</tspan></text>
+  </g>
+</svg>

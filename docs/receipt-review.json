@@ -1,0 +1,56 @@
+{
+  "schema_version": "stet.receipt/v1",
+  "source_commit": "e1980547",
+  "report_sha256": "88ca838e3098ae99043bb7d71454e608490938e05f17116352a929a4c2f8bf74",
+  "historical": true,
+  "historical_period": "April 2026",
+  "corpus": {
+    "name": "Zod",
+    "task_count": 28,
+    "paired": true,
+    "invalid_task_count": 0
+  },
+  "baseline": {
+    "model": "Opus 4.6",
+    "reasoning": "high"
+  },
+  "candidate": {
+    "model": "Opus 4.7",
+    "reasoning": "high"
+  },
+  "decision": {
+    "recommendation": "PROMOTE",
+    "candidate": "Opus 4.7",
+    "confidence": "high"
+  },
+  "metrics": [
+    {
+      "name": "Test pass rate",
+      "baseline": "42.9%",
+      "candidate": "42.9%"
+    },
+    {
+      "name": "Equivalence rate",
+      "baseline": "32.1%",
+      "candidate": "46.4%"
+    },
+    {
+      "name": "Observed cost per task",
+      "baseline": "$19.96",
+      "candidate": "$8.11"
+    },
+    {
+      "name": "Mean agent duration",
+      "baseline": "7m 58s",
+      "candidate": "3m 12s"
+    }
+  ],
+  "caveats": [
+    "Historical April 2026 result, scoped to this 28-task Zod corpus and recorded harness.",
+    "The legacy report predates Stet's current calibration and claim-readiness fields.",
+    "The displayed metric values are observations, not generalized or uncertainty-calibrated improvement claims.",
+    "The receipt also used declared grader evidence not reproduced here."
+  ],
+  "publication_approved_at": "2026-07-14",
+  "publication_approved_by": "benredmond"
+}

@@ -11,8 +11,8 @@ an `AGENTS.md` change, shared skill, model, or reasoning setting improves agent
 behavior before rollout. The coding agent proposes and applies changes; Stet
 measures the result against matched repository work and gates scoped promotion.
 
-[Get started](BETA_QUICKSTART.md) · [See an example result](#example-trial-result) ·
-[Understand how Stet works](ONBOARDING.md)
+[Get started](BETA_QUICKSTART.md) · [Quickstart source](docs/quickstart.mdx) ·
+[Understand the workflow](docs/workflows.mdx)
 
 ## What do you want to improve?
 
@@ -128,12 +128,20 @@ The default evaluation path also needs a running Docker daemon, Python 3.12+,
 
 In the repository you want to evaluate, ask your coding agent:
 
-> Use the Stet skill to onboard this repo. First ask what work and decision I
-> want Stet to track. Read CI and repository history, propose a starter slice
-> from real merged work, prove which retained tasks are build-ready, and report
-> the slice rationale, coverage, gaps, and confidence. Stop with an onboarding
-> receipt before model evaluations; do not claim the slice is automatically
-> representative.
+```text
+Use the Stet skill to onboard this repo for Stet evals.
+
+Ask what work I want tracked. Read CI and build files, then choose the
+narrowest credible bounded verifier and pass it explicitly with --test. Treat
+`bazel test //...`, unfiltered `pytest`, `go test ./...`, and workspace-wide
+scripts as broad. If only a broad verifier exists, stop before build and
+propose bounded alternatives; do not broaden verification to increase yield.
+
+Inspect representative merged work, create the Harbor setup, build the starter
+slice, and run the smallest setup smoke available. Wait for build-summary.json,
+then return a receipt with verifier scope, skipped scope, coverage, confidence,
+and next action. Stop before model smoke, probe, or rules evals.
+```
 
 ## Why trust the result?
 
@@ -157,9 +165,10 @@ telemetry opt-out. Stet does not claim a universal network sandbox.
 
 ## Learn more
 
-- [Beta quickstart](BETA_QUICKSTART.md)
-- [Prompt cookbook](PROMPT_COOKBOOK.md)
-- [How Stet works](ONBOARDING.md)
+- [Beta quickstart](BETA_QUICKSTART.md) · [source](docs/quickstart.mdx)
+- [Prompt cookbook](PROMPT_COOKBOOK.md) · [source](docs/prompts.mdx)
+- [How Stet works](docs/concepts/how-stet-works.mdx)
+- [Workflows](docs/workflows.mdx)
 - [Troubleshooting](TROUBLESHOOTING.md)
 
 The install script and agent skill are available under the [MIT License](LICENSE).

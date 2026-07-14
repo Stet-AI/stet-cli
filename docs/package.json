@@ -1,0 +1,20 @@
+{
+  "name": "stet-docs",
+  "private": true,
+  "engines": {
+    "node": ">=18 <25"
+  },
+  "scripts": {
+    "dev": "mint dev --no-open",
+    "validate:mint": "mint validate",
+    "validate:links": "mint broken-links --check-anchors --check-redirects",
+    "validate:a11y": "mint a11y",
+    "validate:contract": "node scripts/validate-content-contract.mjs contract",
+    "validate:publication": "node scripts/validate-content-contract.mjs publication",
+    "validate": "npm run validate:contract && npm run validate:mint && npm run validate:links && npm run validate:a11y",
+    "check": "npm run validate"
+  },
+  "devDependencies": {
+    "mint": "4.2.687"
+  }
+}

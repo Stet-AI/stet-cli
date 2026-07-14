@@ -1,0 +1,119 @@
+---
+title: Troubleshooting
+sidebarTitle: Troubleshooting
+description: Route setup, authentication, runtime, and evidence problems
+---
+
+Start with the symptom, then return to the owning page. Keep setup problems
+separate from model-quality evidence.
+
+## Setup checks fail
+
+Run:
+
+```sh
+gh auth status
+stet --version
+stet auth status
+npx skills list
+docker info
+command -v uv
+```
+
+The [quickstart](/quickstart) explains which checks are required for the default
+Docker-backed path. If the binary is old, reinstall from the public installer
+and verify `stet --version` again:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.sh | sh
+```
+
+The installer selects the latest stable CLI by default; verify the result with
+`stet --version`.
+
+## GitHub or Stet authentication fails
+
+The public installer and skill do not require GitHub login. GitHub CLI auth is
+needed for private release overrides or PR-backed discovery. Commercial eval
+execution requires:
+
+```sh
+stet auth login
+stet auth status
+```
+
+If a private override fails, confirm repository access before debugging Stet.
+
+## Docker or `uv` is unavailable
+
+Start Docker Desktop or the Linux Docker service, then rerun `docker info`. If
+Docker is intentionally unavailable and the surface supports it, ask your agent
+to use the explicit worktree backend:
+
+```text wrap
+Use the Stet skill. Run the supported local check with
+--harbor-backend worktree, then read status/report and inspect worktree
+integrity artifacts only if diagnosis is needed.
+```
+
+Install `uv` with the public installer when `command -v uv` returns no path:
+
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Worktree-backed evidence is inspect-only by default. It is not
+Docker-equivalent isolation and should support a decision only when the Trial
+Result explicitly says that the evidence is decision-grade; use Docker-backed
+replay for gateable decisions otherwise.
+
+## Claude Code authentication fails
+
+Authenticate before a Stet-managed Claude run:
+
+```sh
+claude setup-token
+mkdir -p ~/.config/stet
+chmod 700 ~/.config/stet
+printf '%s\n' '<printed token>' > ~/.config/stet/claude-oauth-token
+chmod 600 ~/.config/stet/claude-oauth-token
+unset CLAUDE_CODE_OAUTH_TOKEN
+```
+
+Do not commit the token or put it in repository `.env` files. If the skill is
+missing, reinstall it with the command in the [quickstart](/quickstart).
+
+## A run is slow, stalled, or incomplete
+
+Do not restart blindly. Ask the agent to inspect status first:
+
+```text wrap
+Use the Stet skill. This Stet rules run looks incomplete. Check status first
+and identify whether the launcher is still active. Use rules repair only if the
+run has exited or stalled. Do not restart unless I explicitly approve
+discarding evidence.
+```
+
+Then use [Read a Trial Result](/concepts/trial-result) to distinguish an
+infrastructure state from a model-quality result.
+
+## Replay validity is missing
+
+Errors such as `no_gold_pass_commands`,
+`all_commands_ignored_gold_failure_mode_unset`, or replay-validity failures mean
+the selected slice is not decision-grade yet. Fix the test or harness setup,
+choose a better task slice, or stop with an inspect-only diagnosis before
+relaunching.
+
+## Grader coverage is missing
+
+Tests may still have run, but missing declared grader coverage limits the claim.
+Use the repair or regrade command emitted by `stet eval status` or
+`stet eval report`, then reread the complete Trial Result.
+
+## The result says `inspect`
+
+`inspect` is useful evidence for diagnosis or iteration, not a generic failure.
+It can reflect a small sample, stale evidence, missing graders, replay validity,
+infrastructure failure, or mixed results. Ask the agent to name the concrete
+blocker and propose one bounded next action; do not infer promotion from prose.
