@@ -27,6 +27,11 @@ discover (fetch change requests -> prefilter -> LLM scoring -> manifest)
 default; `stet suite build --harbor-backend worktree --repo <path>` runs
 base-fail/gold-pass verification in local git worktrees instead, no Docker
 daemon needed, but requires a local repo with every task base commit).
+The worktree backend uses Stet-owned `GOCACHE` and `TMPDIR` roots for each
+task/command; it deliberately preserves an existing `GOMODCACHE` so it does
+not redownload modules per task. Do not redirect `GOMODCACHE` per evaluation
+cycle unless that isolation is explicitly required and the duplicate-download
+cost is acceptable.
 For explicit `--base/--head` or fresh manifest builds, the default
 `--source-mode auto` selects `reference` when the local worktree route proves
 all reference prerequisites; rev-range builds stay portable until their
