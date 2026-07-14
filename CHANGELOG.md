@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.10.0] - 2026-07-14
+
+Promotes the fully verified `v0.10.0-rc.4` candidate to stable with no product
+behavior changes. Stet 0.10 hardens source authority, portable and reference
+source handling, bounded artifact and cache lifecycles, worktree and Bazel
+isolation, runtime fingerprints, GPT-5.6 pricing, and headless setup while
+reconfirming the existing `--max-snapshot-bytes` behavior: config and CLI flag
+support, flag precedence over config, and the built-in 500 MiB default without
+implying a cap on worktree object stores or Bazel caches.
+
+[v0.10.0]: https://github.com/Stet-AI/stet/compare/v0.10.0-rc.4...v0.10.0
+
 ## [v0.10.0-rc.4] - 2026-07-14
 
 This candidate makes dataset builds safer to operate by bounding temporary work
@@ -364,7 +376,7 @@ Adds an interpretation layer to Stet receipts so coding agents get a trusted, pe
 - Collapse six repair/rerun verbs (`--stitch-rerun`, `repair-patches`, `revalidate-tests`, `repair-tests`, `repair-ai-coverage`, `regrade-graders`) onto one invariant-preserving run-mutation substrate so atomicity, breadcrumbing, derived-artifact regeneration, scratch GC, and the integrity check are defined once behind a commit chokepoint; behavior-preserving with no change to verb flags or behavior ([715dbbdd])
 - Refresh onboarding prompts, agent docs, and rules-skill-loop guidance, and rename craft/discipline graders to quality graders in skill docs ([99d45afa], [9874c882], [133bcfab], [0967129c], [8395ebca])
 
-[Unreleased]: https://github.com/Stet-AI/stet/compare/v0.10.0-rc.1...HEAD
+[Unreleased]: https://github.com/Stet-AI/stet/compare/v0.10.0...HEAD
 
 [v0.9.0-rc.1]: https://github.com/benredmond/stet/compare/v0.8.0...v0.9.0-rc.1
 

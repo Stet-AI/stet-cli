@@ -27,17 +27,24 @@ export PATH="$HOME/.local/bin:$PATH"
 stet --version
 ```
 
-If the binary is old, refresh it with the official installer:
+If the binary is old, update:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.sh | sh
+stet update
 ```
 
-The installer refreshes the CLI only. Refresh the separately installed Stet
-agent skill through the skill manager:
+`stet update` refreshes the CLI. It does not mutate the separately installed
+Stet agent skill. Refresh the skill through the skill manager:
 
 ```sh
 npx skills update stet -y
+```
+
+For a prerelease or exact beta tag:
+
+```sh
+stet update --prerelease
+stet update --version v0.1.0-rc.3
 ```
 
 ## GitHub auth or private repo access
@@ -80,9 +87,7 @@ task supports local git worktree execution, ask your agent to select the
 worktree backend explicitly instead of relaunching the default path:
 
 ```text
-Use the Stet skill. Run the supported local check with
-`--harbor-backend worktree`, then read status/report. Inspect worktree
-integrity artifacts only if diagnosis is needed.
+Use the Stet skill. Run the supported local check with --harbor-backend worktree, then read status/report and inspect worktree integrity artifacts only if diagnosis is needed.
 ```
 
 If Docker is running but Stet jobs fail with stale state or exhausted Docker
@@ -133,11 +138,10 @@ Stet reads `~/.config/stet/claude-oauth-token` and forwards
 `CLAUDE_CODE_OAUTH_TOKEN` only to Stet-managed Claude runs. Do not commit the
 token, put it in repo `.env` files, or export it broadly from shell profiles.
 
-If Claude still asks for `/login` inside a Stet run, refresh the binary with
-the official installer:
+If Claude still asks for `/login` inside a Stet run, refresh the binary:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.sh | sh
+stet update
 ```
 
 If Stet warns that the agent skill is missing or cannot be inspected, refresh
@@ -255,9 +259,7 @@ diagnosis or iteration, but not strong enough for a rollout decision.
 Ask your agent:
 
 ```text
-Use the Stet skill. This run returned inspect. Explain whether it came from a
-small sample, stale evidence, missing graders, replay validity, infrastructure,
-mixed results, or another concrete reason. Recommend one bounded next action.
+Use the Stet skill. This Stet run returned inspect. Explain whether inspect came from small sample size, stale evidence, missing graders, replay validity, infrastructure failure, mixed results, or another concrete reason. Recommend one bounded next action.
 ```
 
 Do not promote from inspect-only evidence unless you are intentionally overriding
