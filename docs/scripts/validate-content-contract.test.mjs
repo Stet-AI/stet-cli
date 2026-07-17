@@ -4,10 +4,19 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateContentContract } from './validate-content-contract.mjs';
+import {
+  PUBLIC_COLLATERAL_REQUIREMENTS,
+  validateContentContract,
+} from './validate-content-contract.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DOCS_DIR = resolve(HERE, '..');
+
+function publicCollateralFixture(file) {
+  const requiredPhrases = PUBLIC_COLLATERAL_REQUIREMENTS[file];
+  if (!requiredPhrases) throw new Error(`unknown public collateral fixture: ${file}`);
+  return `${requiredPhrases.join('\n\n')}\n`;
+}
 
 async function withCopy(mutator) {
   const temp = await mkdtemp(join(tmpdir(), 'stet-content-contract-'));
@@ -240,7 +249,7 @@ test('legacy onboarding fallback remains byte-protected', async () => {
 for (const fallback of ['README.md', 'BETA_QUICKSTART.md', 'PROMPT_COOKBOOK.md', 'TROUBLESHOOTING.md']) {
   test(`authorized public collateral change passes when required content remains (${fallback})`, async () => {
     const result = await runCopy(async (root) => {
-      await writeFile(join(root, '..', fallback), await readFile(resolve(DOCS_DIR, '..', fallback), 'utf8'));
+      await writeFile(join(root, '..', fallback), publicCollateralFixture(fallback));
     }, {
       baseSha: 'base',
       headSha: 'head',
@@ -254,7 +263,7 @@ for (const fallback of ['README.md', 'BETA_QUICKSTART.md', 'PROMPT_COOKBOOK.md',
 test('authorized public collateral change fails when required content is removed', async () => {
   const result = await runCopy(async (root) => {
     const path = join(root, '..', 'README.md');
-    const text = await readFile(resolve(DOCS_DIR, '..', 'README.md'), 'utf8');
+    const text = publicCollateralFixture('README.md');
     await writeFile(path, text.replace('# Improve the instructions, skills, and model settings your coding agents actually use', '# Improve coding workflows'));
   }, {
     baseSha: 'base',
@@ -269,7 +278,7 @@ test('authorized public collateral change fails when required content is removed
 test('authorized public collateral change rejects static Stet CLI versions', async () => {
   const result = await runCopy(async (root) => {
     const path = join(root, '..', 'PROMPT_COOKBOOK.md');
-    await writeFile(path, `${await readFile(resolve(DOCS_DIR, '..', 'PROMPT_COOKBOOK.md'), 'utf8')}\nThe CLI release is v9.9.9.\n`);
+    await writeFile(path, `${publicCollateralFixture('PROMPT_COOKBOOK.md')}\nThe CLI release is v9.9.9.\n`);
   }, {
     baseSha: 'base',
     headSha: 'head',
@@ -297,7 +306,7 @@ test('stable-incompatible automatic canary claims fail in public collateral', as
   ]) {
     const result = await runCopy(async (root) => {
       const path = join(root, '..', 'PROMPT_COOKBOOK.md');
-      const text = await readFile(resolve(DOCS_DIR, '..', 'PROMPT_COOKBOOK.md'), 'utf8');
+      const text = publicCollateralFixture('PROMPT_COOKBOOK.md');
       await writeFile(path, `${text}\n${claim}\n`);
     }, {
       baseSha: 'base',
@@ -313,7 +322,7 @@ test('stable-incompatible automatic canary claims fail in public collateral', as
 test('postfixed automatic canary claim fails in public collateral', async () => {
   const result = await runCopy(async (root) => {
     const path = join(root, '..', 'PROMPT_COOKBOOK.md');
-    const text = await readFile(resolve(DOCS_DIR, '..', 'PROMPT_COOKBOOK.md'), 'utf8');
+    const text = publicCollateralFixture('PROMPT_COOKBOOK.md');
     await writeFile(path, `${text}\nStet runs one canary automatically.\n`);
   }, {
     baseSha: 'base',
@@ -328,7 +337,7 @@ test('postfixed automatic canary claim fails in public collateral', async () => 
 test('fully hyphenated canary-before-fan-out claim fails in public collateral', async () => {
   const result = await runCopy(async (root) => {
     const path = join(root, '..', 'PROMPT_COOKBOOK.md');
-    const text = await readFile(resolve(DOCS_DIR, '..', 'PROMPT_COOKBOOK.md'), 'utf8');
+    const text = publicCollateralFixture('PROMPT_COOKBOOK.md');
     await writeFile(path, `${text}\nStet runs one canary-before-fan-out.\n`);
   }, {
     baseSha: 'base',
@@ -343,7 +352,7 @@ test('fully hyphenated canary-before-fan-out claim fails in public collateral', 
 test('generic human-controlled canary wording remains allowed in public collateral', async () => {
   const result = await runCopy(async (root) => {
     const path = join(root, '..', 'PROMPT_COOKBOOK.md');
-    const text = await readFile(resolve(DOCS_DIR, '..', 'PROMPT_COOKBOOK.md'), 'utf8');
+    const text = publicCollateralFixture('PROMPT_COOKBOOK.md');
     await writeFile(path, `${text}\nA human can run a bounded canary after reviewing the onboarding receipt.\n`);
   }, {
     baseSha: 'base',
