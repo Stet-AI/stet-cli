@@ -48,15 +48,15 @@ test('current docs pass the contract', async () => {
   assert.deepEqual(result, { ok: true, errors: [] });
 });
 
-for (const [field, value] of [['title', 'Wrong title'], ['sidebarTitle', 'Wrong sidebar']]) {
-  test(`index frontmatter ${field} mutation fails`, async () => {
+for (const field of ['title', 'sidebarTitle']) {
+  test(`index frontmatter requires ${field}`, async () => {
     const result = await runCopy(async (root) => {
       const path = join(root, 'index.mdx');
       const text = await readFile(path, 'utf8');
-      await writeFile(path, text.replace(new RegExp(`^${field}:.*$`, 'm'), `${field}: ${value}`));
+      await writeFile(path, text.replace(new RegExp(`^${field}:.*\\n`, 'm'), ''));
     });
     assert.equal(result.ok, false);
-    assert.match(result.errors.join('\n'), /frontmatter title\/sidebarTitle/);
+    assert.match(result.errors.join('\n'), /frontmatter title\/sidebarTitle are required/);
   });
 }
 
@@ -82,6 +82,19 @@ for (const [name, value] of [['primary', '#000000'], ['light', '#000000'], ['dar
   });
 }
 
+test('the exact header contextual menu is accepted', async () => {
+  const result = await runCopy(async (root) => {
+    const path = join(root, 'docs.json');
+    const config = JSON.parse(await readFile(path, 'utf8'));
+    config.contextual = {
+      options: ['copy', 'view', 'chatgpt', 'claude', 'mcp', 'cursor', 'vscode'],
+      display: 'header',
+    };
+    await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);
+  });
+  assert.deepEqual(result, { ok: true, errors: [] });
+});
+
 for (const [field, value] of [['engines.node', '>=18'], ['devDependencies.mint', '4.2.688']]) {
   test(`package.json ${field} mutation fails`, async () => {
     const result = await runCopy(async (root) => {
@@ -96,9 +109,10 @@ for (const [field, value] of [['engines.node', '>=18'], ['devDependencies.mint',
   });
 }
 
-test('approved publication passes the contract', () => {
+test('the unapproved transparency fixture blocks publication', () => {
   const result = validateContentContract({ rootDir: DOCS_DIR, mode: 'publication' });
-  assert.deepEqual(result, { ok: true, errors: [] });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.every((error) => /concepts-trial-result-example receipt fixture requires publication approval/.test(error)));
 });
 
 test('clearing publication approval fails closed', async () => {
@@ -161,8 +175,7 @@ test('collapsed one-line prompt fails', async () => {
   const result = await runCopy(async (root) => {
     const path = join(root, 'quickstart.mdx');
     const text = await readFile(path, 'utf8');
-    const collapsed = text.replace(/```text[^\n]*\n([\s\S]*?)\n```/, (_, body) => `\`\`\`text wrap\n${body.replaceAll('\n', ' ')}\n\`\`\``);
-    await writeFile(path, collapsed);
+    await writeFile(path, `${text}\n\`\`\`text wrap\none line\n\`\`\`\n`);
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join('\n'), /prompt fence must contain at least two nonempty lines/);
@@ -172,8 +185,7 @@ test('overlong prompt line fails', async () => {
   const result = await runCopy(async (root) => {
     const path = join(root, 'quickstart.mdx');
     const text = await readFile(path, 'utf8');
-    const overlong = text.replace('Use the Stet skill. Onboard this repo for Stet evals. Ask what work I want', `Use the Stet skill. ${'x'.repeat(101)}`);
-    await writeFile(path, overlong);
+    await writeFile(path, `${text}\n\`\`\`text wrap\n${'x'.repeat(101)}\nsecond line\n\`\`\`\n`);
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join('\n'), /prompt fence contains a line longer than 100 characters/);
@@ -183,7 +195,7 @@ test('unclosed prompt fence fails', async () => {
   const result = await runCopy(async (root) => {
     const path = join(root, 'quickstart.mdx');
     const text = await readFile(path, 'utf8');
-    await writeFile(path, text.replace('the onboarding receipt with the selected slice, scope, skips, and confidence.\n```', 'the onboarding receipt with the selected slice, scope, skips, and confidence.'));
+    await writeFile(path, `${text}\n\`\`\`text wrap\nfirst\nsecond\n`);
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join('\n'), /unclosed text prompt fence/);
@@ -193,7 +205,7 @@ test('prompt fence without mobile wrapping fails', async () => {
   const result = await runCopy(async (root) => {
     const path = join(root, 'quickstart.mdx');
     const text = await readFile(path, 'utf8');
-    await writeFile(path, text.replace(/^```text.*$/m, '```text nowrap'));
+    await writeFile(path, `${text}\n\`\`\`text nowrap\nfirst\nsecond\n\`\`\`\n`);
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join('\n'), /prompt fence must enable wrapping/);
@@ -418,6 +430,15 @@ test('receipt model mutation fails exact deep equality', async () => {
   assert.match(result.errors.join('\n'), /rendered receipt JSON must exactly equal/);
 });
 
+test('index receipt fixture formatting must retain approved bytes', async () => {
+  const result = await runCopy(async (root) => {
+    const path = join(root, 'receipt-review.json');
+    await writeFile(path, `${await readFile(path, 'utf8')}\n`);
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /receipt-review\.json must exactly retain the approved bytes/);
+});
+
 test('extra asset and PNG fail the exact asset allowlist', async () => {
   const result = await runCopy((root) => writeFile(join(root, 'assets', 'extra.png'), 'not an image'));
   assert.equal(result.ok, false);
@@ -443,4 +464,196 @@ test('approved negated caveat does not false-positive', () => {
   const result = validateContentContract({ rootDir: DOCS_DIR, mode: 'contract' });
   assert.equal(result.ok, true);
   assert.equal(result.errors.some((error) => /unsupported claim/.test(error)), false);
+});
+
+test('a newly discovered page is accepted when navigation includes it', async () => {
+  const result = await runCopy(async (root) => {
+    await writeFile(join(root, 'new-page.mdx'), '---\ntitle: New page\nsidebarTitle: New page\n---\n\nNew page body.\n');
+    const configPath = join(root, 'docs.json');
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    config.navigation.groups[0].pages.push('new-page');
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  });
+  assert.deepEqual(result, { ok: true, errors: [] });
+});
+
+test('new page omitted from navigation fails', async () => {
+  const result = await runCopy((root) => writeFile(join(root, 'new-page.mdx'), '---\ntitle: New page\nsidebarTitle: New page\n---\n\nNew page body.\n'));
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /new-page is missing from docs\.json navigation/);
+});
+
+test('designated root skill asset is allowed outside navigation and remains safety-scanned', async () => {
+  const result = await runCopy((root) => writeFile(join(root, 'skill.md'), '---\nname: Stet docs router\ndescription: Context only.\n---\n\nUse the canonical skill.\n'));
+  assert.deepEqual(result, { ok: true, errors: [] });
+});
+
+for (const [name, injected, expected] of [
+  ['forbidden path', '/Users/ben/private.txt', /forbidden private path/],
+  ['secret', 'TOKEN=sk-ant-test-value', /secret assignment/],
+  ['unsupported claim', 'This is a post-training layer for agents.', /unsupported claim/],
+  ['installer version argument', 'curl https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.sh | sh --version 9.9.9', /must not pass a version argument/],
+  ['stet update', 'Run stet update when needed.', /must not advertise generic stet update/],
+]) {
+  test(`designated root skill asset ${name} fails`, async () => {
+    const result = await runCopy((root) => writeFile(join(root, 'skill.md'), `---\nname: Stet docs router\ndescription: Context only.\n---\n\n${injected}\n`));
+    assert.equal(result.ok, false);
+    assert.match(result.errors.join('\n'), expected);
+  });
+}
+
+test('four navigation groups with wrong names fail even when they cover each page once', async () => {
+  const result = await runCopy(async (root) => {
+    const configPath = join(root, 'docs.json');
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    const pages = config.navigation.groups.flatMap((group) => group.pages);
+    config.navigation.groups = [
+      { group: 'Start', pages: pages.slice(0, 2) },
+      { group: 'Learn', pages: pages.slice(2, 4) },
+      { group: 'Reference', pages: pages.slice(4, 6) },
+      { group: 'Help', pages: pages.slice(6) },
+    ];
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /navigation group names must be exactly/);
+});
+
+test('legacy single Stet navigation group fails', async () => {
+  const result = await runCopy(async (root) => {
+    const configPath = join(root, 'docs.json');
+    const config = JSON.parse(await readFile(configPath, 'utf8'));
+    const pages = config.navigation.groups.flatMap((group) => group.pages);
+    config.navigation.groups = [{ group: 'Stet', pages }];
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /navigation must contain exactly four named groups/);
+});
+
+for (const [name, injected, expected] of [
+  ['forbidden path', '/Users/ben/private.txt', /forbidden private path/],
+  ['leaderboard path', '.stet/leaderboard/zod', /forbidden private path/],
+  ['secret', 'TOKEN=sk-ant-test-value', /secret assignment/],
+  ['unsupported claim', 'This is a post-training layer for agents.', /unsupported claim/],
+  ['installer version argument', 'curl https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.sh | sh --version 9.9.9', /must not pass a version argument/],
+  ['stet update', 'Run stet update when needed.', /must not advertise generic stet update/],
+  ['body H1', '# Not allowed', /must not contain a Markdown H1/],
+]) {
+  test(`new page ${name} fails`, async () => {
+    const result = await runCopy(async (root) => {
+      await writeFile(join(root, 'new-page.mdx'), `---\ntitle: New page\nsidebarTitle: New page\n---\n\n${injected}\n`);
+      const configPath = join(root, 'docs.json');
+      const config = JSON.parse(await readFile(configPath, 'utf8'));
+      config.navigation.groups[0].pages.push('new-page');
+      await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.errors.join('\n'), expected);
+  });
+}
+
+test('Prompt bodies require closure, multiple lines, and short lines', async () => {
+  const result = await runCopy(async (root) => {
+    const path = join(root, 'quickstart.mdx');
+    await writeFile(path, `${await readFile(path, 'utf8')}\n<Prompt>\n${'x'.repeat(101)}\n</Prompt>\n<Prompt>one line</Prompt>\n<Prompt>\nfirst\nsecond\n`);
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /Prompt contains a line longer than 100 characters/);
+  assert.match(result.errors.join('\n'), /Prompt must contain at least two nonempty lines/);
+  assert.match(result.errors.join('\n'), /unclosed Prompt/);
+});
+
+test('unsupported claims inside Prompt bodies fail', async () => {
+  const result = await runCopy(async (root) => {
+    const path = join(root, 'quickstart.mdx');
+    await writeFile(path, `${await readFile(path, 'utf8')}\n<Prompt>\nThis is a post-training layer for agents.\nContinue safely.\n</Prompt>\n`);
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /unsupported claim/);
+});
+
+test('per-page receipt fixture validates a uniquely named marker and caveats', async () => {
+  const result = await runCopy(async (root) => {
+    const fixtureDir = join(root, 'receipt-fixtures');
+    await mkdir(fixtureDir, { recursive: true });
+    const fixture = { caveats: ['Synthetic receipt caveat.'], publication_approved_at: null, publication_approved_by: null };
+    await writeFile(join(fixtureDir, 'quickstart-demo.json'), `${JSON.stringify(fixture, null, 2)}\n`);
+    const path = join(root, 'quickstart.mdx');
+    await writeFile(path, `${await readFile(path, 'utf8')}\nSynthetic receipt caveat.\n{/* <!-- stet-receipt:quickstart-demo:start --> */}\n\`\`\`json\n${JSON.stringify(fixture, null, 2)}\n\`\`\`\n{/* <!-- stet-receipt:quickstart-demo:end --> */}\n`);
+  });
+  assert.deepEqual(result, { ok: true, errors: [] });
+});
+
+test('nested-page receipt fixture binds through its hyphenated logical page name', async () => {
+  const result = await runCopy(async (root) => {
+    const fixtureDir = join(root, 'receipt-fixtures');
+    await mkdir(fixtureDir, { recursive: true });
+    const fixture = { caveats: ['Nested synthetic receipt caveat.'], publication_approved_at: null, publication_approved_by: null };
+    await writeFile(join(fixtureDir, 'concepts-trial-result-demo.json'), `${JSON.stringify(fixture, null, 2)}\n`);
+    const path = join(root, 'concepts', 'trial-result.mdx');
+    await writeFile(path, `${await readFile(path, 'utf8')}\nNested synthetic receipt caveat.\n{/* <!-- stet-receipt:concepts-trial-result-demo:start --> */}\n\`\`\`json\n${JSON.stringify(fixture, null, 2)}\n\`\`\`\n{/* <!-- stet-receipt:concepts-trial-result-demo:end --> */}\n`);
+  });
+  assert.deepEqual(result, { ok: true, errors: [] });
+});
+
+test('nested-page receipt fixture rejects a misbound marker ID', async () => {
+  const result = await runCopy(async (root) => {
+    const fixtureDir = join(root, 'receipt-fixtures');
+    await mkdir(fixtureDir, { recursive: true });
+    const fixture = { caveats: ['Nested synthetic receipt caveat.'], publication_approved_at: null, publication_approved_by: null };
+    await writeFile(join(fixtureDir, 'wrong-page-demo.json'), `${JSON.stringify(fixture, null, 2)}\n`);
+    const path = join(root, 'concepts', 'trial-result.mdx');
+    await writeFile(path, `${await readFile(path, 'utf8')}\nNested synthetic receipt caveat.\n{/* <!-- stet-receipt:wrong-page-demo:start --> */}\n\`\`\`json\n${JSON.stringify(fixture, null, 2)}\n\`\`\`\n{/* <!-- stet-receipt:wrong-page-demo:end --> */}\n`);
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /must be named for page concepts\/trial-result/);
+});
+
+for (const [name, mutate, expected] of [
+  ['unfixtured marker', async (root) => {
+    const path = join(root, 'quickstart.mdx');
+    await writeFile(path, `${await readFile(path, 'utf8')}\n{/* <!-- stet-receipt:quickstart-missing:start --> */}\n\`\`\`json\n{}\n\`\`\`\n{/* <!-- stet-receipt:quickstart-missing:end --> */}\n`);
+  }, /has no receipt fixture/],
+  ['orphan fixture', async (root) => {
+    await mkdir(join(root, 'receipt-fixtures'), { recursive: true });
+    await writeFile(join(root, 'receipt-fixtures', 'orphan.json'), '{"caveats": []}\n');
+  }, /orphan receipt fixture/],
+  ['duplicate marker', async (root) => {
+    const text = await readFile(join(root, 'index.mdx'), 'utf8');
+    await writeFile(join(root, 'index.mdx'), `${text}\n${text.match(/<!--[\s\S]*?stet-receipt:start[\s\S]*?stet-receipt:end[\s\S]*?-->/)?.[0] || ''}`);
+  }, /exactly one stet receipt source block/],
+  ['malformed fixture', async (root) => {
+    await mkdir(join(root, 'receipt-fixtures'), { recursive: true });
+    await writeFile(join(root, 'receipt-fixtures', 'bad.json'), '{ nope }\n');
+    const path = join(root, 'quickstart.mdx');
+    await writeFile(path, `${await readFile(path, 'utf8')}\n{/* <!-- stet-receipt:bad:start --> */}\n\`\`\`json\n{}\n\`\`\`\n{/* <!-- stet-receipt:bad:end --> */}\n`);
+  }, /not valid JSON/],
+  ['mismatch fixture', async (root) => {
+    await mkdir(join(root, 'receipt-fixtures'), { recursive: true });
+    await writeFile(join(root, 'receipt-fixtures', 'bad.json'), '{"caveats": []}\n');
+    const path = join(root, 'quickstart.mdx');
+    await writeFile(path, `${await readFile(path, 'utf8')}\n{/* <!-- stet-receipt:bad:start --> */}\n\`\`\`json\n{"caveats":["different"]}\n\`\`\`\n{/* <!-- stet-receipt:bad:end --> */}\n`);
+  }, /must exactly equal receipt fixture/],
+]) {
+  test(`${name} fails`, async () => {
+    const result = await runCopy(mutate);
+    assert.equal(result.ok, false);
+    assert.match(result.errors.join('\n'), expected);
+  });
+}
+
+test('an unapproved second receipt fixture fails publication but not contract', async () => {
+  const mutate = async (root) => {
+    const fixtureDir = join(root, 'receipt-fixtures');
+    await mkdir(fixtureDir, { recursive: true });
+    const fixture = { caveats: ['Synthetic receipt caveat.'], publication_approved_at: null, publication_approved_by: null };
+    await writeFile(join(fixtureDir, 'quickstart-demo.json'), `${JSON.stringify(fixture, null, 2)}\n`);
+    const path = join(root, 'quickstart.mdx');
+    await writeFile(path, `${await readFile(path, 'utf8')}\nSynthetic receipt caveat.\n{/* <!-- stet-receipt:quickstart-demo:start --> */}\n\`\`\`json\n${JSON.stringify(fixture, null, 2)}\n\`\`\`\n{/* <!-- stet-receipt:quickstart-demo:end --> */}\n`);
+  };
+  assert.deepEqual(await runCopy(mutate), { ok: true, errors: [] });
+  const publication = await runCopy(mutate, { mode: 'publication' });
+  assert.equal(publication.ok, false);
+  assert.match(publication.errors.join('\n'), /quickstart-demo receipt fixture requires publication approval/);
 });

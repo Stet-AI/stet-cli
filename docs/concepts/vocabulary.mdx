@@ -1,0 +1,71 @@
+---
+title: Vocabulary
+sidebarTitle: Vocabulary
+description: Stable terms for Stet measurements and release decisions
+---
+
+These terms make a Stet result legible to both an operator and a coding agent.
+They describe a bounded measurement, not a general statement about a model.
+
+## Measurement inputs
+
+- **Harness surface**: an externally controllable behavior lever, such as an
+  instruction file, skill, model, reasoning setting, tool policy, or prompt.
+- **Task corpus**: replayable accepted repository work, each with a pre-change
+  snapshot, task prompt, and declared verification signal.
+- **Slice**: the declared subset of the task corpus used for one measurement.
+- **Holdout**: matched tasks kept out of iteration and used to check a finalist
+  before promotion.
+- **Gold patch**: the original accepted change held hidden from the agent under
+  test and used as reference evidence where the workflow supports it.
+
+## Comparison terms
+
+- **Arm**: one configuration evaluated on the declared task slice.
+- **Treatment**: the specific harness-surface configuration assigned to an arm.
+- **Baseline**: a named, managed stored reference arm used for matched comparison.
+  A baseline refresh records new evidence; it is not a promotion.
+- **Denominator**: every declared task or arm-task cell that a stated rate uses.
+  Unavailable, no-patch, and inconclusive cells remain visible rather than being
+  silently dropped.
+
+## Backends and evidence
+
+- **Harbor**: Stet's prepared execution environment for replaying repository
+  tasks with the declared setup and verifier.
+- **Docker backend**: isolated container replay. It is the normal backend for
+  evidence intended to inform a decision.
+- **Worktree backend**: an explicitly selected local replay mode. It is not
+  Docker-equivalent isolation and is inspect-only unless the Trial Result says
+  the resulting evidence is decision-grade.
+
+## Graders and dimensions
+
+- **Grader**: an evaluator that applies a declared rubric after core verification.
+- **Dimension**: a quality axis a grader evaluates, such as equivalence, clarity,
+  simplicity, coherence, intentionality, robustness, instruction adherence,
+  scope discipline, or diff minimality.
+- **Contamination**: a signal that the trajectory may have seen information it
+  should not have. It requires investigation and caps claims; it is not a reason
+  to delete the affected row from the denominator.
+- **Stranded results**: incomplete or repairable execution evidence that requires
+  the recorded next action before it can support a decision.
+
+## Spend and calibration
+
+- **Spend operation**: an action that invokes a coding or grader model and can
+  consume tokens. An operator approves these before execution.
+- **No-spend operation**: status, inspection, and some evidence-preserving repair
+  or re-analysis work that does not launch a new coding-agent attempt.
+- **Decision-grade**: a metric has sufficient valid, complete, calibrated
+  evidence for its declared decision.
+- **Directional**: a metric points toward an iteration hypothesis but is not a
+  promotion authorization. Directional means iterate, do not promote.
+- **Noise-band**: observed differences are too uncertain or variable to support
+  a directional conclusion.
+- **Evidence posture**: the action strength of the whole result: actionable,
+  directional, or inspect. Per-metric calibration never becomes a blended score.
+
+See [how Stet works](/concepts/how-stet-works) for the measurement sequence and
+the [release lifecycle](/concepts/release-lifecycle) for what the result can
+authorize.

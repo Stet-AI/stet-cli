@@ -4,93 +4,35 @@ sidebarTitle: Choose a workflow
 description: Match your coding-agent question to a bounded Stet workflow
 ---
 
-Each workflow changes one meaningful harness surface at a time, uses a matched
-task slice, and returns a Trial Result you can interpret before deciding what to
-keep. Choose the question that matches the decision in front of you.
+Choose the question that matches the decision in front of you. Each guide gives
+your agent a bounded prompt, a spend boundary, and a report-back contract.
 
 <span id="agents-md-ab"></span>
 
 ## Is my AGENTS.md change helping?
 
-Use a manifest-backed A/B comparison when you have a proposed instruction change
-and want the model and other relevant settings held fixed.
-
-**Recommended prompt**
-
-```text wrap
-Use the Stet skill to A/B test my proposed AGENTS.md change. Keep the model
-fixed, plan before launch, and return the canonical Trial Result with its
-recommendation, evidence limitations, and next action.
-```
-
-**Evidence expectation:** A credible result compares baseline and candidate on
-the same retained repository tasks, with the intended instruction lever
-isolated and the required tests and graders present. A quick smoke can guide
-iteration but is not a rollout decision.
+Compare one instruction-file lever on the same retained tasks. Read the [instruction-file A/B guide](/guides/instruction-file-ab).
 
 <span id="iterative-instruction-improvement"></span>
 
 ## Improve my AGENTS.md
 
-Use the iterative loop when you want the agent to propose bounded instruction
-edits and measure them one at a time. Set a search space and stop rule before
-launching; holdout evidence and promotion remain explicit decisions.
-
-**Recommended prompt**
-
-```text wrap
-Use the Stet skill to improve AGENTS.md within a bounded search space and stop
-rule. Test one change at a time and ask before using holdout evidence or
-promoting a finalist.
-```
-
-**Evidence expectation:** Each iteration should name the single changed lever,
-preserve the task and grader contract, and stop when the result is inspect-only,
-not improving, or otherwise unable to support the next decision.
+Run a bounded native optimize loop with explicit stop rules. Read the [iterative improvement guide](/guides/iterative-improvement).
 
 <span id="skill-evaluation"></span>
 
 ## Is this skill helping?
 
-Evaluate a skill against the right baseline: an effectively absent skill for a
-new skill, or the committed skill for a revision. Keep repository work and
-behavior-relevant graders matched.
-
-**Recommended prompt**
-
-```text wrap
-Use the Stet skill to test whether this repo-managed skill helps. Plan before
-launch, use the right baseline, and report promote, hold, or inspect.
-```
-
-**Evidence expectation:** The baseline must actually represent skill absence or
-the committed version, and the result should include behavior-relevant grader
-coverage. Missing coverage turns a comparison into an inspectable diagnostic,
-not a keep decision.
+Choose the correct absent or committed baseline before comparing behavior. Read the [skill evaluation guide](/guides/skill-evaluation).
 
 <span id="model-reasoning-comparison"></span>
 
 ## Which model or reasoning effort should I use?
 
-Compare models on the same retained tasks, or hold the model fixed while
-comparing reasoning settings. Keep the rest of the harness stable enough to
-attribute the observed difference.
-
-**Recommended prompt**
-
-```text wrap
-Use the Stet skill to compare these configurations on the same repository
-tasks. First ask whether I want a cheap diagnostic read or a gateable rollout
-decision. Keep diagnostic evidence labeled directional; for a gateable choice,
-use matched runs and return the canonical Trial Result.
-```
-
-**Evidence expectation:** Read correctness, quality dimensions, cost,
-uncertainty, validity, and residual risk separately. Do not choose a default from
-stale, partial, incomparable, or inspect-only evidence.
+Smoke first, then compare one new arm against the same frozen reference. Read the [model comparison guide](/guides/model-comparison).
 
 ## What happens next
 
-Start with [the prompt cookbook](/prompts) for compact copy-paste wording. When
-your run finishes, [read the Trial Result](/concepts/trial-result) before making
-a rollout decision.
+Use the [prompt cookbook](/prompts) for session-ready wording. Your agent reads
+the Trial Result and reports the decision, evidence posture, limits, spend, and
+one next action.

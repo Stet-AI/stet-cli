@@ -1,0 +1,51 @@
+---
+title: Release lifecycle
+sidebarTitle: Release lifecycle
+description: Gate, promote, monitor, and roll back a measured coding-agent capability
+---
+
+A capability release object is a harness change plus its evidence, trust state,
+rollout state, and monitoring history. It moves through a fail-closed lifecycle:
+**gate → promote → monitor → rollback**.
+
+## Gate
+
+At the gate, your agent reads the freshest Trial Result for the intended
+treatment, baseline, and task corpus. The gate checks validity, coverage,
+calibration, contamination, and evidence posture. Missing graders, stale
+evidence, invalid replay, structural confounds, or an inspect posture block a
+promotion claim.
+
+## Promote
+
+Promotion records that the measured capability may be used for the declared
+scope. It is not a universal ranking or a promise beyond the corpus and harness
+that were evaluated. Optimizer finalists must pass a matching holdout before
+promotion or public claims. A baseline refresh is not promotion: it updates the
+managed reference evidence without authorizing a new treatment.
+
+## Monitor
+
+Monitoring reruns the bounded measurement on a schedule or when the harness,
+corpus, or operating conditions materially change. Freshness is part of trust:
+old evidence may remain useful for diagnosis, but it cannot silently stand in
+for evidence about a changed capability.
+
+## Roll back
+
+Rollback withdraws the promoted treatment when monitoring shows regression,
+degraded evidence, an invalid comparison, or a trust failure. Your agent should
+state the rollback reason, preserve the receipt, and propose the next bounded
+repair or comparison rather than overwrite history.
+
+## States your agent should name
+
+- **Trust state**: whether the evidence is decision-grade, directional, or needs
+  inspection for the declared claim.
+- **Rollout state**: gated, promoted, monitored, or rolled back.
+- **Freshness state**: current for the declared inputs, superseded, or stale.
+
+Every transition fails closed. A favorable test headline cannot overcome
+degraded evidence, an incomplete holdout, a missing grader, or an inspect-only
+result. Ask your agent to make the state and next action explicit in every
+report-back.

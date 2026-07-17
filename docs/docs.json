@@ -17,16 +17,50 @@
     "dark": "/assets/stet-mark.svg"
   },
   "favicon": "/assets/stet-mark.svg",
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "mcp",
+      "cursor",
+      "vscode"
+    ],
+    "display": "header"
+  },
   "navigation": {
     "groups": [
       {
-        "group": "Stet",
+        "group": "Get started",
         "pages": [
           "index",
           "quickstart",
-          "workflows",
+          "first-eval"
+        ]
+      },
+      {
+        "group": "Concepts",
+        "pages": [
           "concepts/how-stet-works",
           "concepts/trial-result",
+          "concepts/vocabulary",
+          "concepts/release-lifecycle"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "workflows",
+          "guides/instruction-file-ab",
+          "guides/model-comparison",
+          "guides/skill-evaluation",
+          "guides/iterative-improvement"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
           "prompts",
           "troubleshooting"
         ]

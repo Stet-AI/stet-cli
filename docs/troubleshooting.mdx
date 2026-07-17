@@ -1,119 +1,65 @@
 ---
 title: Troubleshooting
 sidebarTitle: Troubleshooting
-description: Route setup, authentication, runtime, and evidence problems
+description: Recover Stet work without discarding evidence or hiding uncertainty
 ---
 
-Start with the symptom, then return to the owning page. Keep setup problems
-separate from model-quality evidence.
+Start at status. Your agent should read `status` and its `next_action`, classify
+the state, and identify its spend before executing a recorded recovery.
 
-## Setup checks fail
+## Four-state triage
 
-Run:
+| State | Meaning | Correct move |
+| --- | --- | --- |
+| healthy-wait | `waiting_on_quota` is an intentional pause | Wait; do not restart |
+| stalled | Required work stopped progressing | Resume the missing work |
+| broken-infra | Auth, build, Docker, or provider setup failed | Fix that boundary, then target the rerun |
+| invalid-evidence | Evidence is stranded, contaminated, incomplete, or invalid | Fail closed; repair or rerun cleanly |
 
-```sh
-gh auth status
-stet --version
-stet auth status
-npx skills list
-docker info
-command -v uv
-```
+<Prompt description="Classify and recover a Stet run safely" actions={["copy", "cursor"]}>
+Use the Stet skill to read this run's status and next_action. Classify it as
+healthy-wait, stalled, broken-infra, or invalid-evidence. Say whether recovery
+spends model or grader tokens, then propose one evidence-preserving next action.
+</Prompt>
 
-The [quickstart](/quickstart) explains which checks are required for the default
-Docker-backed path. If the binary is old, reinstall from the public installer
-and verify `stet --version` again:
+## Spend boundary for recovery
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.sh | sh
-```
+Status reads, resume, patch repair, and rederive-only work preserve existing
+evidence and do not launch a new coding-agent attempt. Grader backfill can spend
+grader tokens only. Restarting or relaunching an arm runs agents again and can
+spend model tokens. The operator approves each spend boundary.
 
-The installer selects the latest stable CLI by default; verify the result with
-`stet --version`.
+## Diagnose ambiguous symptoms
 
-## GitHub or Stet authentication fails
+Systematic early zero-byte patches often indicate credentials or provider setup.
+Scattered empty patches with timeout or no-patch reasons may be genuine agent
+outcomes. An empty transcript with an exception usually means the container build
+failed before the agent ran. A base-URL configuration mistake can score a
+different provider than intended. Ask the agent to name the artifact-backed cause
+before treating any of these as model signal.
 
-The public installer and skill do not require GitHub login. GitHub CLI auth is
-needed for private release overrides or PR-backed discovery. Commercial eval
-execution requires:
+## Handle contamination without deleting evidence
 
-```sh
-stet auth login
-stet auth status
-```
+Contamination flags annotate a run; they do not justify deleting a row. Stop
+superiority or rollout claims, verify the flag at trajectory level, and retain
+the cell in the denominator while it is unresolved. Follow the status or Trial
+Result's supported emitted next action. If no remediation is emitted, stop and
+report the blocker; do not invent a command or configuration.
 
-If a private override fails, confirm repository access before debugging Stet.
+## Forbidden recovery moves
 
-## Docker or `uv` is unavailable
+- Do not restart a healthy wait; wait for it to resume.
+- Do not silently delete denominator rows; report them and repair or rerun.
+- Do not rewrite result artifacts by hand; use the recorded recovery path.
+- Do not promote stale or inspect-only evidence; read the current Trial Result.
+- Do not spend on a new model run without approval.
+- Do not hand-pair compare directories; use the frozen-baseline identity.
+- Do not retry a terminal arm failure in a repair loop; inspect it and relaunch
+  only with approval.
 
-Start Docker Desktop or the Linux Docker service, then rerun `docker info`. If
-Docker is intentionally unavailable and the surface supports it, ask your agent
-to use the explicit worktree backend:
+## Setup and authentication
 
-```text wrap
-Use the Stet skill. Run the supported local check with
---harbor-backend worktree, then read status/report and inspect worktree
-integrity artifacts only if diagnosis is needed.
-```
-
-Install `uv` with the public installer when `command -v uv` returns no path:
-
-```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Worktree-backed evidence is inspect-only by default. It is not
-Docker-equivalent isolation and should support a decision only when the Trial
-Result explicitly says that the evidence is decision-grade; use Docker-backed
-replay for gateable decisions otherwise.
-
-## Claude Code authentication fails
-
-Authenticate before a Stet-managed Claude run:
-
-```sh
-claude setup-token
-mkdir -p ~/.config/stet
-chmod 700 ~/.config/stet
-printf '%s\n' '<printed token>' > ~/.config/stet/claude-oauth-token
-chmod 600 ~/.config/stet/claude-oauth-token
-unset CLAUDE_CODE_OAUTH_TOKEN
-```
-
-Do not commit the token or put it in repository `.env` files. If the skill is
-missing, reinstall it with the command in the [quickstart](/quickstart).
-
-## A run is slow, stalled, or incomplete
-
-Do not restart blindly. Ask the agent to inspect status first:
-
-```text wrap
-Use the Stet skill. This Stet rules run looks incomplete. Check status first
-and identify whether the launcher is still active. Use rules repair only if the
-run has exited or stalled. Do not restart unless I explicitly approve
-discarding evidence.
-```
-
-Then use [Read a Trial Result](/concepts/trial-result) to distinguish an
-infrastructure state from a model-quality result.
-
-## Replay validity is missing
-
-Errors such as `no_gold_pass_commands`,
-`all_commands_ignored_gold_failure_mode_unset`, or replay-validity failures mean
-the selected slice is not decision-grade yet. Fix the test or harness setup,
-choose a better task slice, or stop with an inspect-only diagnosis before
-relaunching.
-
-## Grader coverage is missing
-
-Tests may still have run, but missing declared grader coverage limits the claim.
-Use the repair or regrade command emitted by `stet eval status` or
-`stet eval report`, then reread the complete Trial Result.
-
-## The result says `inspect`
-
-`inspect` is useful evidence for diagnosis or iteration, not a generic failure.
-It can reflect a small sample, stale evidence, missing graders, replay validity,
-infrastructure failure, or mixed results. Ask the agent to name the concrete
-blocker and propose one bounded next action; do not infer promotion from prose.
+For a broken-infra state, ask the agent to check provider authentication, Docker,
+repository build prerequisites, and the configured provider endpoint. Fix the
+specific failed boundary first, then reread status before a targeted rerun. Keep
+tokens out of repository files and do not paste credentials into prompts.

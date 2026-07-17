@@ -1,52 +1,138 @@
 ---
 title: Read a Trial Result
 sidebarTitle: Read a Trial Result
-description: Interpret recommendation, evidence quality, and the next action
+description: What your agent should report from Stet's canonical decision record
 ---
 
-A Trial Result is the canonical decision artifact for one declared comparison.
-It tells you what was tested, how much evidence exists, and what action that
-evidence supports. Do not reconstruct the verdict from a pass rate alone.
+A Trial Result is the canonical decision record for one declared comparison.
+Your agent reads it on your behalf and projects it into a report-back you can
+act on. The operator does not need a manual artifact-reading workflow.
 
-## Read the decision first
+## The report-back contract
 
-The lifecycle recommendation is one of:
+A trustworthy agent report-back includes all of the following:
 
-- **promote** — the evidence supports keeping the candidate for the declared
-  change, corpus, and harness;
-- **hold** — the evidence does not support promotion; or
-- **inspect** — the result is useful for diagnosis or iteration but is not strong
-  enough for a rollout decision.
+1. A verdict expressed as a routing action, not a raw ranking.
+2. A calibration tier for each metric: decision-grade, directional, or noise-band.
+3. Explicit denominators and coverage, including inconclusive cells.
+4. Confounds named up front; structural confounds cap claim strength.
+5. Plainly stated non-results, including when no quality metric is decision-grade.
+6. Cost with robust centers, such as a median or geomean alongside a mean that
+   may be driven by outliers.
+7. Native provenance from the freshest Trial Result, not a stale field or a
+   hand-written summary.
+8. No superiority or rollout claim from tests alone, stale evidence, missing
+   graders, or inspect-only evidence.
 
-The recommendation is scoped. It is not a universal model ranking or a promise
-that the same change will behave identically on another repository.
+## Calibration is per metric
 
-## Then check the evidence
+**Decision-grade** means the specific metric has enough valid, complete,
+calibrated evidence for its declared decision. **Directional** means the metric
+is useful for iteration, not promotion. **Noise-band** means the observed
+difference cannot support even a directional conclusion. Cross-axis sign
+consistency can strengthen a noise-band read into a directional hypothesis, but
+structural confounds permanently cap the language your agent may use.
 
-Read these fields before acting:
+An evidence posture of `directional` means “iterate, don't promote.” An
+`inspect` posture blocks rollout and superiority claims until the evidence is
+repaired or the claim is narrowed.
 
-| Field | Question it answers |
-| --- | --- |
-| Decision and confidence | What action is proposed, and how strongly? |
-| Evidence quality | Is the evidence fresh, complete, and suitable for the decision? |
-| Validity | Did replay and verification execute as intended? |
-| Task coverage | How many declared tasks and arm-task signals were usable? |
-| Grader coverage | Which declared quality graders actually ran and parsed? |
-| Uncertainty | What variability or limitation remains visible? |
-| Next action | What bounded step should happen now? |
+## Ask these questions next
 
-Missing, stale, partial, under-graded, or replay-invalid evidence should fail
-closed. That is a reason to repair the evidence or narrow the claim, not a reason
-to infer readiness from a favorable number.
+1. Is this decision-grade, directional, or noise-band—and for which metric?
+2. What is the denominator, and were no-patch, unsure, or unavailable cells kept?
+3. Were contamination flags verified as true positives, including for the winning arm?
+4. Is a low or failed rate model signal, or an infrastructure problem?
+5. Did another rerun supersede this number or caveat?
+6. Is candidate versus baseline oriented by lineage rather than a directory name?
+7. Did the summary use the freshest native result rather than a stale field?
+8. Is the verdict an action I can take now?
 
-## Decide what to do
+## A real transparency excerpt
 
-1. Confirm the result is for the intended change and task slice.
-2. Check validity, task coverage, and grader coverage.
-3. Read correctness, quality dimensions, cost, uncertainty, and residual risk
-   separately.
-4. Follow the recorded next action: promote, hold, inspect, repair, or run one
-   bounded follow-up.
+The following sanitized July 2026 excerpt grounds the kind of report-back an
+agent should produce. It contains 16 matched tasks and 32 arm-task cells. It is
+shown for transparency, not as a tutorial for manually interpreting result
+artifacts.
 
-For a small or directional run, keep the label directional. For a gateable
-decision, use matched runs and the complete declared evidence contract.
+Sanitized excerpt from a real July 2026 comparison.
+
+The excerpt omits repository paths and arm identity; it is transparency evidence, not a complete Trial Result.
+
+The inspect verdict blocks superiority and rollout claims.
+
+{/* <!-- stet-receipt:concepts-trial-result-example:start --> */}
+```json
+{
+  "generated_at": "2026-07-09T01:31:06Z",
+  "source_report_sha256": "ff615e5627c4e0490f5ee56f4be03d0691849c80944813ee574fe684b8b4c3b8",
+  "decision_receipt": {
+    "answer": "inconclusive",
+    "confidence": "low",
+    "recommendation": "inspect",
+    "summary": "evidence quality is insufficient; grader discrimination evidence is not decision-grade",
+    "why": "Evidence is mixed, incomplete, or degraded and needs inspection before action.",
+    "next_action": "generate grader discrimination certification before using protected grader evidence",
+    "evidence_quality": {
+      "grade": "insufficient",
+      "posture": "inspect",
+      "readiness_state": "insufficient_evidence",
+      "decision_grade": false,
+      "factors": [
+        {
+          "signal": "validity",
+          "state": "ok",
+          "detail": "all 32 tasks produced usable signal"
+        },
+        {
+          "signal": "grader_coverage",
+          "state": "ok",
+          "detail": "11/11 graders fully covered"
+        },
+        {
+          "signal": "sample_size",
+          "state": "ok",
+          "detail": "16 tasks"
+        },
+        {
+          "signal": "sample_adequacy",
+          "state": "failed",
+          "detail": "equivalence-only corpus: 0/32 genuine discriminating test verdict cells; test-pass headlines are non-discriminating"
+        },
+        {
+          "signal": "grader_discrimination",
+          "state": "failed",
+          "detail": "grader discrimination evidence is not decision-grade: status=absent; readiness=inspect; applicability=incompatible; blockers=incompatible_applicability,missing_authority"
+        }
+      ]
+    },
+    "sample": {
+      "task_count": 16,
+      "denominator": "compare_task_set"
+    }
+  },
+  "caveats": [
+    "Sanitized excerpt from a real July 2026 comparison.",
+    "The excerpt omits repository paths and arm identity; it is transparency evidence, not a complete Trial Result.",
+    "The inspect verdict blocks superiority and rollout claims."
+  ],
+  "publication_approved_at": null,
+  "publication_approved_by": null
+}
+```
+{/* <!-- stet-receipt:concepts-trial-result-example:end --> */}
+
+## Example agent report-back
+
+This is a human projection from the excerpt above, not fabricated machine data:
+“Inspect, low confidence. All 16 matched tasks contributed 32 arm-task cells and
+all 11 declared graders covered the sample, but the corpus contains no genuine
+discriminating test-verdict cells. Grader-discrimination certification is absent
+and incompatible with the protected evidence. Do not make a superiority or
+rollout claim. Generate the certification before using those grader results.”
+
+For a finished evaluation, ask your agent to name the routing action, each
+metric's calibration tier, the full denominator and coverage, validity,
+confounds, observed cost and duration, evidence posture, and `next_action`.
+The [release lifecycle](/concepts/release-lifecycle) explains how that
+report-back can authorize gate, promotion, monitoring, or rollback.

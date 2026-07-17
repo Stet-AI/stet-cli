@@ -1,0 +1,56 @@
+{
+  "generated_at": "2026-07-09T01:31:06Z",
+  "source_report_sha256": "ff615e5627c4e0490f5ee56f4be03d0691849c80944813ee574fe684b8b4c3b8",
+  "decision_receipt": {
+    "answer": "inconclusive",
+    "confidence": "low",
+    "recommendation": "inspect",
+    "summary": "evidence quality is insufficient; grader discrimination evidence is not decision-grade",
+    "why": "Evidence is mixed, incomplete, or degraded and needs inspection before action.",
+    "next_action": "generate grader discrimination certification before using protected grader evidence",
+    "evidence_quality": {
+      "grade": "insufficient",
+      "posture": "inspect",
+      "readiness_state": "insufficient_evidence",
+      "decision_grade": false,
+      "factors": [
+        {
+          "signal": "validity",
+          "state": "ok",
+          "detail": "all 32 tasks produced usable signal"
+        },
+        {
+          "signal": "grader_coverage",
+          "state": "ok",
+          "detail": "11/11 graders fully covered"
+        },
+        {
+          "signal": "sample_size",
+          "state": "ok",
+          "detail": "16 tasks"
+        },
+        {
+          "signal": "sample_adequacy",
+          "state": "failed",
+          "detail": "equivalence-only corpus: 0/32 genuine discriminating test verdict cells; test-pass headlines are non-discriminating"
+        },
+        {
+          "signal": "grader_discrimination",
+          "state": "failed",
+          "detail": "grader discrimination evidence is not decision-grade: status=absent; readiness=inspect; applicability=incompatible; blockers=incompatible_applicability,missing_authority"
+        }
+      ]
+    },
+    "sample": {
+      "task_count": 16,
+      "denominator": "compare_task_set"
+    }
+  },
+  "caveats": [
+    "Sanitized excerpt from a real July 2026 comparison.",
+    "The excerpt omits repository paths and arm identity; it is transparency evidence, not a complete Trial Result.",
+    "The inspect verdict blocks superiority and rollout claims."
+  ],
+  "publication_approved_at": null,
+  "publication_approved_by": null
+}

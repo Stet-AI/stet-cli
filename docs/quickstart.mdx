@@ -48,7 +48,13 @@ npx skills list
 The CLI runs evaluations and manages artifacts. The skill tells your coding
 agent how to choose a workflow and read the canonical result.
 
-## 3. Verify prerequisites
+## 3. Give your agent current Stet guidance
+
+Add the [Stet docs MCP server](https://docs.stet.sh/mcp) so your agent can
+consult the current guidance. Ask the agent to confirm its MCP setup before it
+uses Stet on your repository.
+
+## 4. Verify prerequisites
 
 Run the checks that match the backend you plan to use:
 
@@ -65,11 +71,11 @@ The default isolated path needs Docker, Python 3.12 or newer, `uv`, and
 authentication for the model provider you eventually plan to evaluate. GitHub
 CLI access is needed for private release overrides or PR-backed discovery.
 
-## 4. Ask your agent to onboard one repository
+## 5. Ask your agent to onboard one repository
 
 From the repository you want to measure, ask:
 
-```text wrap
+<Prompt description="Onboard one repository without launching a model evaluation" actions={["copy", "cursor"]}>
 Use the Stet skill. Onboard this repo for Stet evals. Ask what work I want
 Stet to track, read CI first, and choose the real test command. Inspect merged
 PRs/commits for representative work (use read-only subagents for this
@@ -84,7 +90,7 @@ Report scope, skipped tasks and reasons, then stop before any model eval. Treat
 Docker or replay checks as setup validation, not a model eval.
 Wait for `build-summary.json` before treating the build as complete, then return
 the onboarding receipt with the selected slice, scope, skips, and confidence.
-```
+</Prompt>
 
 Your agent should inspect CI and build files, ask about the product areas and
 work mix you care about, select real merged work, and create the repository's
@@ -97,29 +103,39 @@ have the agent pass `--llm-install-config=false` to the suite build and record
 that choice in the receipt; the no-model path can produce lower-fidelity broad
 verifiers.
 
-## 5. Inspect the onboarding receipt
+For noninteractive `stet init`, including `--yes` or a session without a TTY,
+your agent must choose and pass `--ai-provider`. For quality-sensitive setup,
+ask it to use `--quality recommended`; `--yes` alone intentionally does not
+enable the recommended quality bundles.
+
+If Claude is the selected provider, use the secure setup-token path: run
+`claude setup-token`, store the printed token in
+`~/.config/stet/claude-oauth-token` with `0600` permissions, and do not export
+the token into shell history or an environment variable. Stet reads that file.
+
+## 6. Inspect the onboarding receipt
 
 Ask your agent to summarize the receipt before doing more work:
 
-```text wrap
+<Prompt description="Summarize the onboarding receipt before more work" actions={["copy", "cursor"]}>
 Use the Stet skill. Read the Stet onboarding receipt. Summarize the
 candidate-task funnel, selected starter slice, representativeness rationale,
 subsystem/path coverage, difficulty mix, skipped-task reasons, Docker/test
 setup validation, confidence, and recommended next step. Do not launch more
 work yet.
-```
+</Prompt>
 
 If setup or task selection is blocked, use [Troubleshooting](/troubleshooting).
-When the receipt is credible, choose a bounded workflow from [Choose a
-workflow](/workflows). Do not treat this setup check as a model result.
+When the receipt is credible, continue to [Your first eval](/first-eval). Do
+not treat this setup check as a model result.
 
 To expand a credible starter slice, ask for a bounded follow-up:
 
-```text wrap
+<Prompt description="Expand the onboarding slice only when a bounded verifier exists" actions={["copy", "cursor"]}>
 Use the Stet skill. Expand the existing onboarding slice by one bounded
 subsystem or task family. Read the current receipt first, preserve its test
 command with an explicit `--test`, and explain the expected coverage gain.
 Use read-only investigation where useful; do not broaden just to increase
 yield. Stop before building if no narrow verifier is credible, and propose
 alternatives. Report added scope and skips, then stop before any model eval.
-```
+</Prompt>
