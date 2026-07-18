@@ -23,8 +23,11 @@ that spends model tokens. After I approve, run it and read the Trial Result.
 Your agent should turn the onboarding receipt into a narrow evaluation plan:
 one declared harness change, one task slice, and the existing bounded verifier.
 Time and cost depend on your slice and provider, so have it state estimates
-before it starts. Docker-backed replay is the normal setup for evidence you
-intend to act on. The agent should stop for your approval before any
+before it starts. Spend draws on the provider account your agent already uses
+— your existing usage limits, not a separate bill — and a full eval can
+consume a substantial portion of a \$100 or \$200 monthly subscription tier's
+limits, so treat the pre-launch estimate as a real gate. Docker-backed replay
+is the normal setup for evidence you intend to act on. The agent should stop for your approval before any
 model-spending launch and should not quietly broaden the task slice to get
 more results.
 

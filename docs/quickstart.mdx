@@ -7,6 +7,23 @@ description: Install Stet, verify prerequisites, and onboard one repository
 This first session verifies setup and creates an onboarding receipt. It stops
 before a model smoke, probe, or rules evaluation.
 
+## Stet is driven by your coding agent
+
+You do not operate Stet directly. Your coding agent runs the CLI, and the
+skill aligns how it does so with your interests: propose a bounded plan first,
+ask before anything that spends model tokens, never quietly broaden scope to
+get a better-looking number, and report the canonical result honestly —
+including what it does not support. You set the question, approve the spend,
+and make the decision. The prompts in these docs are the words you say to your
+agent to start each bounded workflow.
+
+Evaluations spend model tokens through the provider account your agent already
+uses, so they draw on your existing usage limits rather than a separate bill. A
+full eval can consume a substantial portion of a \$100 or \$200 monthly
+subscription tier's limits, which is why every workflow here states its
+expected spend and waits for your approval before launch. This quickstart
+itself spends nothing on models.
+
 ## 1. Install the CLI
 
 macOS and Linux:
@@ -27,16 +44,30 @@ stet --version
 
 The installer scripts and agent skill come from the current public
 `Stet-AI/stet-cli/main` source. The installers select the latest stable CLI by
-default; verify the installed binary with `stet --version`.
+default; verify the installed binary with `stet --version`. The CLI ships for
+Windows, but the documented end-to-end Docker-backed evaluation workflow
+currently covers macOS and Linux.
 
 ## 2. Sign in and install the skill
 
-Commercial Stet workflows require local authentication:
+Commands that launch AI evaluation or regrading require sign-in; onboarding
+and reading results do not.
 
 ```sh
 stet auth login
 stet auth status
 ```
+
+`stet auth login` opens a browser sign-in and stores a token on your machine;
+signing in for the first time creates your account and starts a trial
+automatically, with no payment details collected. You only need it for
+commands that launch new AI evaluation or regrading work — `stet eval`,
+`stet monitor run`, `stet baseline rerun`, and the `stet runs repair`/`regrade`
+family. Onboarding a repository, building your task corpus, and reading or
+gating existing results all work without signing in. Stet is local-first: your
+repository, patches, and evaluation artifacts stay on your machine.
+Evaluations bill model tokens to your own provider account, never to Stet; run
+`stet auth status` to see your account and trial expiry.
 
 Install the agent skill separately:
 
@@ -46,17 +77,10 @@ npx skills list
 ```
 
 The CLI runs evaluations and manages artifacts. The skill tells your coding
-agent how to choose a workflow and read the canonical result.
-
-## Stet is driven by your coding agent
-
-You do not operate Stet directly. Your coding agent runs the CLI, and the
-skill aligns how it does so with your interests: propose a bounded plan first,
-ask before anything that spends model tokens, never quietly broaden scope to
-get a better-looking number, and report the canonical result honestly —
-including what it does not support. You set the question, approve the spend,
-and make the decision. The prompts in these docs are the words you say to your
-agent to start each bounded workflow.
+agent how to choose a workflow and read the canonical result. `skills` is the
+open skill-manager CLI: `--skill stet` selects the Stet skill from this
+repository, `--all` installs it for each supported coding agent it detects,
+and `npx skills list` shows what was installed and where.
 
 ## 3. Verify prerequisites
 
@@ -72,13 +96,26 @@ command -v uv
 ```
 
 The default isolated path needs Docker, Python 3.12 or newer, `uv`, and
-authentication for the model provider you eventually plan to evaluate. GitHub
-CLI access is needed for private release overrides or PR-backed discovery.
+authentication for the model provider you eventually plan to evaluate. Python
+and `uv` power Stet's replay harness regardless of your repository's language;
+your repository itself does not need to use Python. GitHub CLI access is needed
+for private release overrides or PR-backed discovery.
 
 ## 4. Ask your agent to onboard one repository
 
 From the repository you want to measure, say:
 
+```text wrap
+Use the Stet skill to onboard this repo. Ask me what work I want Stet to
+track, build a starter slice from real merged work, and stop with an
+onboarding receipt before any model evaluation.
+```
+
+The installed skill carries the guardrails — a narrow test command, no quiet
+scope broadening, and a hard stop before model spend. If you want every
+guardrail explicit in the prompt itself, use the long form:
+
+<Accordion title="Long-form onboarding prompt with explicit guardrails">
 ```text wrap
 Use the Stet skill. Onboard this repo for Stet evals. Ask what work I want
 Stet to track, read CI first, and choose the real test command. Inspect merged
@@ -95,6 +132,7 @@ Docker or replay checks as setup validation, not a model eval.
 Wait for `build-summary.json` before treating the build as complete, then return
 the onboarding receipt with the selected slice, scope, skips, and confidence.
 ```
+</Accordion>
 
 Your agent should inspect CI and build files, ask about the product areas and
 work mix you care about, select real merged work, and create the repository's

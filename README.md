@@ -90,7 +90,10 @@ Windows PowerShell:
 irm https://raw.githubusercontent.com/Stet-AI/stet-cli/main/install.ps1 | iex
 ```
 
-Sign in to commercial Stet workflows, then install the Stet agent skill:
+Signing in creates your account and starts a trial (no payment details
+collected); it is required only for commands that launch AI evaluation or
+regrading, and model tokens are always billed to your own provider account,
+never by Stet. Sign in, then install the Stet agent skill:
 
 ```sh
 stet auth login
@@ -109,13 +112,16 @@ onboarded repository to a first bounded measurement.
 Then, in the repository you want to evaluate, ask your coding agent:
 
 ```text
-Use the Stet skill to onboard this repo. First ask what work and decision I
-want Stet to track. Read CI and repository history, propose a starter slice
-from real merged work, prove which retained tasks are build-ready, and report
-the slice rationale, coverage, gaps, and confidence. Stop with an onboarding
-receipt before model evaluations; do not claim the slice is automatically
-representative.
+Use the Stet skill to onboard this repo. Ask me what work I want Stet to
+track, build a starter slice from real merged work, and stop with an
+onboarding receipt before any model evaluation.
 ```
+
+Onboarding spends nothing on models. Evaluations spend model tokens through
+the provider account your agent already uses — your existing usage limits, not
+a separate bill — and a full eval can consume a substantial portion of a $100
+or $200 monthly subscription tier's limits, so your agent states expected
+spend and waits for approval before launch.
 
 ## Why trust the result?
 
@@ -125,17 +131,22 @@ task corpus, and recorded harness. Missing, stale, partial, invalid, or
 under-graded evidence cannot support promotion; Stet preserves the actual
 blocker status and exact next action instead of presenting it as rollout proof.
 
-Evaluation artifacts normally remain in local Stet output roots, and the
-audited Stet control-plane client path does not upload repository contents or
-evaluation artifacts. Configured coding-agent and grader providers can receive
-task instructions, repository context, patches, tests, and grading context.
-When you are signed in, the CLI also sends best-effort command-category and
-status events associated with the authenticated user. Those events are
-persisted server-side. Event metadata may include the root command, selected
-model or models, mode, output-directory basename, generic failure
-classification, and entitlement status or reason. A first-evaluation success
-or failure can enqueue customer outreach. The CLI currently exposes no
-telemetry opt-out. Stet does not claim a universal network sandbox.
+Stet is local-first: evaluations run on your machine, evaluation artifacts
+remain in local Stet output roots, and the audited Stet control-plane client
+path does not upload repository contents or evaluation artifacts — Stet stores
+none of your code or evaluation data. The coding-agent and grader providers
+you configure can receive task instructions, repository context, patches,
+tests, and grading context — that traffic goes to your providers, under your
+credentials, not to Stet. Separately, when you are signed in, the CLI sends
+best-effort command-category and status events to the Stet control plane so we
+can see where evaluations succeed or get stuck during the beta; a
+first-evaluation success or failure can queue a support follow-up. Event
+metadata may include the root command, selected model or models, mode,
+output-directory basename, a generic failure classification, and entitlement
+status or reason — never repository contents, prompts, or diffs. Events are
+persisted server-side and tied to the authenticated account; signing out stops
+them, and the CLI currently exposes no telemetry opt-out while signed in. Stet
+does not claim a universal network sandbox.
 
 ## Learn more
 

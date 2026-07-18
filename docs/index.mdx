@@ -43,6 +43,8 @@ graders, and writes a Trial Result with one scoped recommendation.
 ## Why trust the result
 
 - It measures your repository's real merged work, not synthetic benchmarks.
+- It is local-first: your repository, patches, and evaluation evidence stay on
+  your machine.
 - The evidence is produced independently of the agent whose change is under test.
 - It fails closed: weak, stale, or contaminated evidence blocks a strong claim.
 - Every decision comes with a machine-readable receipt.
@@ -64,8 +66,9 @@ Opus 4.7, both at high reasoning.
   harness and task corpus.
 </Callout>
 
-On this corpus, Opus 4.7 held test pass rate steady, showed higher equivalence,
-and used less cost and time. The receipt's declared grader evidence is part of
+On this corpus, Opus 4.7 held test pass rate steady, showed higher equivalence
+— agreement with the change that was actually merged, judged when tests alone
+cannot separate the arms — and used less cost and time. The receipt's declared grader evidence is part of
 the example:
 
 Grader dimensions are mean scores on a 0-4 rubric from a declared gpt-5.4 grader across all 28 tasks.
