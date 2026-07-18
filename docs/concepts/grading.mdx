@@ -1,0 +1,138 @@
+---
+title: Grading
+sidebarTitle: Grading
+description: How graders score patches and when grader evidence can carry a decision
+---
+
+Tests decide whether a patch works. Graders describe how good it is: whether it
+matches the intent of the original change, how it reads, how far it reaches, and
+how disciplined it was about the instructions. A [grader](/concepts/vocabulary#graders-and-dimensions)
+applies a declared rubric to each patch after core verification, and the scores
+land in the Trial Result alongside test outcomes, cost, and duration. Your agent
+reads and reports them for you; this page explains what it is reporting.
+
+## Why grading exists
+
+Tests provide the correctness gate, and grader evidence is additive on top of
+that gate — it never silently replaces a test verdict. But tests alone often
+cannot separate two configurations: pass rates tie, or a corpus has few
+genuinely discriminating test cells. A patch can pass every test and still be
+broader, riskier, or harder to review than the task called for. Grading is how
+those differences become declared, comparable evidence instead of impressions.
+
+## The grader set
+
+Stet ships three kinds of graders. `stet graders` lists everything resolvable
+in your repository: the built-ins, the bundles, your repository's quality
+configuration, and any local rubric files.
+
+**Outcome graders** judge what the patch accomplished:
+
+- **Equivalence** judges whether the patch satisfies the task's intended
+  change, obligation by obligation against the task statement. The hidden gold
+  patch is available to the judge as one correct implementation, not as a
+  template — a different approach that meets the obligations is equivalent.
+  The verdict is yes or no, with an explicit unsure when the evidence cannot
+  support a call, and it matters most exactly where tests cannot separate the
+  arms.
+- **Code review** renders a ship decision — pass, fail, or unsure — plus four
+  0-4 scores for correctness, introduced bug risk, edge-case handling, and
+  maintainability. The scores must be consistent with the ship decision.
+- **Footprint risk** classifies the patch's touched surface as low, medium, or
+  high, weighing files, churn, and non-test surface against the gold patch's
+  footprint. It is computed deterministically; no model judges it.
+
+**Quality bundles** score how the work was done. Two bundles cover code
+patches, each dimension on an anchored 0-4 rubric:
+
+| Bundle | Dimension | What a high score means |
+| --- | --- | --- |
+| craft | Clarity | The changed code is easy to trace: names, control flow, boundaries. |
+| craft | Simplicity | The smallest adequate solution, without premature generalization. |
+| craft | Coherence | The patch fits the repository instead of reinventing adjacent machinery. |
+| craft | Intentionality | Every hunk advances the task or makes the touched path safer. |
+| craft | Robustness | Concrete boundary handling and diagnostics, without defensive clutter. |
+| discipline | Instruction adherence | The patch follows the letter of the written instructions. |
+| discipline | Scope discipline | It solves what was asked, with minimal assumptions on ambiguity. |
+| discipline | Diff minimality | The diff is the natural size of the change, with no padding or churn. |
+
+**Custom rubrics** are repository-local rubric files your agent can author for
+dimensions you care about that the built-ins do not cover. A custom rubric is
+either binary — pass, fail, or unsure — or scored on the same 0-4 scale, and
+the discipline is the same: one rubric measures one dimension, anchored to
+observable evidence in the patch rather than overall impressions. Calibrate a
+new rubric against known examples or anchor cases before trusting its scores.
+
+## Who judges, and with what evidence
+
+Rubric-scored grading is performed by a declared judge model, recorded with the
+evaluation so reruns keep the same provenance. It should be kept independent of
+the model under test — the same model should not grade its own work, and a
+same-model setup cannot certify decisive grader evidence. For the outcome
+graders, the judge sees the task, the agent's patch, and the hidden gold patch
+as reference evidence; code review also sees the declared tests and their
+outcomes. The quality bundles and custom rubrics judge the agent's patch with
+bounded task and repository context and without the gold patch, so their scores
+are not anchored to the shape of the original change. The judge never scores on
+vibes alone, and it never rewards absence: a missing patch yields an
+insufficient-evidence outcome, and an empty patch where a change was required
+scores low — never a default high score.
+
+## Where grader results land
+
+The Trial Result carries one canonical entry per grader: mean 0-4 scores for
+rubric dimensions, pass and unsure rates for verdict graders, an equivalence
+rate over validated cells, and per-task detail in each task's decision record.
+Every grader metric gets its own calibration tier — decision-grade,
+directional, or noise-band — exactly like test and cost metrics; see
+[Read a Trial Result](/concepts/trial-result) for how tiers bound what your
+agent may claim.
+
+## When grader evidence can carry a decision
+
+Grader evidence is held to the same fail-closed standard as everything else in
+a Trial Result:
+
+- **Coverage is an evidence-quality factor.** The receipt records how many
+  declared graders actually covered the sample. A missing, failed, or
+  asymmetric grader — one arm graded, the other not — blocks a decision-grade
+  claim even when the headline scores look clean.
+- **Subjective grader evidence that would decide the outcome by itself is
+  protected.** Before a rubric-score movement can carry a promotion on its own,
+  the grading setup must hold a discrimination certification proving it can
+  actually separate stronger work from weaker work. Without it, grader scores
+  remain supporting evidence, and the receipt says so — the `inspect` example
+  in [Read a Trial Result](/concepts/trial-result) shows exactly this refusal.
+- **The grading setup itself is versioned.** Changing a rubric, prompt, or the
+  judging context changes the measurement device; results graded under mixed
+  setups are inspect-only until regraded consistently.
+- **Judge noise is real.** When the evaluation carries a recorded judge-noise
+  bound, score movements below that floor are flagged rather than presented as
+  signal.
+
+## How to interpret grader results
+
+- A grader delta on a broken or misconfigured run is setup noise, not model
+  signal. Fix the run first.
+- Same-direction movement across several dimensions can upgrade a weak read
+  into an iteration hypothesis. It is a reason to iterate, never a promotion by
+  itself.
+- On small task slices, treat grader deltas as directional at best, and do not
+  iterate on a movement the result marks noise-band unless consistent
+  cross-dimension movement has upgraded it into a directional hypothesis.
+- Keep craft separate from correctness in your own head: a candidate can write
+  cleaner patches and still resolve fewer tasks. The Trial Result reports both;
+  neither substitutes for the other.
+
+When a result comes back, ask your agent for the grader picture explicitly:
+
+```text wrap
+From the canonical Trial Result, report each grader dimension's scores for both
+arms with its calibration tier, the grader coverage the receipt records, and
+whether any grader evidence is protected or blocked. State plainly which grader
+movements support iteration and which support nothing.
+```
+
+Grading also extends beyond code patches: the
+[skill evaluation guide](/guides/skill-evaluation) shows the same rubric
+machinery applied to skill quality with its own declared dimensions.

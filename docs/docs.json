@@ -43,6 +43,7 @@
         "group": "Concepts",
         "pages": [
           "concepts/how-stet-works",
+          "concepts/grading",
           "concepts/trial-result",
           "concepts/vocabulary",
           "concepts/release-lifecycle"
