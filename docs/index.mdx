@@ -1,13 +1,14 @@
 ---
 title: Change control for AI coding agents
 sidebarTitle: Overview
-description: Change control for AI coding agents
+description: Measure whether changes to your coding agent are safe to keep
 ---
 
-Stet replays accepted repository work so you can measure whether a change to an
-`AGENTS.md` file, shared skill, model, reasoning setting, or tool policy is safe
-to keep. Your coding agent proposes and applies changes; Stet evaluates matched
-work and returns a scoped decision.
+You change your coding agent's setup constantly — a new model, a rewritten
+`AGENTS.md`, a new skill, a different reasoning setting. Stet tells you which
+changes are safe to keep. It replays your repository's real accepted work under
+the proposed change and returns a scoped decision. Your agent runs Stet on your
+behalf; you set the question, approve the spend, and make the call.
 
 ## Find your next answer
 
@@ -39,16 +40,17 @@ graders, and writes a Trial Result with one scoped recommendation.
 
 ![The Stet evaluation loop: real merged work becomes replayable tasks, baseline and candidate are evaluated with tests and graders, and a Trial Result returns a bounded decision.](/assets/stet-loop.svg)
 
-The evaluator is separate from the coding agent that made the change. That
-separation keeps the question clear: did this bounded harness change improve
-behavior on the declared work, and is the evidence strong enough for the next
-action?
+## Why trust the result
+
+- It measures your repository's real merged work, not synthetic benchmarks.
+- The evidence is produced independently of the agent whose change is under test.
+- It fails closed: weak, stale, or contaminated evidence blocks a strong claim.
+- Every decision comes with a machine-readable receipt.
 
 ## Example Trial Result
 
-This is a historical April 2026 model comparison across 28 paired Zod tasks,
-with Opus 4.6 and Opus 4.7 both using high reasoning. It is a scoped example,
-not a current or universal model ranking.
+An example from a model comparison on 28 paired Zod tasks: Opus 4.6 versus
+Opus 4.7, both at high reasoning.
 
 | Observed measure | Opus 4.6 | Opus 4.7 |
 | --- | ---: | ---: |
@@ -62,16 +64,28 @@ not a current or universal model ranking.
   harness and task corpus.
 </Callout>
 
-On this task corpus, the historical receipt held observed test pass rate steady,
-showed higher observed equivalence, and used less observed cost and time. The
-receipt also used declared grader evidence that is not reproduced here.
+On this corpus, Opus 4.7 held test pass rate steady, showed higher equivalence,
+and used less cost and time. The receipt's declared grader evidence is part of
+the example:
 
-The scope and evidence limits are part of the result:
+Grader dimensions are mean scores on a 0-4 rubric from a declared gpt-5.4 grader across all 28 tasks.
+
+| Grader dimension | Opus 4.6 | Opus 4.7 |
+| --- | ---: | ---: |
+| Clarity | 2.91 | 2.98 |
+| Coherence | 2.53 | 2.61 |
+| Simplicity | 3.29 | 3.21 |
+| Intentionality | 3.27 | 3.58 |
+| Robustness | 2.23 | 2.27 |
+| Instruction adherence | 2.41 | 2.58 |
+| Scope discipline | 2.98 | 3.29 |
+| Diff minimality | 3.07 | 3.39 |
+
+Opus 4.7 showed higher means on seven of the eight craft dimensions; simplicity
+dipped slightly. The scope and evidence limits are part of the result:
 
 - Historical April 2026 result, scoped to this 28-task Zod corpus and recorded harness.
 - The legacy report predates Stet's current calibration and claim-readiness fields.
-- The displayed metric values are observations, not generalized or uncertainty-calibrated improvement claims.
-- The receipt also used declared grader evidence not reproduced here.
 
 <Accordion title="Machine-readable receipt">
 {/* <!-- stet-receipt:start --> */}
@@ -123,13 +137,59 @@ The scope and evidence limits are part of the result:
       "candidate": "3m 12s"
     }
   ],
+  "graders": {
+    "judge_model": "gpt-5.4",
+    "scale": "mean score on a 0-4 rubric",
+    "task_coverage": "28/28",
+    "dimensions": [
+      {
+        "name": "Clarity",
+        "baseline": "2.91",
+        "candidate": "2.98"
+      },
+      {
+        "name": "Coherence",
+        "baseline": "2.53",
+        "candidate": "2.61"
+      },
+      {
+        "name": "Simplicity",
+        "baseline": "3.29",
+        "candidate": "3.21"
+      },
+      {
+        "name": "Intentionality",
+        "baseline": "3.27",
+        "candidate": "3.58"
+      },
+      {
+        "name": "Robustness",
+        "baseline": "2.23",
+        "candidate": "2.27"
+      },
+      {
+        "name": "Instruction adherence",
+        "baseline": "2.41",
+        "candidate": "2.58"
+      },
+      {
+        "name": "Scope discipline",
+        "baseline": "2.98",
+        "candidate": "3.29"
+      },
+      {
+        "name": "Diff minimality",
+        "baseline": "3.07",
+        "candidate": "3.39"
+      }
+    ]
+  },
   "caveats": [
     "Historical April 2026 result, scoped to this 28-task Zod corpus and recorded harness.",
     "The legacy report predates Stet's current calibration and claim-readiness fields.",
-    "The displayed metric values are observations, not generalized or uncertainty-calibrated improvement claims.",
-    "The receipt also used declared grader evidence not reproduced here."
+    "Grader dimensions are mean scores on a 0-4 rubric from a declared gpt-5.4 grader across all 28 tasks."
   ],
-  "publication_approved_at": "2026-07-14",
+  "publication_approved_at": "2026-07-18",
   "publication_approved_by": "benredmond"
 }
 ```

@@ -41,8 +41,8 @@ export const PUBLIC_COLLATERAL_REQUIREMENTS = {
 };
 
 const EXPECTED_DOCS_REVIEW = {
-  content_base_commit: '1bb4d0bfb165cea588e5cbba1129d169968db9b8',
-  reviewed_at: '2026-07-17',
+  content_base_commit: 'c225091fbf5913ff3f2070a60cfa18db880da14f',
+  reviewed_at: '2026-07-18',
 };
 
 const EXPECTED_RECEIPT = {
@@ -61,13 +61,27 @@ const EXPECTED_RECEIPT = {
     { name: 'Observed cost per task', baseline: '$19.96', candidate: '$8.11' },
     { name: 'Mean agent duration', baseline: '7m 58s', candidate: '3m 12s' },
   ],
+  graders: {
+    judge_model: 'gpt-5.4',
+    scale: 'mean score on a 0-4 rubric',
+    task_coverage: '28/28',
+    dimensions: [
+      { name: 'Clarity', baseline: '2.91', candidate: '2.98' },
+      { name: 'Coherence', baseline: '2.53', candidate: '2.61' },
+      { name: 'Simplicity', baseline: '3.29', candidate: '3.21' },
+      { name: 'Intentionality', baseline: '3.27', candidate: '3.58' },
+      { name: 'Robustness', baseline: '2.23', candidate: '2.27' },
+      { name: 'Instruction adherence', baseline: '2.41', candidate: '2.58' },
+      { name: 'Scope discipline', baseline: '2.98', candidate: '3.29' },
+      { name: 'Diff minimality', baseline: '3.07', candidate: '3.39' },
+    ],
+  },
   caveats: [
     'Historical April 2026 result, scoped to this 28-task Zod corpus and recorded harness.',
     "The legacy report predates Stet's current calibration and claim-readiness fields.",
-    'The displayed metric values are observations, not generalized or uncertainty-calibrated improvement claims.',
-    'The receipt also used declared grader evidence not reproduced here.',
+    'Grader dimensions are mean scores on a 0-4 rubric from a declared gpt-5.4 grader across all 28 tasks.',
   ],
-  publication_approved_at: '2026-07-14',
+  publication_approved_at: '2026-07-18',
   publication_approved_by: 'benredmond',
 };
 

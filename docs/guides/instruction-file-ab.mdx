@@ -9,21 +9,19 @@ hypothesis. Keep the model, task slice, and other harness settings fixed.
 
 ## Say this
 
-<Prompt description="Plan an instruction-file A/B before spending tokens" actions={["copy", "cursor"]}>
+```text wrap
 Use the Stet skill to A/B test this proposed AGENTS.md or CLAUDE.md change.
 Keep one lever changed, retain at least 10 matched repository tasks, and keep
 the model and verifier fixed. Confirm the plan with me before model-token spend.
-</Prompt>
+```
 
 ## What happens
 
-Your agent should first propose the baseline, candidate, retained slice, verifier,
-graders, and expected spend. Duration and cost depend on retained-task count,
-provider, retries, repository setup, and grader coverage. Before launch, require
-the agent to state an expected time and spend band; there is no universal band.
-A smoke can expose setup or obvious behavior problems, but it is not a keep
-decision. A credible instruction-file signal uses at least 10 retained tasks and
-isolates one lever at a time.
+Your agent should first propose the baseline, candidate, retained slice,
+verifier, graders, and expected time and spend. A smoke run can expose setup or
+obvious behavior problems, but it is not a keep decision. A credible
+instruction-file signal uses at least 10 retained tasks and isolates one lever
+at a time.
 
 For a quality claim, ask for the recommended dimensions: `clarity`,
 `simplicity`, `coherence`, `intentionality`, `robustness`,
@@ -31,22 +29,17 @@ For a quality claim, ask for the recommended dimensions: `clarity`,
 coverage or invalid replay makes the result diagnostic rather than a rollout
 decision.
 
-## What your agent should report back
+## What a good answer sounds like
 
-The report should name the changed lever, matched denominator, evidence posture,
-and calibration for each relevant metric. Its values must come from the actual
-Trial Result:
+The report should name the changed lever, how many matched tasks counted, how
+strong the evidence is for each metric, and any confounds — every value from
+the actual Trial Result.
 
-> **Illustrative receipt shape:** Routing: keep, hold, or inspect. Confidence
-> and posture: actual values. Coverage: matched denominator and grader coverage.
-> Caveat: confounds or missing dimensions. Observed spend: actual value. Next
-> action: one supported action.
+Ask: "Which metrics are decision-grade?" "Were all matched cells retained?"
+"What blocks a keep decision?"
 
-Ask: “Which metrics are decision-grade?” “Were all matched cells retained?”
-“What blocks a keep decision?”
-
-<Prompt description="Ask for an honest instruction-file A/B report" actions={["copy", "cursor"]}>
+```text wrap
 Read the canonical Trial Result for this instruction-file A/B. Report the
 routing verdict, denominator, grader coverage, metric calibration, confounds,
 observed spend, and one next action. Do not promote inspect-only evidence.
-</Prompt>
+```

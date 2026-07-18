@@ -1,50 +1,50 @@
 ---
 title: Prompt cookbook
 sidebarTitle: Prompt cookbook
-description: Session-ready prompts for bounded Stet operator workflows
+description: Session-ready prompts for bounded Stet workflows
 ---
 
-These prompts are designed for an operator to hand to an agent. Start with a
-plan, reuse current evidence when possible, and make model-token spend explicit.
+Say these to your coding agent. Each starts with a plan, reuses current
+evidence when possible, and makes model-token spend explicit.
 
 ## Compare a new arm
 
-<Prompt description="Compare one new arm without repeating existing work" actions={["copy", "cursor"]}>
+```text wrap
 Use the Stet skill to plan a comparison of this new arm on the existing corpus.
 Reuse valid current evidence and spend only on the new arm. State the frozen
 baseline, matched slice, verifier, cost boundary, and plan before doing spend.
-</Prompt>
+```
 
 ## Reanalyze existing evidence
 
-<Prompt description="Get a no-spend read of current evidence" actions={["copy", "cursor"]}>
+```text wrap
 Use the Stet skill to inspect the freshest existing Trial Results and compare
 artifacts. Do not launch models. Tell me what can be reanalyzed without spend,
 what remains uncertain, and the one next action if new evidence is necessary.
-</Prompt>
+```
 
 ## Improve one instruction or skill lever
 
-<Prompt description="Keep an improvement loop bounded" actions={["copy", "cursor"]}>
+```text wrap
 Use the Stet skill to propose one bounded improvement to this instruction file
 or repository-managed skill. Name the baseline, one lever, retained slice,
 verifier, stop rules, and spend boundary. Confirm the plan before model spend.
-</Prompt>
+```
 
 ## Check an active or incomplete run
 
-<Prompt description="Recover through status before restarting" actions={["copy", "cursor"]}>
+```text wrap
 Use the Stet skill to inspect this run's status and next_action. Classify the
 state, say whether recovery spends model tokens, and execute only an approved
 evidence-preserving action. Do not restart a healthy wait or discard bad rows.
-</Prompt>
+```
 
 ## Read a completed result
 
-<Prompt description="Get a decision-ready human report" actions={["copy", "cursor"]}>
+```text wrap
 Read the canonical Trial Result on my behalf. Report the routing verdict,
 confidence, denominator, per-metric calibration, validity, confounds, observed
 spend, claim limits, and one next action. Do not reconstruct from pass rate alone.
-</Prompt>
+```
 
 Use [Choose a workflow](/workflows) when you need the full decision boundary.

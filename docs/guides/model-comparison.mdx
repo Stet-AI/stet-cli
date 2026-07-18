@@ -10,30 +10,26 @@ attribute a difference.
 
 ## Say this
 
-<Prompt description="Plan a matched model comparison before new spend" actions={["copy", "cursor"]}>
+```text wrap
 Use the Stet skill to compare a new model arm on this corpus. Reuse existing
 evidence where valid, smoke before new spend, and run only the new arm on the
 same task slice. Confirm the plan with me before model-token spend.
-</Prompt>
+```
 
 ## What happens
 
 Your agent should smoke the new configuration before investing in a full arm.
-Then it should run only that new arm on the identical retained slice, freeze the
-incumbent once as a named baseline, and compare the candidate with that frozen
-baseline. Duration and cost depend on slice size, provider, retries, repository
-setup, verifier, and grader coverage. Before launch, require an expected time
-and spend band; there is no universal band. The frozen identity prevents
-hand-pairing directories or silently changing the reference.
+Then it runs only that new arm on the identical retained slice, freezes the
+incumbent once as a named baseline, and compares the candidate against that
+frozen baseline. Have it state expected time and spend before launch. The
+frozen identity prevents hand-pairing directories or silently changing the
+reference.
 
-If compatible evidence is split across roots, combine it into a durable root;
-do not hand-edit manifests. A combined root may remain pending and fail closed
-until its derived artifacts are complete. `stet eval combine --finalize` only
-derives or finalizes those existing artifacts; it is idempotent and launches no
-new coding-model attempt or spend. Existing multi-arm artifacts can also be
-reanalyzed versus the field without another model run. A reasoning-effort
-comparison is the same shape: hold the model fixed, name the reasoning variant,
-and disclose that harness-surface difference.
+If compatible evidence is split across runs, have your agent combine it into
+one durable result rather than hand-editing anything; combining and reanalyzing
+existing artifacts spends nothing new. A reasoning-effort comparison is the
+same shape: hold the model fixed and name the reasoning variant as the
+treatment.
 
 | Request | Model-token spend |
 | --- | --- |
@@ -43,27 +39,21 @@ and disclose that harness-surface difference.
 | Reanalyze existing arms versus the field | No new model attempt |
 | Relaunch a changed arm or slice | Yes; approve first |
 
-Results remain scoped to the corpus, slice, harness, and time of the evidence.
+Results stay scoped to the corpus, slice, harness, and time of the evidence.
 Incomplete, stale, contaminated, or inspect-only evidence cannot support a
 default or superiority claim.
 
-## What your agent should report back
+## What a good answer sounds like
 
-Ask for the frozen baseline identity, candidate identity, exact denominator,
-per-metric calibration, quality and reliability separately, cost center and
-outliers, validity, and confounds. Its values must come from the actual Trial
-Result:
+The report should name the frozen baseline, the candidate, how many tasks
+counted, how strong each metric's evidence is, cost with its outliers, and any
+confounds — every value from the actual Trial Result.
 
-> **Illustrative receipt shape:** Routing: keep, hold, inspect, or gather one
-> bounded evidence item. Confidence and posture: actual values. Coverage:
-> matched denominator and grader coverage. Caveat: corpus scope or confound.
-> Observed spend: actual value. Next action: one supported action.
+Ask: "Which metric is decision-grade?" "Were all cells retained?" "What does
+this corpus-scoped result not establish?"
 
-Ask: “Which metric is decision-grade?” “Were all cells retained?” “What does
-this corpus-scoped result not establish?”
-
-<Prompt description="Request a corpus-scoped model-comparison report" actions={["copy", "cursor"]}>
+```text wrap
 Read the canonical Trial Result and compare evidence. Report the frozen baseline,
 candidate, denominator, per-metric calibration, cost, validity, confounds, and
 one routing action. State what this corpus-scoped evidence does not establish.
-</Prompt>
+```

@@ -16,18 +16,18 @@ the state, and identify its spend before executing a recorded recovery.
 | broken-infra | Auth, build, Docker, or provider setup failed | Fix that boundary, then target the rerun |
 | invalid-evidence | Evidence is stranded, contaminated, incomplete, or invalid | Fail closed; repair or rerun cleanly |
 
-<Prompt description="Classify and recover a Stet run safely" actions={["copy", "cursor"]}>
+```text wrap
 Use the Stet skill to read this run's status and next_action. Classify it as
 healthy-wait, stalled, broken-infra, or invalid-evidence. Say whether recovery
 spends model or grader tokens, then propose one evidence-preserving next action.
-</Prompt>
+```
 
 ## Spend boundary for recovery
 
 Status reads, resume, patch repair, and rederive-only work preserve existing
 evidence and do not launch a new coding-agent attempt. Grader backfill can spend
 grader tokens only. Restarting or relaunching an arm runs agents again and can
-spend model tokens. The operator approves each spend boundary.
+spend model tokens. You approve each spend boundary.
 
 ## Diagnose ambiguous symptoms
 
@@ -63,3 +63,10 @@ For a broken-infra state, ask the agent to check provider authentication, Docker
 repository build prerequisites, and the configured provider endpoint. Fix the
 specific failed boundary first, then reread status before a targeted rerun. Keep
 tokens out of repository files and do not paste credentials into prompts.
+
+## Ask for help
+
+If the recorded recovery paths do not resolve it, have your agent write the
+issue up first: the state classification, the artifact-backed cause, what it
+tried, and the exact error. Then send that write-up to
+[ben@stet.sh](mailto:ben@stet.sh) — any Stet issue or question is welcome there.

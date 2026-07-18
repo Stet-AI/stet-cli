@@ -10,45 +10,36 @@ skill for a revision.
 
 ## Say this
 
-<Prompt description="Plan a skill evaluation with the correct baseline" actions={["copy", "cursor"]}>
+```text wrap
 Use the Stet skill to evaluate this repository-managed skill. Choose an actually
 absent baseline for a new skill, or the committed version for a revision. Keep
 the repository tasks and verifier matched. Confirm the plan with me before spend.
-</Prompt>
+```
 
 ## What happens
 
 Your agent should inspect the baseline before launch rather than assuming that a
-missing-looking file means absence. Duration and cost depend on task count,
-provider, retries, repository setup, verifier, and skill-workbench coverage.
-Before launch, require an expected time and spend band; there is no universal
-band. It should keep the task slice and behavior contract matched, then use the
-`skill_workbench` dimensions: `skill_routing`, `skill_actionability`,
-`skill_specificity`, `skill_command_exactness`, `skill_tool_selection`, and
-`skill_regression_risk`.
+missing-looking file means absence, and state expected time and spend. It keeps
+the task slice and behavior contract matched, then uses the `skill_workbench`
+dimensions: `skill_routing`, `skill_actionability`, `skill_specificity`,
+`skill_command_exactness`, `skill_tool_selection`, and `skill_regression_risk`.
 
 A skill revision is not proven by tests alone. Coverage, replay validity, and the
 correct baseline determine whether the result can support keeping the change or
 only inspecting it.
 
-## What your agent should report back
+## What a good answer sounds like
 
-The report should identify the baseline actually used, the candidate skill,
-denominator, each `skill_workbench` dimension's calibration, regressions,
-evidence posture, observed spend, and one next action. Its values must come from
-the actual Trial Result:
+The report should name the baseline actually used, the candidate skill, how many
+tasks counted, each `skill_workbench` dimension's result, and any regressions —
+every value from the actual Trial Result.
 
-> **Illustrative receipt shape:** Routing: keep, hold, or inspect. Confidence
-> and posture: actual values. Coverage: task denominator and skill-workbench
-> coverage. Caveat: regression or missing evidence. Observed spend: actual
-> value. Next action: one supported action.
+Ask: "Was the baseline truly absent or committed?" "Which dimensions regressed?"
+"Is coverage complete enough for this routing action?"
 
-Ask: “Was the baseline truly absent or committed?” “Which dimensions regressed?”
-“Is coverage complete enough for this routing action?”
-
-<Prompt description="Ask for a skill-evaluation receipt" actions={["copy", "cursor"]}>
+```text wrap
 Read the canonical Trial Result for this skill evaluation. Name the baseline
 provenance, candidate, denominator, skill_workbench coverage, regressions,
 calibration, observed spend, and one next action. Do not infer promotion from
 missing or inspect-only evidence.
-</Prompt>
+```

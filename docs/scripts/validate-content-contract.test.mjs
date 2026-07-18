@@ -130,7 +130,7 @@ test('clearing publication approval fails closed', async () => {
       const path = join(root, name);
       const text = await readFile(path, 'utf8');
       await writeFile(path, text
-        .replace('"publication_approved_at": "2026-07-14"', '"publication_approved_at": null')
+        .replace('"publication_approved_at": "2026-07-18"', '"publication_approved_at": null')
         .replace('"publication_approved_by": "benredmond"', '"publication_approved_by": null'));
     }
   }, { mode: 'publication' });

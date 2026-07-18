@@ -5,84 +5,64 @@ description: Ask your agent to run and report one bounded Stet evaluation
 ---
 
 Your first eval turns a credible onboarding slice into one bounded measurement.
-The operator sets the question and spend boundary; the agent proposes a plan,
-runs it only after confirmation, and reads the Trial Result on the operator's
-behalf.
+You set the question and the spend boundary; your agent proposes a plan, runs
+it after you confirm, and reads the Trial Result for you.
 
 ## Say this
 
-<Prompt description="Plan one bounded first evaluation before spending tokens" actions={["copy", "cursor"]}>
+```text wrap
 Use the Stet skill and the existing onboarding receipt for this repository.
 Propose one bounded first eval on the selected slice. State the treatment,
 baseline, verifier, expected duration, expected model-token spend, Docker load,
 and decision this can support. Confirm the plan with me before running anything
 that spends model tokens. After I approve, run it and read the Trial Result.
-</Prompt>
+```
 
 ## What happens
 
-Your agent should turn the onboarding receipt into a narrow evaluation plan.
-Duration, token spend, and machine load depend on the slice, provider, retries,
-and repository setup, so the plan should provide estimates before it starts;
-Stet does not promise a fixed dollar amount or duration here.
+Your agent should turn the onboarding receipt into a narrow evaluation plan:
+one declared harness change, one task slice, and the existing bounded verifier.
+Time and cost depend on your slice and provider, so have it state estimates
+before it starts. Docker-backed replay is the normal setup for evidence you
+intend to act on. The agent should stop for your approval before any
+model-spending launch and should not quietly broaden the task slice to get
+more results.
 
-The agent should keep the question small: one declared harness change, one task
-slice, and the existing bounded verifier. Docker-backed replay is the usual
-quality posture for evidence intended to inform a decision. The agent should
-stop for approval before a model-spending launch and should not silently broaden
-the task slice to get more results.
+## While it runs
 
-## While it runs: ask for a state, not a guess
+If you want a check-in, ask for the run's recorded state rather than a guess:
 
-Ask your agent to check status and execute its recorded next action. It should
-classify the state before suggesting a rerun:
-
-- **healthy-wait** — `waiting_on_quota` is an intentional pause; wait and let
-  the workflow continue rather than launching another run.
-- **stalled** — required work is not progressing; resume the missing work rather
-  than restarting the whole evaluation.
-- **broken-infra** — authentication, Docker, build, or environment setup failed;
-  fix that boundary and then use a targeted rerun.
-- **invalid-evidence** — evidence is stranded, contaminated, incomplete, or
-  otherwise unfit for a claim; fail closed, repair or rerun cleanly, and retain
-  the affected cells in the denominator.
-
-<Prompt description="Check the eval state and follow its next action" actions={["copy", "cursor"]}>
+```text wrap
 Use the Stet skill to check this eval's status and execute its next_action.
-Classify it as healthy-wait, stalled, broken-infra, or invalid-evidence.
-Tell me whether the next action spends model tokens, and ask before any spend.
-Do not restart a healthy quota wait or discard incomplete cells from the result.
-</Prompt>
+Tell me whether the run is healthy, and whether the next action spends model
+tokens; ask before any spend. Do not restart a run that is waiting on quota,
+and do not discard incomplete cells from the result.
+```
 
-## What your agent should report back
+If the run looks stuck or broken, use [Troubleshooting](/troubleshooting) — it
+covers how your agent should classify and recover each failure state.
 
-The report-back is a human summary of the Trial Result, not a replacement for
-it. It should name the routing action, calibration by metric, coverage and
-denominator, validity, confounds, evidence posture, observed spend, and the
-next action.
+## What a good answer sounds like
 
-An illustrative onboarding report-back has no fixed numbers: “Routing: plan one
-bounded eval. Confidence and posture: state the onboarding receipt's values.
-Coverage: state the retained and build-ready coverage. Caveat: name any degraded
-or missing evidence. Observed spend: state the receipt's value. Next action:
-propose the bounded eval for approval.” Its values must come from the actual
-onboarding receipt.
+When the eval finishes, ask for the decision:
 
-When the eval finishes, ask for the decision in this form:
-
-<Prompt description="Get a decision-grade report-back from the finished eval" actions={["copy", "cursor"]}>
+```text wrap
 Read the canonical Trial Result and report the routing verdict, confidence, and
 next_action. For each metric, say decision-grade, directional, or noise-band.
 Give the denominator and coverage, validity, confounds, evidence posture,
 observed spend and duration, and what claim this evidence does not support.
-</Prompt>
+```
 
-The [sanitized finished-eval example](/concepts/trial-result) shows the intended
-grounding: it routes to inspect with low confidence; all 16 matched tasks and
-32 arm-task cells are usable, with all 11 graders covered. It still has no
-genuine discriminating test-verdict cells, so grader-discrimination certification
-is the next action and no superiority or rollout claim is supported.
+A good report-back reads like this, with every value taken from the actual
+Trial Result:
 
-If a metric is directional, treat it as a reason to iterate, not to promote.
-Use [Read a Trial Result](/concepts/trial-result) for the full report-back
-contract and the questions to ask next.
+> "Inspect, low confidence. All 16 matched tasks counted and all 11 graders
+> covered them, but the corpus has no genuinely discriminating test cells, so
+> no superiority claim is supported. Next action: generate grader-discrimination
+> certification; no new coding-agent run required."
+
+It names an action, says how many tasks counted, states the caveat plainly, and
+claims no more than the evidence supports. If a metric is only directional,
+treat it as a reason to iterate, not to promote. The full report-back contract
+and the questions to ask next live in
+[Read a Trial Result](/concepts/trial-result).

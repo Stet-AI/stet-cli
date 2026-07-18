@@ -10,47 +10,38 @@ or task corpus until a result looks better.
 
 ## Say this
 
-<Prompt description="Plan a bounded native optimize loop" actions={["copy", "cursor"]}>
+```text wrap
 Use the Stet skill to improve this one declared harness lever with native
 optimize. Propose the search space, baseline, retained slice, stop rules, and
 spend boundary. Confirm the plan with me before model-token spend.
-</Prompt>
+```
 
 ## What happens
 
-Your agent should run a bounded sequence: candidate, evaluate, check in the
-result, choose one next mutation, then repeat only while the declared rules
-allow it. Duration and cost depend on the search-space size, retained slice,
-provider, retries, verifier, and stop rule. Before launch, require an expected
-time and spend band; there is no universal band. Each change needs a one-lever
-hypothesis and a record of rejected levers. Stop when evidence is invalid or
-inspect-only, improvement stops, the search space is exhausted, or the next move
-crosses the approved spend boundary. Do not widen the lever, task slice, or
-decision claim without asking.
+Your agent runs a bounded sequence: candidate, evaluate, check in the result,
+choose one next mutation, then repeat only while the declared rules allow it.
+Have it state expected time and spend before launch. Each change needs a
+one-lever hypothesis and a record of rejected levers. Stop when evidence is
+invalid or inspect-only, improvement stops, the search space is exhausted, or
+the next move crosses the approved spend boundary. The agent should not widen
+the lever, task slice, or decision claim without asking.
 
 A finalist still needs matching holdout approval before promotion or any public
 claim. Screening evidence is useful for iteration; it does not silently become
 holdout evidence.
 
-## What your agent should report back
+## What a good answer sounds like
 
-The report should state the current candidate, one changed lever, hypothesis,
-result, evidence posture, stop-rule status, observed spend, and one next action.
-Its values must come from the actual Trial Result:
+The report should state the current candidate, the one changed lever, its
+hypothesis and result, the stop-rule status, and spend so far — every value
+from the actual Trial Result. It should say explicitly when a holdout is still
+required rather than implying that a screening result authorizes promotion.
 
-> **Illustrative receipt shape:** Routing: iterate, hold, or inspect. Confidence
-> and posture: actual values. Coverage: evaluated denominator and retained
-> evidence. Caveat: stop-rule or holdout constraint. Observed spend: actual
-> value. Next action: one supported action.
+Ask: "Which lever changed this round?" "What is the retained denominator?"
+"Does the finalist still require holdout evidence?"
 
-Ask: “Which lever changed this round?” “What is the retained denominator?”
-“Does the finalist still require holdout evidence?”
-
-It should say explicitly when a holdout is required rather than implying that a
-screening result authorizes promotion.
-
-<Prompt description="Ask for the next bounded optimize decision" actions={["copy", "cursor"]}>
+```text wrap
 Read the current optimize state and linked Trial Result. Report the candidate,
 one changed lever, hypothesis, result, stop-rule status, spend, and one next
 action. Stop and ask me before any new spend, broadening, holdout, or promotion.
-</Prompt>
+```

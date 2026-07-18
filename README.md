@@ -6,71 +6,48 @@
 
 # Improve the instructions, skills, and model settings your coding agents actually use
 
-Accepted repository work becomes replayable tasks so Stet can measure whether
-an `AGENTS.md` change, shared skill, model, or reasoning setting improves agent
-behavior before rollout. The coding agent proposes and applies changes; Stet
-measures the result against matched repository work and gates scoped promotion.
+You change your coding agent's setup constantly — a new model, a rewritten
+`AGENTS.md`, a new skill, a different reasoning setting. Stet tells you which
+changes are safe to keep. It replays your repository's real accepted work under
+the proposed change and returns a scoped decision. Your agent runs Stet on your
+behalf; you set the question, approve the spend, and make the call.
 
-[Get started](BETA_QUICKSTART.md) · [See an example result](#example-trial-result) ·
-[Understand how Stet works](ONBOARDING.md)
+**Full documentation lives at [docs.stet.sh](https://docs.stet.sh).**
+
+[Get started](https://docs.stet.sh/quickstart) ·
+[Run your first eval](https://docs.stet.sh/first-eval) ·
+[See an example result](#example-trial-result) ·
+[How Stet works](https://docs.stet.sh/concepts/how-stet-works)
 
 ## What do you want to improve?
 
-### A/B test an `AGENTS.md` change
+- **Is my `AGENTS.md` change helping?** Compare current and proposed
+  instructions on the same retained tasks —
+  [instruction-file A/B](https://docs.stet.sh/guides/instruction-file-ab).
+- **Improve my `AGENTS.md`.** Iterate one instruction lever at a time with a
+  bounded stop rule —
+  [iterative improvement](https://docs.stet.sh/guides/iterative-improvement).
+- **Is this skill helping?** Test a skill against an appropriate absent or
+  committed baseline —
+  [skill evaluation](https://docs.stet.sh/guides/skill-evaluation).
+- **Which model or reasoning effort should I use?** Compare configurations on
+  the same repository task slice —
+  [model comparison](https://docs.stet.sh/guides/model-comparison).
 
-Compare current and proposed instructions on the same retained repository
-tasks, with the model fixed across both arms. Stet returns a scoped `promote`,
-`hold`, or `inspect` recommendation for the selected corpus and recorded
-harness.
-
-> Use the Stet skill to A/B test my proposed `AGENTS.md` change. Keep the model
-> fixed, plan before launch, and return the canonical Trial Result with its
-> recommendation, evidence limitations, and next action.
-
-### Improve `AGENTS.md` iteratively — Advanced
-
-Let your coding agent change one allowed instruction lever at a time while Stet
-persists loop state, measures each candidate, and protects holdout and promotion
-boundaries. The coding agent edits; Stet records, compares, selects, and gates.
-
-> Use the Stet skill to improve `AGENTS.md` within a bounded search space and
-> stop rule. Test one change at a time and ask before using holdout evidence or
-> promoting a finalist.
-
-### Test whether a skill helps
-
-Compare behavior with and without a new skill, or compare a committed skill
-with a revision, using replayable tasks and behavior-relevant graders. A new
-skill needs a true skill-absent baseline; a revision uses the committed skill.
-
-> Use the Stet skill to test whether this repo-managed skill helps. Plan before
-> launch, use the right baseline, and report `promote`, `hold`, or `inspect`.
-
-### Choose a model or reasoning effort
-
-Compare models on the same retained tasks, or hold the model fixed and compare
-reasoning-effort arms. Read correctness, quality, cost, uncertainty, validity,
-and residual risk separately; unavailable or incomparable dimensions stay
-visible.
-
-> Use the Stet skill to compare these configurations on the same repository
-> tasks. First ask whether I want a cheap diagnostic read or a gateable rollout
-> decision. Keep diagnostic evidence labeled directional; for a gateable choice,
-> use matched runs and return the canonical Trial Result.
+The prompts you say to your agent for each workflow are in the
+[prompt cookbook](https://docs.stet.sh/prompts).
 
 ## How Stet works
 
 ![Stet turns merged repository work into replayable tasks, evaluates a baseline and candidate with tests and graders, and returns a promote, hold, or inspect Trial Result.](assets/stet-loop.svg)
 
-Stet packages selected history as replayable tasks. It declares the treatment
-being tested and its intent, runs a baseline and candidate against the same task
-slice while controlling the other harness settings that are relevant, evaluates
-both with tests and declared graders, and writes a canonical Trial Result with
-one scoped recommendation and next action.
+Accepted repository work becomes replayable tasks. Stet runs a baseline and a
+candidate against the same task slice, evaluates their patches with tests and
+graders, and writes a Trial Result with one scoped recommendation. The evidence
+is produced independently of the agent whose change is under test, and weak,
+stale, or contaminated evidence blocks a strong claim.
 
 ## Example Trial Result
-
-### A real decision from repository work
 
 Historical April 2026 model comparison across 28 paired Zod tasks, with Opus
 4.6 and Opus 4.7 at identical high reasoning.
@@ -84,15 +61,16 @@ Historical April 2026 model comparison across 28 paired Zod tasks, with Opus
 
 **Historical receipt: `PROMOTE` candidate Opus 4.7, high confidence.**
 
-On this task corpus, the historical receipt recommended Opus 4.7 after it held
-the observed test pass rate steady, improved observed equivalence, and used less
-observed cost and time. These are selected observations; the receipt also used
-declared grader evidence not reproduced here.
+On this corpus, Opus 4.7 held test pass rate steady, showed higher equivalence,
+and used less cost and time. The receipt's declared grader evidence is part of
+the example: mean scores on a 0-4 rubric from a declared gpt-5.4 grader across
+all 28 tasks, on which Opus 4.7 showed higher means on seven of the eight craft
+dimensions. The full example, including the grader table and machine-readable
+receipt, is on the [docs overview](https://docs.stet.sh#example-trial-result).
 
 Historical April 2026 result, scoped to this 28-task Zod corpus and recorded
 harness. The legacy report predates Stet's current calibration and
-claim-readiness fields, so the displayed metric values are observations, not
-generalized or uncertainty-calibrated improvement claims.
+claim-readiness fields.
 
 ## Install and get a first result
 
@@ -124,16 +102,20 @@ npx skills list
 
 The default evaluation path also needs a running Docker daemon, Python 3.12+,
 `uv`, and authentication for the model provider you plan to evaluate. The
-[beta quickstart](BETA_QUICKSTART.md) covers platform setup and verification.
+[quickstart](https://docs.stet.sh/quickstart) covers platform setup and
+verification, and [Your first eval](https://docs.stet.sh/first-eval) takes the
+onboarded repository to a first bounded measurement.
 
-In the repository you want to evaluate, ask your coding agent:
+Then, in the repository you want to evaluate, ask your coding agent:
 
-> Use the Stet skill to onboard this repo. First ask what work and decision I
-> want Stet to track. Read CI and repository history, propose a starter slice
-> from real merged work, prove which retained tasks are build-ready, and report
-> the slice rationale, coverage, gaps, and confidence. Stop with an onboarding
-> receipt before model evaluations; do not claim the slice is automatically
-> representative.
+```text
+Use the Stet skill to onboard this repo. First ask what work and decision I
+want Stet to track. Read CI and repository history, propose a starter slice
+from real merged work, prove which retained tasks are build-ready, and report
+the slice rationale, coverage, gaps, and confidence. Stop with an onboarding
+receipt before model evaluations; do not claim the slice is automatically
+representative.
+```
 
 ## Why trust the result?
 
@@ -157,10 +139,14 @@ telemetry opt-out. Stet does not claim a universal network sandbox.
 
 ## Learn more
 
-- [Beta quickstart](BETA_QUICKSTART.md)
-- [Prompt cookbook](PROMPT_COOKBOOK.md)
-- [How Stet works](ONBOARDING.md)
-- [Troubleshooting](TROUBLESHOOTING.md)
+- [Quickstart](https://docs.stet.sh/quickstart)
+- [Your first eval](https://docs.stet.sh/first-eval)
+- [Choose a workflow](https://docs.stet.sh/workflows)
+- [Prompt cookbook](https://docs.stet.sh/prompts)
+- [Read a Trial Result](https://docs.stet.sh/concepts/trial-result)
+- [Troubleshooting](https://docs.stet.sh/troubleshooting)
+
+Questions or issues of any kind: [ben@stet.sh](mailto:ben@stet.sh).
 
 The install script and agent skill are available under the [MIT License](LICENSE).
 The distributed Stet binary is governed by the [Stet Binary Terms](TERMS.md).
