@@ -6,6 +6,75 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.11.0-rc.2] - 2026-07-21
+
+This follow-up 0.11 candidate makes build and evaluation evidence more durable:
+Stet can recover partial-clone source authority, preserve only test coverage
+that remains trustworthy, and keep stitched or repaired comparisons bound to
+the exact selected trial and measurement function.
+
+### Fixed
+- Make portable source packs reliable from Git partial clones: hydrate the pinned base's history and objects before publishing, and report incomplete source history with a concrete recovery path. ([fbe0de9a], [b42b28c8])
+- Preserve selector-approved terminal test coverage when dynamic F2P finds a focused witness; require the retained command to pass on gold, and abstain when a verifier fails before executing the intended test. ([450f4daa], [dddb0e98])
+- Reuse safe, command-scoped Bazelisk and repository-download caches for Bazel test selection while keeping mutable query and output state isolated per task. ([124d3d6e])
+- Keep `stet eval rules` corpus-floor checks fail-closed for genuinely diverse task selections; skip subsystem deduplication only when every qualifying task has the same subsystem key. ([5276aa3f])
+- Prevent stitched evaluation cells from replacing canonical evidence unless the exact selected trial supplies a usable patch, fresh validation, and provider-native session or trajectory evidence; leave incomplete replacements pending rather than borrowing sibling or superseded evidence. ([66053c52])
+- Mark quality-only comparisons with mixed retained grader measurement-function fingerprints as `inspect`, preventing promotion or superiority claims from directionally incompatible evidence. ([8082f5c9])
+- Preserve plugin-overlay identity when repairing retained-study provenance, including manifest-declared overlays. ([a07938ce])
+
+[v0.11.0-rc.2]: https://github.com/Stet-AI/stet/compare/v0.10.0...v0.11.0-rc.2
+[fbe0de9a]: https://github.com/Stet-AI/stet/commit/fbe0de9a
+[b42b28c8]: https://github.com/Stet-AI/stet/commit/b42b28c8
+[450f4daa]: https://github.com/Stet-AI/stet/commit/450f4daa
+[dddb0e98]: https://github.com/Stet-AI/stet/commit/dddb0e98
+[124d3d6e]: https://github.com/Stet-AI/stet/commit/124d3d6e
+[5276aa3f]: https://github.com/Stet-AI/stet/commit/5276aa3f
+[66053c52]: https://github.com/Stet-AI/stet/commit/66053c52
+[8082f5c9]: https://github.com/Stet-AI/stet/commit/8082f5c9
+[a07938ce]: https://github.com/Stet-AI/stet/commit/a07938ce
+
+## [v0.11.0-rc.1] - 2026-07-20
+
+This first 0.11 release candidate makes the onboarding and verifier loop more
+durable: Stet can carry bounded setup and source authority forward, prove
+proposal-selected tests more honestly, and preserve typed infrastructure causes
+instead of misreporting them as model or dataset quality signals.
+
+### Added
+- Add a durable `stet suite onboard` ready-task pipeline with cohort ledger, setup-contract reuse, candidate evidence, and operator feedback; add `stet suite bootstrap-authority` to publish a bounded exact-tree Git authority for enforced reference builds ([fac9ed1b], [bf4b13d5], [1c31be89])
+- Add schema-constrained proposal test selection, dynamic F2P attestation, bounded repair feedback, and receipt-safe named-test evidence for supported and unsupported test runners ([00f99b40], [6b510d68], [76706695], [d4e2bbe2])
+
+### Changed
+- Preserve selected-command verifier artifacts, authoritative runtime and plugin-overlay activation, and grader/provider provenance across retries and recovery ([ad7d7bfe], [31103391], [a150b4d6], [9d97146b])
+- Synchronize the shipped public Stet skill bundle with the current source guidance ([bbf6f040])
+
+### Fixed
+- Classify Bazel and selector toolchain failures as executor infrastructure errors, cancel timed-out Bazel query descendants, and keep fallback receipts from being misreported as F2P or flake outcomes ([cc2963a2], [764dd1d1], [89052086])
+- Preserve typed provider failures when rebuilding built-in h2h graders and allow provenance repair without commercial entitlement or telemetry gating ([e64567bc], [9d97146b], [15439c21])
+- Sanitize operator and onboarding diagnostics, keep root Node test commands at repository root, and bind proposal-derived F2P proofs to durable command receipts ([a58f9248], [122c6ed3], [b8d74923])
+
+[v0.11.0-rc.1]: https://github.com/Stet-AI/stet/compare/v0.10.0...v0.11.0-rc.1
+[fac9ed1b]: https://github.com/Stet-AI/stet/commit/fac9ed1b
+[bf4b13d5]: https://github.com/Stet-AI/stet/commit/bf4b13d5
+[1c31be89]: https://github.com/Stet-AI/stet/commit/1c31be89
+[00f99b40]: https://github.com/Stet-AI/stet/commit/00f99b40
+[6b510d68]: https://github.com/Stet-AI/stet/commit/6b510d68
+[76706695]: https://github.com/Stet-AI/stet/commit/76706695
+[d4e2bbe2]: https://github.com/Stet-AI/stet/commit/d4e2bbe2
+[ad7d7bfe]: https://github.com/Stet-AI/stet/commit/ad7d7bfe
+[31103391]: https://github.com/Stet-AI/stet/commit/31103391
+[a150b4d6]: https://github.com/Stet-AI/stet/commit/a150b4d6
+[9d97146b]: https://github.com/Stet-AI/stet/commit/9d97146b
+[bbf6f040]: https://github.com/Stet-AI/stet/commit/bbf6f040
+[cc2963a2]: https://github.com/Stet-AI/stet/commit/cc2963a2
+[764dd1d1]: https://github.com/Stet-AI/stet/commit/764dd1d1
+[89052086]: https://github.com/Stet-AI/stet/commit/89052086
+[e64567bc]: https://github.com/Stet-AI/stet/commit/e64567bc
+[15439c21]: https://github.com/Stet-AI/stet/commit/15439c21
+[a58f9248]: https://github.com/Stet-AI/stet/commit/a58f9248
+[122c6ed3]: https://github.com/Stet-AI/stet/commit/122c6ed3
+[b8d74923]: https://github.com/Stet-AI/stet/commit/b8d74923
+
 ## [v0.10.0] - 2026-07-14
 
 Promotes the fully verified `v0.10.0-rc.4` candidate to stable with no product

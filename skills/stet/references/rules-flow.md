@@ -163,10 +163,11 @@ Within `task_selection`, AGENTS.md/CLAUDE.md runs may emit
 (`repo_tests_only` and tasks with no qualifying selector evidence are
 excluded, fail-closed), then deduped by source commit and by a two-segment
 touched-subsystem key so one PR or one area of the repo cannot be double- or
-triple-counted; on corpora where the subsystem key collapses (a flat top-level
-tests/ dir, a monorepo package root) a degenerate-signal guard skips subsystem
-dedupe and falls back to commit-only dedupe, which the error message
-discloses. Follow the remediation: expand or rebuild the onboarding dataset
+triple-counted; only when at least two qualifying tasks exist and every one
+collapses to the same non-empty subsystem key (a flat top-level tests/ dir, a
+monorepo package root) does the degenerate-signal guard skip subsystem dedupe
+and fall back to commit-only dedupe, which the error message discloses. Follow
+the remediation: expand or rebuild the onboarding dataset
 with an onboarding-scale discover command such as
 `stet suite discover --repo . --rev-range HEAD~200..HEAD --limit 200 --target-pass 25`,
 keep quality lanes on, then rerun `stet eval rules` with a larger retained
@@ -177,8 +178,10 @@ Do not treat that floor as a reason to switch to one-task `probe --file` or
 onboarding floor: under 10 retained ready tasks is setup-incomplete, not an
 instruction-surface signal.
 
-`--ai-cmd` is a launch-only override for `stet eval rules`; use an absolute
-script path when launching from scratch directories. The default evaluator and
+`--ai-cmd` is a launch-only override for `stet eval rules` and, for worktree
+arms, is also the trusted shell command run as the coding agent (`/bin/sh -c`).
+Use an absolute script path when launching from scratch directories. The
+default evaluator and
 LLM-backed graders resolve from `ai.default_provider` (or an auto-discovered
 provider) and authenticate off that provider's local credential — for Claude,
 stet's long-lived `setup-token` — so no wrapper command is needed; pass
@@ -557,6 +560,7 @@ Common next steps:
 - `promote override`: `stet promote --change-manifest .stet/rules/stet.change.yaml --reason "..." --allow-inspect` when trust remains `inspect` and the operator is intentionally overriding the gate
 - `repair compare`: `stet eval rules repair --change-manifest .stet/rules/stet.change.yaml --json` when the persisted rules runtime exists but the canonical Trial Result is incomplete; use this for OOM/rate-limit interruptions before deleting the compare root, because repair reruns only missing/retryable arm tasks and can replay unchanged AGENTS.md/CLAUDE.md overlays from the change manifest. `resume` remains accepted as a compatibility alias. Repair cannot recover a terminal arm failure: when status/report emit a `repair` block with code `RULES_COMPARE_ARM_FAILED` or `RULES_ACTIVE_ARM_FAILED`, inspect the failed arm root, address the harness failure (auth, config, missing bundle, etc.), then relaunch instead of repairing
 - `relaunch arm`: when one arm lost every cell's `agent.patch` to a transient single-arm wipeout (e.g. an HTTP 429 that left results+validation present but `agent_no_patch`/empty patches and no arm summary), plain `repair`/`resume` stays non-spending and emits an `arm_relaunch_required` blocker; rerun `stet eval rules resume --rules-root <dir> --relaunch-arm candidate` to relaunch only that arm's empty cells while reusing every good cell and the sibling arm byte-for-byte. Accepts a comma list and repeats (`--relaunch-arm candidate,baseline`) or `all`; it spends tokens. Prefer it over `--restart`, which discards everything
+  When validation never started, relaunch is offered only when the selected trial's matching, regular in-root `result.json` records exact `infra_runtime_error`; timeout, integrity, verifier, malformed, mismatched, or symlinked evidence remains non-relaunchable.
 - `retry graders`: use the `repair-ai-coverage` or `regrade-graders` command emitted by report/status; add `--parse-retries N` for saved grader prompts that failed JSON/schema parsing, and keep the emitted `--grading-timeout` for timeout-gapped custom graders
 - `restart`: `stet eval rules --change-manifest .stet/rules/stet.change.yaml --suite-manifest .stet/rules/stet.suite.yaml --restart` only when the operator intentionally discards existing rules evidence for that change manifest
 
@@ -684,6 +688,14 @@ eval:
   candidate_model: model:sonnet 4.6
   harness: .stet/high-memory.harness.yaml
 ```
+
+Docker-backed Harbor runs use an environment build/start timeout multiplier of
+`1.5` by default. Override it for an unusually heavy environment with
+`--harbor-arg "--environment-build-timeout-multiplier 2"` or the equivalent
+`runner.harbor_args` entry; values must be greater than zero and no more than
+`3`. If startup still reaches Harbor's exact environment-start timeout, Stet
+records a terminal infra cell with no agent or patch attempt, continues sibling
+cells, and excludes that cell from missing-grader coverage.
 
 Rules reports include each compare arm's effective runner settings when Stet
 has them. If a Claude Code compare emits

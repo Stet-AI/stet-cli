@@ -32,6 +32,10 @@ task/command; it deliberately preserves an existing `GOMODCACHE` so it does
 not redownload modules per task. Do not redirect `GOMODCACHE` per evaluation
 cycle unless that isolation is explicitly required and the duplicate-download
 cost is acceptable.
+For Bazel tasks, selector queries keep writable output state isolated per task
+while reusing Stet-owned Bazelisk and repository-download caches for the same
+environment cohort during that build command; command cleanup retires those
+caches unless explicit worktree retention protects them.
 For explicit `--base/--head` or fresh manifest builds, the default
 `--source-mode auto` selects `reference` when the local worktree route proves
 all reference prerequisites; rev-range builds stay portable until their
@@ -57,10 +61,20 @@ dataset root, charges the logical union of `.stet`, registered external roots,
 and the prospective output root, and records requested, backend-capped, and
 effective validation workers in `storage-admission.json`. It can reduce
 worktree concurrency only after the exact Git authority for the selected bases
-has already been published and verified. First reference builds should use the
-default `shadow` mode, which can publish that authority; enforced `auto` falls
-portable when it is absent, while explicit reference refuses before output
-creation. Enforcement is conservative logical/free-space admission, not a
+has already been published and verified. For a first enforced reference build,
+prepare only its selected base trees first:
+
+```bash
+stet suite bootstrap-authority --repo <repo> --base <base-sha> --max-authority-bytes <bytes> --json
+```
+
+The command verifies and stages one immutable exact-tree authority, refuses to
+publish it when its logical bytes exceed the supplied cap, and emits its opaque
+authority ID. It does not build a dataset or run tests. The cap applies before
+authority publication; Git's temporary fetch/repack allocation and Docker
+runtime storage remain separate physical risks. Without this bootstrap,
+enforced `auto` falls portable when an authority is absent, while explicit
+reference refuses before output creation. Enforcement is conservative logical/free-space admission, not a
 physical-byte claim: portable source history and Docker/BuildKit runtime peaks
 remain unknown, so portable builds refuse until those exposures have exact
 bounds. Use `shadow` to inspect those receipts without blocking.
@@ -339,9 +353,8 @@ own commands so forms like `env PATH=… cargo test` and toolchain installers ar
 auto-allowed. A toolchain preflight then fails loud
 (`toolchain preflight: rust test runner "cargo" is not installed …`) before any
 fan-out/materialization for a non-base toolchain (Rust) the recipe doesn't
-install, instead of a downstream "gold tests did not run". `stet init` does not
-choose or pin Rust/Cargo; add the CI-selected toolchain to
-`.stet/harbor.Dockerfile` before building.
+install, instead of a downstream "gold tests did not run". `stet init` on a Rust
+repo scaffolds rustup/cargo into `.stet/harbor.Dockerfile` so `cargo test` runs unedited.
 
 For Python repos that use `uv`, prefer the direct verifier command when one
 exists, for example `uv run --frozen --no-sync coverage run -m pytest ...` or
@@ -423,7 +436,8 @@ Explicit `--test` or config-provided test commands remain the task commands
 unless the repo declares a `test_selector` config. During strict F2P proof,
 Stet may derive flags-preserving Bazel label candidates when `bazel query` (or
 Bazelisk) resolves a package pattern to actual test-rule labels and proves their
-sources/buildfiles cover required test-patch directories; recursive patterns
+direct srcs, Rust crate srcs, direct data source files, or buildfiles cover
+required test-patch directories; recursive patterns
 are never recorded as strict F2P identities. An actual label is accepted only after the same dynamic
 base-fail/gold-pass check as other targeted candidates. When Bazel candidate
 derivation abstains (query pattern failure, the >16-label bound, or no
@@ -434,6 +448,9 @@ with `fallback: keep_broad`. It never falls back to a partial or first-N label
 subset. Infrastructure failures (disk/extraction errors, missing toolchain
 binaries, selector crashes) classify as `executor_runtime_error`, skip the task
 instead of minting a fallback proof, and are never recorded as `f2p_failed`.
+If a base verifier fails before an intended changed test executes—for example,
+zero-test import, collection, or generated-fixture setup failure—Stet records
+`verifier_pretest_failure` and abstains instead of minting dynamic F2P.
 Generated whole-suite verifiers may also narrow after
 deterministic filesystem package/path/file proof for supported path runners.
 Each task's existing
@@ -443,6 +460,15 @@ and strength, selected targets, covered paths, fallback, setup blocker class
 when known, and a legacy v1 projection. Unsupported, ambiguous, malformed,
 stale, or missing evidence keeps the broad command with `left_broad` or
 `abstained`; selector coverage is corpus evidence, not model-quality evidence.
+`proof_strength: selector_command_unverified` (reason `f2p_proposal_differential_unattested`)
+is reserved for a base-fail/gold-pass result on a non-extractor-derived
+command that lacks an attested named-test differential (>=1 named test
+parsed as passing at gold and failing/absent at base from `go test -json` or
+TAP output) — an exit-code-only differential alone never mints
+`proven_dynamic_f2p` in that case. The headless setup agent's accepted oracle
+proposal path is the built-in selection mode that binds a proposal-derived
+command to this prover, so an accepted proposal without an attested
+differential is what surfaces this value.
 
 Repos may declare a lower-trust selector input surface in `.stet/stet.yaml`:
 
@@ -714,10 +740,11 @@ Each phase checkpoint recommends one concrete next step:
 
 ## Harbor Dockerfile Starting Points
 
-Use these as manual starting points after reading CI and repo config. `stet
-init` generated Dockerfiles do not pin runtimes/package managers; uv starters
-may include an unpinned uv bootstrap. Add the exact CI-selected setup yourself
-when the tests need it. Keep the actual repo test command in `stet init --test`.
+`stet init` generated Dockerfiles now install a real Go/Node+pnpm/Rust/Bazel
+toolchain automatically, so you don't hand-add one for those languages; uv
+repos still get an unpinned uv bootstrap. Use these as reference or as manual
+starting points for a custom Dockerfile. Keep the actual repo test command in
+`stet init --test`.
 
 ### Python (uv)
 ```dockerfile

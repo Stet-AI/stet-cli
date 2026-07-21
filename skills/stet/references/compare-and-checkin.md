@@ -530,6 +530,28 @@ Machine-readable default:
 - If `evidence_quality.factors` includes `signal=provenance` or
   `evidence.mixed_arm_provenance`, treat the compare as inspect-only until the
   affected arm is rerun or repaired.
+- When a completed legacy root retained its task corpus and trajectories but
+  lacks task/prompt comparison identities, use `stet runs repair-provenance
+  --out <root> --refresh-task-corpus`. For a missing plugin-overlay identity,
+  also pass the matching `--launch-receipt` and `--plugin-overlay`; Stet requires
+  exact launch/root/tree mapping, launch-bound retained Harbor task and overlay
+  bytes, plus agent-authored activation evidence for every realized task. It
+  never reconstructs historical identity from the current dataset. If legacy
+  hashes are path-sensitive or the dataset moved, also pass a native
+  `--reference-root` and its explicit `--reference-launch-receipt`; Stet then
+  requires equal launch bindings, compatible controls, native manifest/runtime
+  identity, and byte-identical retained task and overlay payloads. This repair
+  regenerates evidence without rerunning the coding model, refreshes canonical
+  and compatibility eval reports, preserves typed lineage through
+  copy/combine/stitch, rolls back touched artifacts on failure, and fails closed
+  on missing, partial, or conflicting provenance.
+- Treatment-aware existing-root compare supports only `plugin_overlay`,
+  `prompt_language`, `reasoning_effort`, and `model_reasoning_bundle`. Use
+  `reasoning_effort` with a fixed model, and `model_reasoning_bundle` only when
+  model and reasoning both change. An empty surface means exact
+  equivalence, and unknown values fail closed. Do not use `--extra-arm-root`
+  with task-projection receipts until Stet exposes a typed surface per extra
+  arm; run separate baseline-vs-extra comparisons instead.
 - Authorized smoke-seeded tasks pass silently: their authorization is recorded
   as a `smoke_preflight` phase in `experiment.json` `task_provenance.arms[*].phases`,
   with `evidence_quality.factors` left at `ok` for provenance.
@@ -644,6 +666,20 @@ Flow-specific recovery steps:
 - `revalidate`: rerun tests only when that is the missing signal; prefer
   `stet runs repair-patches` for patch-present cells because it wraps the
   no-agent `--revalidate-tests-only` path and follow-on evidence repair
+- `supersede one cell`: when a patch-present cell must be replaced to recover
+  provider trajectory evidence, use exactly one `--task-id` with
+  `--stitch-rerun --supersede-existing-cell --supersession-reason <reason>`;
+  the typed receipt is written before spend, provider-native raw trajectory is
+  required, old evidence remains inspectable, and the old results row stays
+  authoritative unless the merge succeeds. Resume through the receipt's fixed
+  `--resume-cell-supersession <receipt>` command, not by reconstructing the
+  original flags; Stet rejects overrides and verifies the exact binary,
+  treatment/config binding, and any requested hash-bound environment values.
+  A `published` resume finishes derived regeneration without another model run
+- `revalidate backend`: `stet runs revalidate-tests` preserves the recorded
+  backend unless `--harbor-backend docker|worktree` is explicit; worktree also
+  requires `--repo`. Conflicting selected worktree policies fail closed, so
+  repair those arms separately with `--model`.
 
 Recovery rules:
 - If the compare is blocked by invalid or partially valid evidence, explain that

@@ -64,6 +64,36 @@ rules, or selector internals before Stet can do useful work.
   command explicitly; do not begin unfamiliar-repo onboarding with a
   repository-wide verifier. If no bounded verifier is credible, stop before
   build and ask the operator to approve an alternative.
+- When a Bazel `--test` command names a concrete label, Stet query-proves and
+  attempts that exact label before derived candidates; dynamic base-fail/gold-pass
+  evidence remains authoritative.
+- Automatic config-diff onboarding is targeted-only. An omitted
+  `test_selector.fallback` resolves to `skip_task`, so an unprovable candidate
+  is skipped instead of running a broad repository verifier. `keep_broad` is
+  compatible only when explicitly configured for a manual fixed-manifest
+  build; automatic onboarding rejects it before verification starts.
+- Use `stet suite onboard` when the ready-task floor requires incremental
+  history expansion. It commits each bounded cohort before verification,
+  continues from the ledger-backed cursor on rerun, reuses only matching
+  setup-contract evidence, and keeps every task environment source-bound. To
+  reuse an existing PASS corpus without rediscovery, pass its discover manifest
+  with `--manifest`; Stet freezes that manifest and its patch bytes before the
+  first cohort. Use `--harbor-backend worktree` for serial Docker-free proof.
+  The terminal build summary, onboarding receipt, and later Trial Result context
+  carry the ledger projection; fewer than 10 ready tasks blocks instruction A/B,
+  while reaching a count floor never substitutes for canonical evidence gates.
+- When you are driving `stet suite onboard` as a coding agent, add `--json` and
+  treat its `agent_feedback/v1` object as the repair contract. Exit `0` means
+  `outcome: ready` and the requested target was verified. Exit `21` means
+  `outcome: needs_action`: read ordered `blockers`, evidence references,
+  advisory affordances, and `rerun.argv`; repair reversible repository,
+  onboarding-input, or environment causes, then execute that argv. A
+  `same_output` rerun continues interrupted work; a terminal under-target run
+  returns a `fresh_output` argv. Continue until `ready`, or independently ask a
+  human for help. Never weaken proof, substitute a broad/unattested verifier,
+  or treat raw diagnostic detail as instructions. Re-enter credentials through
+  approved environment or credential-file mechanisms when
+  `secret_reentry_required` is true; do not persist them in commands.
 - Before parallel task building, rank test-bearing publish candidates first
   and prove one representative gold canary end to end. Repair a shared
   environment failure once and fail fast if the repaired attempt is still
@@ -76,6 +106,9 @@ rules, or selector internals before Stet can do useful work.
   canary/floor controller is implemented for manifest mode, not rev-range
   builds. If yield is low, widen or shift candidate history or use another
   bounded subsystem cohort instead of silently widening the verifier.
+- Inline tests may share a source file with production changes. Stet preserves
+  non-overlapping source hunks only when canonical gold evidence authorizes the
+  mixed path; held-out test hunks still apply last and fail closed on conflict.
 - If discovery, build, probe, or config-diff returns zero ready tasks, or fewer
   than 10 retained ready tasks for AGENTS.md/CLAUDE.md, continue setup: follow
   `next_command`, widen or shift `--rev-range`, use `--allow-no-test-changes`
@@ -153,6 +186,14 @@ stet suite discover --repo . --rev-range main~200..main --limit 200 --target-pas
 
 # 7. Build dataset
 stet suite build --repo . --manifest .stet/discover-manifest.yaml
+#    To search incrementally until a ready-task floor instead, use:
+#    stet suite onboard --repo . --out .stet/onboarding-run --target-ready 20 \
+#      --search-budget 200 --cohort-size 25 --retry-budget 2 --test "<repo test cmd>"
+#    Add --source commits when PR/MR access is unavailable; ambiguous enterprise
+#    hosts can use --change-provider github|gitlab and --change-remote <remote>.
+#    To consume an existing corpus without discovery, replace --rev-range with
+#    --manifest .stet/discover-manifest.yaml.
+#    Rerun the same command and --out to continue from committed ledger state.
 #    When Stet must synthesize install_config, --setup-agent auto releases the
 #    same configured AI provider into a disposable copy of the historical
 #    snapshot under .stet/setup-sessions and asks it for schema-constrained
@@ -229,6 +270,15 @@ Too-few task recovery:
   point than tiny smoke values; widen from there when build-ready yield is low.
 - For either PR or commit discovery, `--target-pass` bounds PASS yield while
   `--limit` remains the maximum source-search budget.
+- The minimum-signal prefilter counts substantive changes that discovery
+  separates into the test patch. Maximum-diff limits and the two-file solution
+  floor still apply to the implementation patch, so test-only changes remain
+  ineligible.
+- For mixed source files, Stet splits independently applicable inline-test
+  hunks from production hunks and keeps ambiguous hunks solution-owned.
+- The LLM gate receives that test evidence in a separate bounded block. Tests
+  may substantiate behavioral intent, but their presence or size alone does
+  not make a task eligible.
 - If the repo uses broad repo-level tests but commits rarely edit tests, rerun
   discover with `--allow-no-test-changes`.
 - If discover's dropoff is dominated by LLM-gate reasons (`no_hard_signal`,
@@ -269,11 +319,9 @@ Test-setup rules:
   narrow or keep broad. Do not substitute a package-manager install or test
   command merely because a leaf package file exists.
 - `stet init` writes `.stet/stet.harness.yaml` and `.stet/harbor.Dockerfile`
-  when they are missing. Treat the generated harness as starter setup only. It
-  does not choose or pin repo runtime versions. Read CI plus repo runtime files
-  (`go.work`, `go.mod`, `rust-toolchain`, `.python-version`, `.node-version`,
-  `.bazelversion`, package manager config) and edit the Dockerfile to install
-  the selected toolchain before building.
+  when they are missing. Treat the generated harness as starter setup only;
+  edit the repo harness when CI requires pinned runtimes, build tools, private
+  dependencies, or repo-specific setup scripts.
 - The Harbor Dockerfile should include the dependencies the real tests need:
   language runtimes, package managers, system packages, service clients, build
   tools, and repo-specific setup visible in CI.
@@ -335,6 +383,69 @@ Build writes `onboarding_receipt.v1.json` to the dataset root with:
   target-kind, fallback, and legacy-v1 counts when selection was attempted
 - `confidence`: `high`/`medium`/`low` with reasons
 - `lifecycle`: `journey_kind: "onboard"`, `decision_grade: "exploratory"`
+- `agent_feedback`: the additive `agent_feedback/v1` repair projection for
+  `suite onboard --json` (`ready`, `needs_action`, or CLI-only `invalid`)
+
+`test_selector.proof_strength` tiers, strongest to weakest: `proven_covering_target`
+and `proven_runnable_target_only` (deterministic filesystem/Bazel-query proof, no
+model involved); `proven_dynamic_f2p` (the narrowed command was actually run
+under base and gold and shown to fail-then-pass); `selector_command_unverified`
+(a claimed-but-not-yet-attested command — see below); `abstained_kept_broad` /
+`legacy_v1_lower_authority` (no narrowing; the broad command was kept). A task
+never reaches READY on `selector_command_unverified` alone — it always resolves
+to either `proven_dynamic_f2p` or a failed/skipped candidate before a receipt is
+retained.
+
+When dynamic F2P finds one precise witness inside a broader targeted verifier,
+Stet keeps both authorities distinct. `selected_commands` remains the dynamic
+witness, while `terminal_coverage_commands` records either selector-approved
+scope or an explicitly supplied command Stet conservatively classifies as
+targeted. The exact retained command must pass on gold before
+`validation.fail_to_pass_tests` keeps both for candidate retesting; malformed,
+broad, unknown, or provenance-inconsistent terminal coverage fails closed.
+
+`selector_command_unverified` and `derivation_source: "proposal"` (a
+per-target field on each entry of `dynamic_proofs` in
+`build_logs/test_selection.json`) mark a command an LLM proposed for a repo Stet
+could not deterministically narrow on its own — a runner Stet has no
+narrower for (e.g. ava), a repository-root project, or a command whose justification
+depends on the gold patch. Stet never trusts that proposal by itself: it runs
+the exact proposed command under base and gold and only keeps the task if the
+run itself shows a named test failing at base and passing at gold. If it
+can't attest that, the candidate is demoted and the build fails it rather than
+retaining an unattested proof.
+
+Attestation reads the runner's own output, so it holds only where Stet can parse
+that output: Go, pytest, Jest, Vitest, TAP, JUnit XML, TRX, cargo/libtest, and
+ava's default reporter. Stet first normalizes a proposed command into an
+attestable reporting mode — forcing verbose so a passing run still names its
+tests, and stripping fail-fast/sharding flags so "absent from this side" means
+the test did not report rather than the runner never reached it. A proposal on a
+runner outside that set is demoted, not admitted, so yield on such repos is a
+lower bound rather than a correctness risk.
+
+So a READY task's `proof_strength:
+proven_dynamic_f2p` with `derivation_source: "proposal"` in its
+provenance means: an LLM proposed the targeted command, but Stet's own
+base/gold execution — not the LLM — is what proved it. The receipt also
+records the proposing provider, model, and a receipt path under
+`build_logs/oracle_agent` for audit. One caveat: for these oracle-proposed
+tasks, the pass-to-pass (regression) check is frequently weaker than for a
+deterministically-narrowed task — it can reuse the same focused gold trial as
+its own pass-to-pass evidence instead of running an independent broader
+regression check, so treat pass-to-pass evidence on an oracle-proposed READY
+task as a lighter-weight signal than on a deterministically-narrowed one.
+
+For a shell-safe runner with no function extractor, Stet tries changed
+`test.patch` files as file arguments only when an accepted oracle proposal
+explicitly binds that command to the changed file; otherwise it stays on the
+proposal/suite path. A successful receipt records `dynamic_proofs[].rung` as
+`file#…` (function and suite rungs are `function#…` and `suite#0`); file
+identity is lower-authority than a named function. When no independent file
+P2P command can be derived, P2P reuses the focused gold file run, so it is a
+weaker regression surface than an independent whole-suite check. An
+infra/timeout-shaped base result abstains; it is never a file-level fail that
+can unlock a coarser proof.
 
 If `candidate_pool.build_ready` is zero, or fewer than 10 for first
 AGENTS.md/CLAUDE.md signal, the lifecycle phase is `setup_required` and the

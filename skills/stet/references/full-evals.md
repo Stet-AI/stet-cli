@@ -130,12 +130,21 @@ Machine-readable default:
 - For per-model comparison truth, prefer `runs.<model>.decision_metrics` from
   summary/report surfaces. Treat `validation_metrics` as legacy aliases and
   detailed counters.
+- Read arm provenance from persisted manifest/runtime/summary projections in
+  canonical reports: plugin overlays expose sanitized identity digests, CLI
+  cache records requested/effective mode, and grader coverage keeps requested
+  IDs plus summary-derived per-grader task counts/status. Legacy roots leave
+  unavailable provenance absent; do not reconstruct it from CLI arguments.
 - For per-task authority, prefer `task_decision.json`, then `task_detail.json`
   and `trajectory.json` for inspectability.
 - In Harbor-backed roots, a flat trial dir with `superseded_trial.v1.json` is
   preserved debug/telemetry evidence, not canonical scored authority. Follow its
   `authoritative_results_path` and `authoritative_trial_dir` before judging the
   scored patch/test outcome.
+- Exact Harbor environment-start and pre-execution agent-setup timeouts are
+  per-task `fail_infra/setup_failed_before_agent` receipts, not agent no-patch
+  outcomes. They produce no patch, skip validation/grading for that cell, and do
+  not stop healthy siblings; near matches keep legacy handling.
 
 For patch-present cells that need verifier or evidence repair, keep `--out`
 pointed at the canonical root and use `stet runs repair-patches --task-id ...`.
@@ -143,10 +152,12 @@ This reuses the existing model-under-test `agent.patch`, reruns
 validation/evidence repair, and regenerates the merged summary without a model
 rerun. Use raw `stet eval run --task-id ... --stitch-rerun` only for selected
 cells that lack usable patch evidence and truly need a fresh model run. When a
-stitch-rerun's in-scratch validate/grade partially fails, every cell with a real
-patch is still merged into canonical and a `pending-stitch.v1.json` breadcrumb is
-written naming any still-pending cells; `stet eval status` surfaces the recovery
-command.
+stitch-rerun's in-scratch validate/grade partially fails, Stet switches a cell
+only after its exact selected trial's patch, validation, and provider-native
+trajectory/session evidence are retained in canonical. Missing selected provider
+evidence leaves the prior canonical cell authoritative and records the cell in
+`pending-stitch.v1.json`; Stet never borrows a sibling or superseded trial's
+transcript. `stet eval status` surfaces the recovery command.
 
 When comparing a model whose outputs will be judged by LLM-backed graders,
 persist the evaluator model in the suite manifest so reruns keep the same
@@ -225,22 +236,41 @@ flags override suite values for a temporary launch.
   `smoke_preflight` receipts for run/reuse/skip decisions. Use
   `--smoke-policy always` to force smoke, or `--smoke-policy never` / legacy
   `--skip-smoke-preflight` for an explicit override.
+- If the model run and validation complete but the custom evaluator loses auth,
+  quota, times out, or hits a known transport outage, Stet exits 0 with
+  `grader_enrichment.status=repair_required` in `runtime.v1.json`. Treat that
+  typed status—not the exit code—as authoritative; `stet eval status --json`
+  lists parked cells and emits the exact `stet eval rules resume ... --json`
+  recovery. Restore evaluator access, then resume to regrade only those cells;
+  it does not rerun the coding model. Unknown/schema/config grader errors still
+  fail the run.
 - To compare reasoning levels, keep the model fixed and use first-class
   reasoning arms: `stet eval run --dataset <dataset> --model <model> --reasoning-efforts max,xhigh,high,low --out <out>`.
   Add `--pinned-task-source` and `--pinned-dataset-key` when reusing prior Stet
   history. Do not repeat the same model under `--models` for reasoning tests.
   For no-spend reporting across three or more completed arms, use
-  `stet eval compare --multi-arm` and set `--comparison-surface reasoning_effort`.
+  `stet eval compare --multi-arm` and set
+  `--comparison-surface reasoning_effort`. Use `model_reasoning_bundle` only
+  when model and reasoning both change.
 - To A/B a pre-baked agent plugin/hook/MCP overlay (Caveman, Ponytail, RTK,
   Context Mode), add `--plugin-overlay <dir>` to a single-arm `stet eval run`
   (one `--models` entry). The dir needs a `stet-plugin-overlay.json` manifest
   declaring activation markers; `agent` defaults to `claude-code`, and Codex
   overlays should set `"agent": "codex"` with markers under `.codex/`. Stet
   merges it into the run's agent `HOME`/`CODEX_HOME`, forces required binaries
-  onto `PATH`, and records a typed `plugin_not_active` failure (never a silent
+  onto `PATH`, preserves package symlinks that resolve within the overlay (while
+  rejecting absolute, dangling, or escaping links), and records a typed
+  `plugin_not_active` failure (never a silent
   clean run) if activation isn't observed. It is a single-arm run-config input,
   not a compare treatment — combine arms offline. Works in worktree and Harbor
-  backends.
+  backends. Worktree overlay arms first run one real-agent canary and write
+  `treatment_admission.v1.json`; widening requires active marker/transcript
+  evidence. Each worktree task writes `treatment_execution.v1.json` referencing
+  that admission receipt, and an inactive or unknown receipt makes a zero-byte
+  patch an infrastructure/treatment failure rather than `agent_no_patch`.
+  Harbor staging can prove the generated image inputs but the host cannot prove
+  the container's effective PATH; that dimension is `unknown` unless an
+  in-container probe supplies evidence.
 - If multiple experiment arms request the same explicit `model_key`, read the
   manifest for the effective keys; Stet disambiguates them before writing run
   and validation artifact paths.
@@ -253,6 +283,13 @@ flags override suite values for a temporary launch.
   evidence and mark them with `superseded_trial.v1.json`; use the referenced
   canonical trial for scored outcomes. Do not tell the user to hand-copy retry
   artifacts unless they explicitly need the legacy manual path.
+  Repair runs default to `--workers 1 --command-workers 1 --time-budget 20m`.
+  Progress and retryable failures are durable in
+  `.stet/repair-patches.v1.json`; rerunning the same command skips cells already
+  recorded as validated while their patch and canonical `validation.json`
+  digests remain unchanged. Only one repair process may own a run root. Use
+  `stet eval status --out <root>` to see current repair activity and the exact
+  safe resume command after an interruption.
 - `stet eval report` is the canonical decision surface over finished artifacts.
 - `stet eval status` is the canonical health/check-in surface for active roots.
 - Stranded patches (quota-interrupted windows): if a root holds non-empty
