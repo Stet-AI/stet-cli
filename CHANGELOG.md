@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.11.0] - 2026-07-21
+
+Promotes the verified `v0.11.0-rc.2` feature set to stable and makes native
+Codex worktree execution settings explicit and auditable before model spend.
+
+### Fixed
+- Enforce supported native Codex worktree execution settings: validate and isolate requested credentials before launch, apply the requested reasoning level, reject unsupported kwargs, and persist a bounded per-task execution-request receipt without claiming provider-side acceptance. ([1ebeb2b2])
+
+[v0.11.0]: https://github.com/Stet-AI/stet/compare/v0.11.0-rc.2...v0.11.0
+[1ebeb2b2]: https://github.com/Stet-AI/stet/commit/1ebeb2b2
+
 ## [v0.11.0-rc.2] - 2026-07-21
 
 This follow-up 0.11 candidate makes build and evaluation evidence more durable:

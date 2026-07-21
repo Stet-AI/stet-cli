@@ -377,7 +377,12 @@ inspect-only for rollout or model claims.
 the reasoning level for both arms (default `high`); it is backend-agnostic and
 applies to the worktree path too (e.g. run gpt-5.4 at `medium`). The CLI flag
 overrides any `harness_settings.reasoning_effort` declared in the change
-manifest.
+manifest. Native Codex worktree runs validate and isolate the resolved
+credential before spend, apply the requested reasoning level to the Codex
+process, and fail closed on agent kwargs that the native backend cannot honor.
+Per-task `worktree_execution_request.v1.json` records the resolved executable,
+requested model/reasoning/sandbox, credential materialization, and process exit
+without claiming that the provider accepted those requested settings.
 
 `stet eval rules` is non-destructive by default when a matching rules runtime
 already exists. It reuses completed evidence, auto-resumes candidate-phase
