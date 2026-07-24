@@ -6,6 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.11.2] - 2026-07-24
+
+Makes cold Bazel fail-to-pass selection survivable by giving operators a durable
+repository cache root, so a first-task timeout warms later runs instead of
+throwing the downloads away. The rest of the release unblocks valid head-to-head
+resumes and recovers fail-to-pass tasks whose runner has no function extractor.
+
+### Fixed
+- Let operators point the Bazel selector repository cache at a durable path via `build.bazel_cache_root` / `--bazel-cache-root` on `stet suite build` and `stet dataset regenerate-f2p`. The previous per-command MkdirTemp root was deleted on exit, so a cold-cache selector timeout never warmed later runs. An operator-supplied root is external and unmanaged: Stet creates it if missing and never GC-deletes it; unset keeps the ephemeral default. ([4cf34c3a])
+- Restore head-to-head resume for legacy measuring-device digests and experiment-requested custom graders. Recovery stays fail-closed for genuinely unavailable graders, but legacy digests are grandfathered and custom grader specs are threaded into resume pre-flight so valid resumes are no longer blocked. ([188be3f7])
+- Recover fail-to-pass tasks on runners with no function extractor by deriving proposal-free file-level candidates from `test.patch`, stamping `narrowing_unverified` on the resulting coarse proofs. Terminal abstains now name the concrete recovery routes that were tried. ([ec4c5000])
+
+### Internal
+- Rework the GPT-5.6 token-saving-modes comparison visualization on the leaderboard, moving its dataset into a dedicated module and refreshing the post's chart rendering. ([cc09aeb1])
+
+[v0.11.2]: https://github.com/Stet-AI/stet/compare/v0.11.1...v0.11.2
+[4cf34c3a]: https://github.com/Stet-AI/stet/commit/4cf34c3a
+[188be3f7]: https://github.com/Stet-AI/stet/commit/188be3f7
+[ec4c5000]: https://github.com/Stet-AI/stet/commit/ec4c5000
+[cc09aeb1]: https://github.com/Stet-AI/stet/commit/cc09aeb1
+
 ## [v0.11.1] - 2026-07-23
 
 Restores fail-to-pass selection on large Bazel repositories, where a hard-coded

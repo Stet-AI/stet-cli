@@ -34,8 +34,12 @@ cycle unless that isolation is explicitly required and the duplicate-download
 cost is acceptable.
 For Bazel tasks, selector queries keep writable output state isolated per task
 while reusing Stet-owned Bazelisk and repository-download caches for the same
-environment cohort during that build command; command cleanup retires those
-caches unless explicit worktree retention protects them.
+environment cohort during that build command. By default those caches live in
+an ephemeral per-command root that command cleanup retires (unless
+`--worktree-keep` protects it). Point `build.bazel_cache_root` /
+`--bazel-cache-root` at a durable operator-owned directory to reuse the same
+Bazelisk and `repository_cache` across suite build / regenerate-f2p runs; Stet
+does not GC or delete that operator-supplied root.
 For explicit `--base/--head` or fresh manifest builds, the default
 `--source-mode auto` selects `reference` when the local worktree route proves
 all reference prerequisites; rev-range builds stay portable until their
@@ -332,6 +336,18 @@ fails the task closed at `stage: selector` with
 `stet dataset regenerate-f2p` takes the same `--bazel-query-timeout` flag but
 reads no config file. Values must be positive Go durations, such as `20m`.
 
+Cold Bazel startups also re-download external repos into the selector's
+`repository_cache`. By default that cache is ephemeral per command, so a timed-
+out first task never warms later runs. Set `build.bazel_cache_root` in
+`.stet/stet.yaml` or `--bazel-cache-root` to a durable operator-owned directory
+so Bazelisk and repository downloads persist across suite build /
+regenerate-f2p invocations; the flag wins over config.
+`stet dataset regenerate-f2p` accepts the same `--bazel-cache-root` flag but
+reads no config file. Stet creates the directory if missing and never deletes
+or GC-reaps an operator-supplied root. Unset keeps today's ephemeral
+MkdirTemp root. This knob is applied on the worktree backend only; the Docker
+harbor path does not share a selector repository cache today.
+
 Keep the output root operator-controlled for the full build. Stet rejects a
 symlinked output root and unsafe physical ancestry, and serializes concurrent
 Stet builds on the resolved physical root, but is not an OS security boundary
@@ -487,6 +503,18 @@ TAP output) — an exit-code-only differential alone never mints
 proposal path is the built-in selection mode that binds a proposal-derived
 command to this prover, so an accepted proposal without an attested
 differential is what surfaces this value.
+
+When the test command has no function-level extractor (an unrecognized runner)
+and no accepted proposal binding, Stet still attempts a coarse file-level
+recovery: it appends each changed test file from `test.patch` (added-line
+hunks, deduped and capped) as a trailing positional argument and runs the same
+base-fail/gold-pass loop. A successful proof is real F2P evidence but stamps
+`proof_strength: narrowing_unverified` with `broadness: broad` and
+`strictness_status: narrowing_unverified` — the runner may have ignored the
+file argument and executed the whole suite, so file-level blast radius is not
+claimed. If that rung also finds no proof, the abstain error names the
+unrecognized command and the routes forward (enable the setup agent / oracle
+proposal path, or a fixed manifest with `test_selector.fallback=keep_broad`).
 
 Repos may declare a lower-trust selector input surface in `.stet/stet.yaml`:
 
