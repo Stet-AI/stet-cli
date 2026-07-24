@@ -6,6 +6,55 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.11.1] - 2026-07-23
+
+Restores fail-to-pass selection on large Bazel repositories, where a hard-coded
+query deadline rejected every task before evaluation could start. The rest of
+the release hardens worktree containment, manifest-backed builds, and
+head-to-head evidence handling so partial, superseded, or untrustworthy results
+fail closed instead of being silently substituted.
+
+### Fixed
+- Make the Bazel fail-to-pass selector query timeout configurable and raise the default from 2m to 10m. Large Bazel repos pay a cold startup in the selector's isolated output base, which silently rejected every task at `stage: selector` with `runtime_classification: timeout`. Set `build.bazel_query_timeout` in `.stet/stet.yaml` or pass `--bazel-query-timeout` to `stet suite build`; `stet dataset regenerate-f2p` accepts the same flag. The timeout error now names the knob. ([a8161f5f])
+- Query-prove every changed source label before large-package reverse-dependency recovery in the selector; a missing or ambiguous source now abstains instead of running a reverse-dependency query against unverified owners. ([c05a90e8])
+- Recognize syntactically valid Bazel and Bazelisk target patterns in parser-proven target positions within direct or simply composed commands, via a dedicated command parser. Path-valued flags, redirect operands, post-`--` arguments, and unsupported shell grammar remain fail-closed in the integrity scanner. ([b7a7f93f])
+- Recognize Bazel labels wrapped in transparent command context joined by `&&`; all other shell grammar keeps normal absolute-path scrutiny so labels in opaque command text are not trusted. ([f4331bb9])
+- Accept Bazel root package labels such as `//:target` in integrity scanning, and reject labels whose path segments are empty, `.`, or `..`. ([2ab96dba])
+- Retire each task's isolated worktrees, object store, homes, and owned build caches once its artifacts persist, leaving a lifecycle receipt in the task artifact directory. Use `--worktree-keep` to protect them instead. ([f468da1f])
+- Retain worktree replay evidence for validation overrides under its own output root, so non-kept verifier evidence survives while the scratch root stays disposable. ([a605b750])
+- Freeze the exact input manifest and every PASS-task patch before planning manifest-backed builds, and retain a sanitized authority copy under the dataset. Reuse, resume, and rejected-task retry now fail closed when the caller manifest or retained authority no longer matches; use `--restart` only when intentionally replacing that dataset. ([66df39f1])
+- Preflight charged experiment arm models while planning `stet eval rules`, resolving them through the same provider, config, and command semantics execution uses, so an unresolvable model fails before model spend rather than mid-run. ([4a3d0116])
+- Restore the persisted variant treatment when resuming `stet eval rules`, taking the baseline/candidate role from the persisted treatment rather than the arm key, and rejecting missing, ambiguous, or mismatched arm manifests and unsupported persisted harness settings. ([04cd8d10])
+- Validate head-to-head recovery against the full persisted grader profile, so repairing a subset of graders cannot silently redefine the persisted profile's rubric digest; unavailable specs fail closed. ([d754ddfa])
+- Exclude terminal cells whose patch or execution environment is untrustworthy grader input from grader coverage accounting, so intentionally skipped graders no longer create phantom coverage gaps or repair work while the cells are retained as infrastructure evidence. ([5dab833f])
+- Contain worktree integrity violations as fail-closed task-cell outcomes with a terminal receipt, instead of treating them as benign empty patches or escalating them to arm-wide harness failures. ([64b8c955])
+- Stop marking an automatically resolved provider command as an explicit user command, so worktree execution can distinguish operator-supplied agent commands from resolved ones. ([616cc071])
+- Publish provider-native session evidence once during Harbor normalization, refusing symlinked or irregular sources and detecting conflicting logs, so mutable raw exports cannot replace a selected canonical trajectory after its source trial is superseded. ([75632fec])
+- Prefer canonical provider-native trajectory evidence when stitching, rejecting superseded trials and empty or irregular evidence files rather than accepting them as usable. ([4ae979c7])
+- Migrate the one legacy case where Harbor normalization retained the only provider-native agent log in a superseded flat trial, binding every field of the retained log to the exact selected cell against a pinned source descriptor before copying its bytes into scratch. No source path is mutated. ([1167fe08])
+
+### Internal
+- Add the GPT-5.6 token-saving-modes leaderboard study post, covering six treatments against a GPT-5.6 Sol baseline with an interactive comparison view. ([660d97a8])
+
+[v0.11.1]: https://github.com/Stet-AI/stet/compare/v0.11.0...v0.11.1
+[a8161f5f]: https://github.com/Stet-AI/stet/commit/a8161f5f
+[c05a90e8]: https://github.com/Stet-AI/stet/commit/c05a90e8
+[b7a7f93f]: https://github.com/Stet-AI/stet/commit/b7a7f93f
+[f4331bb9]: https://github.com/Stet-AI/stet/commit/f4331bb9
+[2ab96dba]: https://github.com/Stet-AI/stet/commit/2ab96dba
+[f468da1f]: https://github.com/Stet-AI/stet/commit/f468da1f
+[a605b750]: https://github.com/Stet-AI/stet/commit/a605b750
+[66df39f1]: https://github.com/Stet-AI/stet/commit/66df39f1
+[4a3d0116]: https://github.com/Stet-AI/stet/commit/4a3d0116
+[04cd8d10]: https://github.com/Stet-AI/stet/commit/04cd8d10
+[d754ddfa]: https://github.com/Stet-AI/stet/commit/d754ddfa
+[5dab833f]: https://github.com/Stet-AI/stet/commit/5dab833f
+[64b8c955]: https://github.com/Stet-AI/stet/commit/64b8c955
+[616cc071]: https://github.com/Stet-AI/stet/commit/616cc071
+[75632fec]: https://github.com/Stet-AI/stet/commit/75632fec
+[4ae979c7]: https://github.com/Stet-AI/stet/commit/4ae979c7
+[1167fe08]: https://github.com/Stet-AI/stet/commit/1167fe08
+
 ## [v0.11.0] - 2026-07-21
 
 Promotes the verified `v0.11.0-rc.2` feature set to stable and makes native

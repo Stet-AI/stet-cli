@@ -322,10 +322,26 @@ disk use, extraction cost, and runtime. After changing the cap, rerun with
 `--restart` or choose a fresh output directory so an existing build summary is
 not reused.
 
+On a Bazel repo, the fail-to-pass selector runs a `bazel query` per task in an
+isolated output base, so each query pays a cold Bazel startup even when the same
+query is about a second in a warm workspace. A query that exceeds the timeout
+fails the task closed at `stage: selector` with
+`runtime_classification: timeout` and is not retried. The default timeout is
+10m. On `stet suite build`, raise it with `build.bazel_query_timeout` in
+`.stet/stet.yaml` or `--bazel-query-timeout`, and the flag wins over config.
+`stet dataset regenerate-f2p` takes the same `--bazel-query-timeout` flag but
+reads no config file. Values must be positive Go durations, such as `20m`.
+
 Keep the output root operator-controlled for the full build. Stet rejects a
 symlinked output root and unsafe physical ancestry, and serializes concurrent
 Stet builds on the resolved physical root, but is not an OS security boundary
 against another process able to replace that root.
+
+For manifest-backed builds, Stet freezes the exact input manifest and every
+PASS-task patch before planning, then retains a sanitized authority copy under
+the dataset. Reuse, resume, and rejected-task retry fail closed when the caller
+manifest or retained authority no longer matches. Use `--restart` only when
+intentionally replacing that dataset, or choose a fresh output directory.
 
 The shadow `storage-admission.json` preview models logical exposure, not
 physical allocation or reclaim. For portable builds it applies the snapshot
@@ -437,7 +453,9 @@ unless the repo declares a `test_selector` config. During strict F2P proof,
 Stet may derive flags-preserving Bazel label candidates when `bazel query` (or
 Bazelisk) resolves a package pattern to actual test-rule labels and proves their
 direct srcs, Rust crate srcs, direct data source files, or buildfiles cover
-required test-patch directories; recursive patterns
+required test-patch directories. Large-package reverse-dependency recovery
+first query-proves every changed source label; a missing or ambiguous source
+abstains before any reverse-dependency query. Recursive patterns
 are never recorded as strict F2P identities. An actual label is accepted only after the same dynamic
 base-fail/gold-pass check as other targeted candidates. When Bazel candidate
 derivation abstains (query pattern failure, the >16-label bound, or no
