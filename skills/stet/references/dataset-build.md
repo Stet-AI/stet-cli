@@ -32,14 +32,18 @@ task/command; it deliberately preserves an existing `GOMODCACHE` so it does
 not redownload modules per task. Do not redirect `GOMODCACHE` per evaluation
 cycle unless that isolation is explicitly required and the duplicate-download
 cost is acceptable.
-For Bazel tasks, selector queries keep writable output state isolated per task
-while reusing Stet-owned Bazelisk and repository-download caches for the same
-environment cohort during that build command. By default those caches live in
-an ephemeral per-command root that command cleanup retires (unless
-`--worktree-keep` protects it). Point `build.bazel_cache_root` /
-`--bazel-cache-root` at a durable operator-owned directory to reuse the same
-Bazelisk and `repository_cache` across suite build / regenerate-f2p runs; Stet
-does not GC or delete that operator-supplied root.
+For Bazel tasks, selector queries reuse Stet-owned Bazelisk and
+repository-download caches for the same environment cohort during that build
+command. By default those caches live in an ephemeral per-command root that
+command cleanup retires (unless `--worktree-keep` protects it), and each task
+gets a throwaway query workspace and Bazel output base. Point
+`build.bazel_cache_root` / `--bazel-cache-root` at a durable operator-owned
+directory to reuse the same Bazelisk, `repository_cache`, query workspace, and
+query output base across suite build / regenerate-f2p runs; Stet does not GC or
+delete that operator-supplied root. Within one cohort each task's extraction,
+patching, and query run one at a time, and concurrent `stet` invocations may
+share the root safely because the selector takes an OS file lock on it, though
+runs on the same cohort then serialize.
 For explicit `--base/--head` or fresh manifest builds, the default
 `--source-mode auto` selects `reference` when the local worktree route proves
 all reference prerequisites; rev-range builds stay portable until their
@@ -189,6 +193,15 @@ Proactive gotcha handling:
 | Repo expects setup steps before tests | Encode them in the Dockerfile, keep `stet init --test` focused on test execution |
 | Monorepo command drift | Use CI's repo-level runner command; do not infer setup from unrelated leaf package files |
 
+Every exported task instruction now leads with a fair-internet-use policy on
+both the Harbor and worktree backends: general documentation, API reference, and
+error-semantics lookups are permitted, while anything that could reveal the
+task's reference solution or upstream patch is not, including the upstream
+repository, its PRs/commits/diffs, and installing a newer release to obtain the
+fix. Detection is unchanged and independent of the prompt, so a run that reaches
+a solution-bearing route is still flagged. Because agent instructions changed,
+runs recorded before this policy are not prompt-comparable with runs after it.
+
 Harbor task exports default to runtime internet enabled. Keep package downloads
 and equivalent dependency prewarming in the Dockerfile or install config anyway
 so runtime execution does not depend on live setup fetches. Use the dependency
@@ -208,9 +221,13 @@ in reports when the Harbor task explicitly disables network, for example via
 network-command use; do not treat `allow_internet = true` on those runs as
 permission to move dependency setup or verifier installs back into runtime.
 Even when network stays enabled, candidate guards deny obvious target-answer
-routes such as public PR/commit pages, raw target-repo source, provider web
-fetch/search surfaces, GitHub API answer endpoints, and target upstream git
-history fetch/show/apply paths. Candidate-visible denials are intentionally
+routes such as public PR/commit pages, raw target-repo source, GitHub API answer
+endpoints, and target upstream git history fetch/show/apply paths. Provider
+web fetch/search surfaces are no longer denied for the cursor agent on either
+backend: its `.cursor/cli.json` now allows `WebFetch(*)`, so the fair-internet-use
+policy in the instruction is the operative rule there, with the source-fetch
+routes above still guarded independently of the prompt. The Harbor claude-code
+agent still runs with `WebFetch`/`WebSearch` disallowed. Candidate-visible denials are intentionally
 generic; use the operator artifacts for precise route and validity diagnostics.
 Some provider CLIs still expose harness-looking launch details such as `/app`,
 sandbox/trust flags, or headless execution modes; treat those as residual
@@ -337,16 +354,52 @@ fails the task closed at `stage: selector` with
 reads no config file. Values must be positive Go durations, such as `20m`.
 
 Cold Bazel startups also re-download external repos into the selector's
-`repository_cache`. By default that cache is ephemeral per command, so a timed-
-out first task never warms later runs. Set `build.bazel_cache_root` in
-`.stet/stet.yaml` or `--bazel-cache-root` to a durable operator-owned directory
-so Bazelisk and repository downloads persist across suite build /
-regenerate-f2p invocations; the flag wins over config.
+`repository_cache`, and then re-extract and re-execute every external
+repository rule, which a warm download cache does not skip. By default both are
+ephemeral per command, so a timed-out first task never warms later runs. Set
+`build.bazel_cache_root` in `.stet/stet.yaml` or `--bazel-cache-root` to a
+durable operator-owned directory so Bazelisk, repository downloads, and the
+selector's per-cohort query workspace and output base persist across suite
+build / regenerate-f2p invocations; the flag wins over config. Tasks in one
+cohort then share that output base and run their whole selector step --
+workspace extraction, patching, and query -- one at a time, while different
+cohorts still query in parallel. An OS file lock on the root extends that
+serialization across concurrent `stet` invocations, so sharing a cohort root
+between runs is safe but not parallel.
 `stet dataset regenerate-f2p` accepts the same `--bazel-cache-root` flag but
 reads no config file. Stet creates the directory if missing and never deletes
 or GC-reaps an operator-supplied root. Unset keeps today's ephemeral
 MkdirTemp root. This knob is applied on the worktree backend only; the Docker
 harbor path does not share a selector repository cache today.
+
+When a selector query fails -- including on timeout or cancellation -- the error
+now carries the elapsed time, the exact `bazel` argv, the names of the forwarded
+connectivity variables, and a tail of Bazel's own stdout/stderr, and the query
+no longer suppresses progress output. A stalled selector therefore names what it
+was waiting on (typically an external repository fetch) instead of reporting a
+bare timeout. Argv values of credential-bearing flags such as `--remote_header`,
+and URL userinfo anywhere in the captured output, are redacted.
+
+Stet also resolves the query binary in its own timeout budget before the first
+query, so a Bazelisk download of the pinned Bazel is no longer charged to (and
+no longer repeatedly kills) that query. A toolchain that cannot resolve at all
+fails as `runtime_classification: toolchain` instead of as a query timeout. That
+result is reused for the same binary, `BAZELISK_HOME`, and `.bazelversion`, so
+with a durable `--bazel-cache-root` the download happens once for the cohort;
+without one each task still has its own ephemeral Bazelisk home and pays it
+again. A preflight *timeout* is never reused, so one transient network failure
+cannot fail every remaining task.
+
+Trusted phases -- the selector query and base/gold verification, which run repo
+code plus `test.patch` and gold with no candidate code in the tree -- forward the
+host's proxy routing (`HTTP(S)_PROXY`, `NO_PROXY`, `ALL_PROXY`) and TLS trust
+store (`SSL_CERT_FILE`, `SSL_CERT_DIR`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`,
+`NODE_EXTRA_CA_CERTS`) so they reach what the operator's own toolchain reaches.
+On a proxied or TLS-inspected network these were previously stripped, and the
+failure surfaced only as an unexplained timeout. Candidate verification keeps the
+agent-containment posture and forwards none of them. Credentials, tokens, netrc,
+and agent sockets are withheld in every phase; a repo whose external fetches
+need authentication must pre-warm its `repository_cache`.
 
 Keep the output root operator-controlled for the full build. Stet rejects a
 symlinked output root and unsafe physical ancestry, and serializes concurrent

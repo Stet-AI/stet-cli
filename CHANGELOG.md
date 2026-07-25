@@ -6,6 +6,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.11.3] - 2026-07-24
+
+Makes a stalled Bazel fail-to-pass selector diagnosable instead of silent: query
+failures now carry the elapsed time, the argv, and Bazel's own output, the
+toolchain download is resolved on its own clock so it can no longer masquerade
+as a query timeout, and trusted selector and verification phases reach the
+operator's proxy and TLS trust store. Candidate agents also gain a shared
+fair-internet-use policy across both backends, which changes the exported task
+instructions.
+
+### Changed
+- Give candidate agents the same fair-internet-use policy on both backends: general lookups (documentation, API references, error and language semantics) are permitted, while anything that could reveal the task's reference solution or upstream patch is not. The Harbor path previously carried no policy and the worktree path a blanket ban, so the two backends measured different harnesses and the ban understated capability. This rewrites the exported agent instructions and moves the export cache generation and hash salt v12 to v13, so recorded runs from before this release are no longer prompt-comparable with runs after it. ([84b04e4c])
+- Forward proxy routing and the TLS trust store to the trusted selector query and to base/gold verification. On a proxied or TLS-inspected network, stripping those turned a fetch failure into a silent hang. Candidate verification is deliberately excluded and keeps full agent containment; no credentials, tokens, netrc, or agent sockets are forwarded in any phase. ([2da09e80])
+
+### Fixed
+- Report evidence on every Bazel selector query failure, timeouts included: elapsed time, the exact argv, the names of the forwarded connectivity variables, and a 4 KB tail of Bazel's stdout and stderr. Progress reporting is no longer suppressed, so a stalled selector names the fetch it is waiting on, and capture writes to real files because the process-group kill sets a `WaitDelay` and `os/exec` abandons its pipe copiers exactly when the output matters. Credential flag values and URL userinfo are redacted. ([2da09e80])
+- Resolve the Bazel toolchain in a separate timeout budget before the first query, which is where Bazelisk downloads the pinned Bazel. An unresolvable toolchain now fails as a toolchain blocker carrying Bazelisk's own error instead of impersonating a query timeout. The outcome is memoized per binary, `BAZELISK_HOME`, and `.bazelversion`, so a cohort with a durable cache root pays the download once; preflight timeouts are deliberately not memoized, so one transient blip cannot condemn every remaining task. ([2da09e80])
+- Keep the Bazel selector query workspace and output base under the per-cohort trusted root when `--bazel-cache-root` / `build.bazel_cache_root` is set, so external repository rules are extracted and executed once per cohort rather than once per task. The extract, patch, overlay, and query span is serialized per durable root by an in-process mutex plus an OS file lock, so concurrent invocations sharing a cohort root cannot corrupt each other. With no cache root the previous ephemeral behavior is byte-identical. ([b1110eb3])
+
+### Internal
+- Answer the toolchain preflight in the selector cancellation fixtures so they exercise the query they were written to cover rather than the preflight, and correct the `BazelQueryRuntime` doc comment that still described the query output root as task-scoped. ([a3aa591a])
+- Fix a stale `BazelQueryCachePaths` call site left behind when the signature widened, which stopped `internal/cli` from compiling, and assert that the query output root also lands under the durable cache root. ([1e1ee7a6])
+
+[v0.11.3]: https://github.com/Stet-AI/stet/compare/v0.11.2...v0.11.3
+[84b04e4c]: https://github.com/Stet-AI/stet/commit/84b04e4c
+[2da09e80]: https://github.com/Stet-AI/stet/commit/2da09e80
+[b1110eb3]: https://github.com/Stet-AI/stet/commit/b1110eb3
+[a3aa591a]: https://github.com/Stet-AI/stet/commit/a3aa591a
+[1e1ee7a6]: https://github.com/Stet-AI/stet/commit/1e1ee7a6
+
 ## [v0.11.2] - 2026-07-24
 
 Makes cold Bazel fail-to-pass selection survivable by giving operators a durable
