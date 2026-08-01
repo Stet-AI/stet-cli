@@ -6,6 +6,80 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.12.0] - 2026-08-01
+
+This release makes the agent-first build and onboarding loop more trustworthy on
+unfamiliar repositories: Stet records the exact scoring and execution authority
+it observed, keeps retries bound to that authority, and preserves clear
+infrastructure outcomes instead of inferring success. Onboarding now uses the
+requested ready-task floor by default; representative selection is available
+only as an explicit temporary opt-in while it is validated on real repositories.
+
+### Added
+- Attest the observed named scoring targets that prove fail-to-pass behavior and
+  project only complete, supported evidence into the scoring surface. ([545f2251])
+- Add an evidence-only blind cheat challenger as a third fail-to-pass proof leg
+  in `stet suite build`, so a cheap solution to the selected tests is recorded
+  without changing the build's proof strength. ([70b4ce18])
+- Deduplicate exact-match authority executions while retaining canonical
+  receipts, and resume completed authority plans without rerunning proof.
+  ([4a2a94f2], [80812435])
+
+### Changed
+- Keep `stet suite onboard --target-ready N` at its requested ready-task floor
+  by default. Set `STET_ONBOARD_REPRESENTATIVE_V1=1` before a fresh onboarding
+  to validate a bounded 2N reservoir and select a static-diversity panel.
+  ([ad426e73], [b23d5b2b])
+- Give candidate agents a consistent fair-internet-use policy: documentation and
+  general references are allowed, while upstream solutions and reference patches
+  remain blocked. ([eebd6911])
+
+### Fixed
+- Retry one gold verification only when the first attempt failed before any test
+  executed while acquiring dependencies. Both attempt receipts are retained
+  across direct, batched, Harbor, and worktree validation; network activity
+  during repository tests remains a normal test failure. ([f033b557])
+- Let CMake/CTest plans ignore non-test support paths in a test patch while
+  still requiring exactly one declared test source to select a target.
+  ([9636aed6])
+- Bind validation replay, authority receipts, and R3 artifacts to their exact
+  certified content identity; ambiguous or incomplete authority fails closed.
+  ([1f3b9a2e], [4208c894], [c79a79dc])
+- Preserve selected head-to-head validation evidence across revalidation and
+  distinguish absent smoke failure kinds rather than silently borrowing or
+  misclassifying them. ([23df59ab], [27f5e406])
+- Isolate Codex evaluator runtime state under the owning output root and forward
+  the selected AI command through onboarding, avoiding shared runtime leakage.
+  ([dcf4e35e], [46435f1d])
+- Recognize CMake CTest, PHPUnit, and Swift test plans while keeping incomplete
+  source history and verifier runtime blockers explicit and fail-closed.
+  ([fee2e89d], [13f4fe88], [7c43c491], [e5584e3e], [06d79c3c])
+- Publish Harbor companion agents as version 0.9.1, matching the version the
+  Stet Harbor invocation pins at runtime. ([b23d5b2b])
+
+[v0.12.0]: https://github.com/Stet-AI/stet/compare/v0.11.3...v0.12.0
+[545f2251]: https://github.com/Stet-AI/stet/commit/545f2251
+[70b4ce18]: https://github.com/Stet-AI/stet/commit/70b4ce18
+[4a2a94f2]: https://github.com/Stet-AI/stet/commit/4a2a94f2
+[80812435]: https://github.com/Stet-AI/stet/commit/80812435
+[ad426e73]: https://github.com/Stet-AI/stet/commit/ad426e73
+[b23d5b2b]: https://github.com/Stet-AI/stet/commit/b23d5b2b
+[eebd6911]: https://github.com/Stet-AI/stet/commit/eebd6911
+[f033b557]: https://github.com/Stet-AI/stet/commit/f033b557
+[9636aed6]: https://github.com/Stet-AI/stet/commit/9636aed6
+[1f3b9a2e]: https://github.com/Stet-AI/stet/commit/1f3b9a2e
+[4208c894]: https://github.com/Stet-AI/stet/commit/4208c894
+[c79a79dc]: https://github.com/Stet-AI/stet/commit/c79a79dc
+[23df59ab]: https://github.com/Stet-AI/stet/commit/23df59ab
+[27f5e406]: https://github.com/Stet-AI/stet/commit/27f5e406
+[dcf4e35e]: https://github.com/Stet-AI/stet/commit/dcf4e35e
+[46435f1d]: https://github.com/Stet-AI/stet/commit/46435f1d
+[fee2e89d]: https://github.com/Stet-AI/stet/commit/fee2e89d
+[13f4fe88]: https://github.com/Stet-AI/stet/commit/13f4fe88
+[7c43c491]: https://github.com/Stet-AI/stet/commit/7c43c491
+[e5584e3e]: https://github.com/Stet-AI/stet/commit/e5584e3e
+[06d79c3c]: https://github.com/Stet-AI/stet/commit/06d79c3c
+
 ## [v0.12.0-rc.2] - 2026-07-31
 
 ### Fixed
