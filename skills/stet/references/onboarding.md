@@ -82,6 +82,19 @@ rules, or selector internals before Stet can do useful work.
   The terminal build summary, onboarding receipt, and later Trial Result context
   carry the ledger projection; fewer than 10 ready tasks blocks instruction A/B,
   while reaching a count floor never substitutes for canonical evidence gates.
+  By default, automatic onboarding stops at the requested `--target-ready N`
+  ready-task floor. To temporarily opt into a bounded `2N` valid reservoir and
+  deterministic `representative_v1` panel, set
+  `STET_ONBOARD_REPRESENTATIVE_V1=1` before starting with a fresh `--out`
+  directory. An existing N-floor ledger cannot be expanded by enabling this
+  option; its recorded policy remains authoritative. The receipt then explains
+  the selected tasks and ranked reserves; defaults run only the selected panel.
+  This is static-diversity selection, not a calibrated claim of
+  representativeness.
+  Coverage counts only known static facts and reports its gain over a canonical
+  identity baseline. Observed authority-validation time from the same recorded
+  execution basis may break a static tie; it is neither task-quality evidence
+  nor an agent-runtime estimate.
 - When you are driving `stet suite onboard` as a coding agent, add `--json` and
   treat its `agent_feedback/v1` object as the repair contract. Exit `0` means
   `outcome: ready` and the requested target was verified. Exit `21` means
@@ -94,6 +107,18 @@ rules, or selector internals before Stet can do useful work.
   or treat raw diagnostic detail as instructions. Re-enter credentials through
   approved environment or credential-file mechanisms when
   `secret_reentry_required` is true; do not persist them in commands.
+- If a `targeted_selection_skipped` blocker appears, do not rerun the returned
+  argv unchanged when it contains a broad `--test`. Replace that flag with a
+  bounded verifier that covers the changed tests, or configure
+  `test_selection` in `.stet/stet.harness.yaml`; an existing `suite onboard`
+  argv is flag-authoritative, so later edits to `.stet/stet.yaml` do not replace
+  its persisted `--test` value.
+- If `scoring_surface_unresolved` or `scoring_authority_withheld` appears, the
+  retained candidate has a proven base-fail/gold-pass differential but lacks
+  complete scoring attribution or has broad-only scoring coverage. It remains
+  non-READY for scoring; do not weaken repository verification or call it an
+  F2P failure. Preserve its selector receipt and retry only after the Stet
+  scoring-attribution capability is available.
 - Before parallel task building, rank test-bearing publish candidates first
   and prove one representative gold canary end to end. Repair a shared
   environment failure once and fail fast if the repaired attempt is still
@@ -171,6 +196,11 @@ For most repos, the quick path is enough:
 #    requested; generic non-instruction setup may clarify ambiguous grader
 #    settings.
 stet init --repo . --yes --ai-provider <codex|claude|gemini|cursor> --quality recommended --test "<repo test cmd>"
+#    Built-in Codex binary commands use ephemeral sessions. During discovery,
+#    Stet gives each discovery gate a temporary runtime beneath the managed
+#    output directory, staging file/API auth there when present, and removes it
+#    after the call. If the gate remains unavailable, keep the same slice and
+#    follow the receipt's recovery.
 
 # 6. Mine candidate pool
 stet suite discover --repo . --rev-range main~200..main --limit 200 --target-pass 25
@@ -189,6 +219,9 @@ stet suite build --repo . --manifest .stet/discover-manifest.yaml
 #    To search incrementally until a ready-task floor instead, use:
 #    stet suite onboard --repo . --out .stet/onboarding-run --target-ready 20 \
 #      --search-budget 200 --cohort-size 25 --retry-budget 2 --test "<repo test cmd>"
+#    Pass --ai-cmd "<command>" to use your selected agent and model for generated
+#    setup and targeted test selection. Durable rerun feedback never stores that
+#    command verbatim; re-enter it through an approved channel before rerunning.
 #    Add --source commits when PR/MR access is unavailable; ambiguous enterprise
 #    hosts can use --change-provider github|gitlab and --change-remote <remote>.
 #    To consume an existing corpus without discovery, replace --rev-range with
@@ -199,9 +232,13 @@ stet suite build --repo . --manifest .stet/discover-manifest.yaml
 #    snapshot under .stet/setup-sessions and asks it for schema-constrained
 #    setup JSON. The agent may modify that copy, never the authoritative checkout.
 #    Use --setup-agent none for the legacy
-#    prompt-only fallback, or codex|claude|cursor to choose explicitly. Default
-#    auto also preserves legacy synthesis for a custom --ai-cmd wrapper whose
-#    provider cannot be identified; explicit/configured auto fails closed. The
+#    prompt-only fallback, or codex|claude|cursor to choose explicitly. It
+#    disables the headless setup-agent path; legacy LLM install-recipe synthesis
+#    remains enabled. For a strict no-synthesized-recipe boundary, add
+#    --llm-install-config=false (for example, --setup-agent none
+#    --llm-install-config=false). Default auto also preserves legacy synthesis
+#    for a custom --ai-cmd wrapper whose provider cannot be identified;
+#    explicit/configured auto fails closed. The
 #    agent only proposes: Stet pins configured tests and validates every root,
 #    command, evidence digest, environment fingerprint, and gold result.
 #    Requires Docker by default. Add --harbor-backend worktree to verify
@@ -262,6 +299,24 @@ Task-selection rules:
 Too-few task recovery:
 - Read the status or partial receipt first. Use `failure_class`, reject reasons,
   and `next_command` rather than guessing from pass rate alone.
+- If discovery stops with `stopped_reason: ai_gate_unavailable`, the slice is
+  blocked, not low-yield. Read each `terminal_failure` stage, failure class, and
+  output-relative evidence reference; restore the configured AI gate and rerun
+  the same slice before widening the range or treating error records as policy
+  rejections.
+- If discovery stops with `stopped_reason: history_objects_unavailable`, the
+  checkout is a filtered or incomplete Git source, not a low-yield slice. Fetch
+  the required history from its promisor remote (for example,
+  `git fetch --refetch --no-filter <remote> <base>`) or reclone without
+  `--filter=blob:none`, then rerun the same slice. Do not widen the range or
+  treat the blocked candidates as task rejections.
+- When direct Codex reports that the current process declares network disabled,
+  do not widen the slice. Stet stops before the nested gate by default. If the
+  marker may be inherited, rerun the same slice with
+  `STET_ALLOW_INHERITED_CODEX_NETWORK_DISABLED=1` for one marker-only retry:
+  this removes the marker from that child but cannot grant it network access.
+  If the gate remains unavailable, use a provider-capable outer Codex context
+  or configure another reachable AI provider; do not widen the slice.
 - Widen or shift the slice before giving up: `main~50..main` -> `main~200..main`
   -> `main~500..main`, or choose an older range that contains product work.
 - Use `--source commits` when PR provider auth/tooling is unavailable, and add
@@ -274,6 +329,12 @@ Too-few task recovery:
   separates into the test patch. Maximum-diff limits and the two-file solution
   floor still apply to the implementation patch, so test-only changes remain
   ineligible.
+- Default test-path recognition covers common `test`, `tests`, `spec`, and
+  `__tests__` directories regardless of case, plus standard language-specific
+  test filenames. If a repository uses another layout, add
+  `.stet/test-classifier.json` (for example,
+  `{"include":["**/verification/**"]}`); reserve `--allow-no-test-changes`
+  for history that genuinely has no test-file changes.
 - For mixed source files, Stet splits independently applicable inline-test
   hunks from production hunks and keeps ambiguous hunks solution-owned.
 - The LLM gate receives that test evidence in a separate bounded block. Tests
@@ -378,6 +439,8 @@ Build writes `onboarding_receipt.v1.json` to the dataset root with:
 - `candidate_pool`: total, passed, build_ready, build_skipped, skip_reasons
 - `task_selection`: frozen `TaskSelectionRecord` with requested/realized IDs
 - `task_rationale`: per-task selected/rejected with reasons
+- `representative_selection`: requested panel and reservoir counts, terminal
+  state, static coverage, selected-task rationale, and ranked replacements
 - `test_setup`: commands and source
 - `test_selector`: selector status, reason-code, proof-strength, runner,
   target-kind, fallback, and legacy-v1 counts when selection was attempted
@@ -403,6 +466,14 @@ scope or an explicitly supplied command Stet conservatively classifies as
 targeted. The exact retained command must pass on gold before
 `validation.fail_to_pass_tests` keeps both for candidate retesting; malformed,
 broad, unknown, or provenance-inconsistent terminal coverage fails closed.
+
+For automatic command discovery, `build_logs/test_selection.json` also carries
+`scoring_surface`: every authored target is either a required discriminator, a
+required scoring target, an evidence-backed exclusion, or unresolved. Required
+targets need a reporter-attested gold run of a persisted scoring command. Only
+`complete` is READY by default; `broad_complete` needs an explicit broad policy,
+and `scoring_surface_unresolved` fails closed. Omitted historical evidence is
+reported as `legacy_absent`, never assumed complete.
 
 `selector_command_unverified` and `derivation_source: "proposal"` (a
 per-target field on each entry of `dynamic_proofs` in

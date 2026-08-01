@@ -60,7 +60,14 @@ Roles:
 - `eval status`: explain the current phase or health
 - `eval rules repair`: recover an incomplete rules compare from the persisted runtime; when the surface is replayable, it can resume a baseline-phase compare or rerun a missing/partial candidate arm while preserving completed evidence, then repair/regrade missing coverage. `eval rules resume` remains accepted for compatibility. Pass `--parse-retries N` to forward grader JSON parse-repair attempts during regrade recovery. Pass `--report-mode separate_axes|strict_publishable_pass` to pin the reporting mode when the baseline and candidate arms were produced by Stet binaries whose default drifted; baseline mode is used automatically otherwise.
 - `grader_profile_mismatch`: repair/regrade blockers include expected and actual evaluator runtime, provider, command hash, and measuring-device digests so operators can distinguish real profile drift from reconstruction bugs.
-- `eval report`: read the finished rollout decision
+- `eval report`: read the finished rollout decision. Default reporting uses
+  exact F2P task-validity evidence. When the operator is claiming independent
+  regression coverage or authorizing a broad rollout, add
+  `--p2p-policy required_for_regression_claim`; every realized task must then
+  prove an independently isolated test passes at both base and gold. Missing,
+  ambiguous, unsafe, or failed P2P evidence makes the report `inspect` rather
+  than invalidating F2P task admission. An intentional exception uses the
+  existing explicit `stet promote --allow-inspect --reason "..."` override.
 
 `eval status --change-manifest --json` reports three axes. `rules_runtime`
 means metadata is `resolved`, `unresolved`, or `stale`; `arm_evidence` means
@@ -281,6 +288,14 @@ the 10-task instruction-surface floor before it prints a plan command. If the
 receipt reports `instruction_dataset_too_small`, follow `next_actions` to
 expand and rebuild the retained slice; do not run `eval rules plan` from that
 underfloor suite.
+
+For a predeclared, fixed directional study only, an operator may record
+`change.rules.instruction_dataset_policy:
+operator_authorized_retain_proof_qualified`. This retains duplicate
+source-commit/subsystem entries only when all ten selected tasks still carry
+`proven_dynamic_f2p` proof; it does not lower the floor or waive missing
+proof. The plan and runtime receipts expose the exception, and the resulting
+instruction-surface evidence remains non-independent.
 
 For optimization loops, add `--plan-task-slices --iteration-count N
 --checkpoint-count N --holdout-count N --seed <seed> --change-manifest

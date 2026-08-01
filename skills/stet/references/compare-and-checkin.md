@@ -70,7 +70,20 @@ denominator policy separately: contamination labels
 flags. Those cells keep their real `matrix_status` and count under
 `publishable`, but they are not automatically clean; inspect the trace,
 blocked-access events, and dataset overlap before making rollout-grade or public
-claims, or exclude them by flag for a contamination-free denominator. Read
+claims, or exclude them by flag for a contamination-free denominator.
+
+`evidence.network_posture` is where those flags are readable without opening
+per-task files: it carries the run's declared network tier and policy prompt
+version, and one entry per flagged cell with the flag kind, the route that fired,
+a one-line excerpt, the transcript path, and the declared posture at the time.
+The human report renders the same under `Network policy:` and `Contamination:`.
+Exposure changes no counts — `denominator_effect` is `none` — so treat a flagged
+cell as a finding to adjudicate, not as a cell Stet has already removed. Candidate
+agents run with their provider's web tools available, so bare use of one is not
+flagged under `declared_open`; route `agent_web_tool_used` appears only where the
+tool was restricted or denied. A reach for the change under review reads as
+`agent_answer_contamination` with a named route, or as
+`agent_external_source_url`, under every posture. Read
 `decision_receipt.compare.multi_arm`, `multi_arm.standings`, and
 `statistics.multi_arm` instead of reconstructing counts by hand. New multi-arm
 reports include quality columns in `multi_arm.standings`; bind metric claims to
@@ -347,6 +360,16 @@ The report text now includes for all recommendation types:
 Machine-readable default:
 - Read persisted `<compare-root>/.stet/eval-report/eval_report.v1.json` first
   when it exists. Otherwise run `stet eval report --out <compare-root> --json`.
+- A completed two-arm `eval run` emits a canonical paired task comparison in
+  `decision_receipt.task_comparison` and `decision_receipt.tasks[*].comparison`:
+  read its strict functional lane before quality or cost. A failed/failed pair
+  is a negative signal, not a functional tie; adaptive evidence stays a
+  lower-bound or inconclusive lane.
+  `stet eval report --out <run-root> --task-id <id>` drills into both arms.
+  On that two-arm root, omit `--model` for the paired view; `--model` writes a
+  scoped arm view and cannot overwrite the root Trial Result. Pointwise quality
+  dimensions and patch behavior are diagnostic annotations, not synthetic task
+  winners.
 - Read `decision_receipt` as the canonical decision object.
 - Do not read top-level `decision` or top-level `metrics`; those legacy fields
   are no longer present in the JSON report.
@@ -369,8 +392,24 @@ Machine-readable default:
   valid-but-different behavioral recall labels. Supporting modes may include
   `equivalence`, `agent_test_replay`, and `adapted_reference_test`;
   adapted-reference-test support must carry an audited adapted test diff, not a
-  silent application patch. Treat these as paired recall evidence, not as a
-  replacement for the strict lower-bound headline. Per-cell labels are mirrored
+  silent application patch. Stet composes the model's test-only delta with the
+  canonical reference test patch and records the standalone patch it actually
+  ran. Paired non-vacuity requires the adapted test to fail on base and pass on
+  the candidate, while the canonical reference test fails on base and passes
+  on gold (`base_outcome`, `run_outcome`, `reference_base_outcome`, and
+  `gold_outcome` on the lane's result). An independent assertion-preservation
+  audit must also report `preserved` for every canonical assertion relevant to
+  the task instruction under the exact canonical test command. Unrelated gold
+  collateral is outside the proof surface, but an omitted task-relevant case is
+  weakening even when the command does not select it. If the audit cannot
+  determine relevance, selection, or preservation, it fails closed. The adapter
+  may select only an exact canonical test command. The receipt binds the exact
+  canonical and adapted
+  patch hashes plus a retained evidence path for each corner. This allows gold
+  and candidate to expose different valid APIs. Any other combination records
+  its outcomes and confers no recall credit. Treat these as paired recall
+  evidence, not as a replacement for the strict lower-bound headline. Per-cell
+  labels are mirrored
   in
   `decision_receipt.tasks[*].{baseline,candidate}_behavioral_recall_label` and
   mechanical status in
@@ -379,6 +418,11 @@ Machine-readable default:
   recall nor a confirmed failure: the strict gate failed but no discriminating
   test was executed (for example the adaptation model judged no reference-test
   patch was needed), so do not count it as a solve or as a true regression.
+- `agent_test_replay` is secondary behavioral evidence only. A current
+  `test_selection/v2` receipt must carry a certified replay plan bound to its
+  dynamic proof; absent legacy receipts and unsupported runner plans are
+  explicit skips, never functional F2P credit. `--skip-quality` performs no
+  evaluator or adapted-reference model call.
 - After a recall-active run, read the terminal "Behavioral recall" panel (and
   its programmatic source `task_selection_adequacy.test_verdict_basis`). It
   renders the strict precise-gold-fn pass-rate as a high-precision lower bound
@@ -389,6 +433,17 @@ Machine-readable default:
   `non_solve_cells`) — use those, not the collapsed aggregate, for a compare or
   multi-arm read. The panel is intentionally silent on clean test-backed corpora
   (no impl-divergent or inconclusive cells), so its absence is not a defect.
+- When adapted-reference ran, also read the terminal "Adapted-reference adapter"
+  panel (same `test_verdict_basis` source). The lane fires only on eligible
+  test failures and is LLM-mediated, so per-arm `adapter_fired_cells` /
+  outcome buckets (`accepted`, `base_pass`, `gold_fail`, …) and
+  `adapter_never_rebound_tasks` (tasks where every fired cell is `gold_fail`
+  only — now meaning the canonical reference test failed on gold, not that the
+  candidate-specific adapted patch failed there; the field name is retained
+  for receipt compatibility) are differential measurement / task-validity
+  evidence — not agent quality. Mechanical cleanliness is still reported but
+  no longer decides whether the lane runs; cheat-demoted proofs still skip
+  both rescue lanes.
 - Treat cost deltas as decision-grade only when the cost metric row has
   `comparability.comparable: true`. If `cost_per_task` or `total_cost` says
   `delta_display: "incomparable"`, cite the raw costs only as audit data and
@@ -679,7 +734,10 @@ Flow-specific recovery steps:
 - `revalidate backend`: `stet runs revalidate-tests` preserves the recorded
   backend unless `--harbor-backend docker|worktree` is explicit; worktree also
   requires `--repo`. Conflicting selected worktree policies fail closed, so
-  repair those arms separately with `--model`.
+  repair those arms separately with `--model`. It defaults to `--workers 1`
+  because post-hoc gold/control verification can exhaust shared Docker capacity;
+  raise the bound only explicitly after confirming the verifier environment can
+  support it.
 
 Recovery rules:
 - If the compare is blocked by invalid or partially valid evidence, explain that

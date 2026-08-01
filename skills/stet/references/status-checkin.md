@@ -23,6 +23,11 @@ Machine-readable default:
 - For `--change-manifest` check-ins, a payload with `reasons` and no
   `run_status` or `report` is inspect-class evidence; do not treat the current
   phase alone as a clean wait signal.
+- When an exact completed compare is present in release history but its mutable
+  root locator was replaced, Stet restores that root projection before status,
+  report, or rollout reads it. The release snapshot, current manifests, nested
+  report, and arm identities must all match one execution. Stale promote/hold
+  evidence and any identity mismatch remain blocked.
 
 ## Receipt
 

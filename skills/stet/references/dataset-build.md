@@ -27,6 +27,9 @@ discover (fetch change requests -> prefilter -> LLM scoring -> manifest)
 default; `stet suite build --harbor-backend worktree --repo <path>` runs
 base-fail/gold-pass verification in local git worktrees instead, no Docker
 daemon needed, but requires a local repo with every task base commit).
+A harness-less worktree route requires explicit `--harbor-backend worktree` and
+an explicit `--test` or persisted test command; Stet does not infer a verifier
+or apply harness selector or runner defaults when no harness manifest exists.
 The worktree backend uses Stet-owned `GOCACHE` and `TMPDIR` roots for each
 task/command; it deliberately preserves an existing `GOMODCACHE` so it does
 not redownload modules per task. Do not redirect `GOMODCACHE` per evaluation
@@ -183,6 +186,34 @@ and can be narrowed or kept broad by Stet. Avoid package-local commands, shard
 wrappers, negative target filters, or leaf package-manager commands unless CI
 shows that they are the real repo-level verifier.
 
+### Bounded CMake/CTest mapping
+
+Some native repositories need a per-test build target before their CTest filter
+can run. If CI establishes a stable one-file-to-one-target convention, record
+that convention as a typed harness declaration instead of asking Stet to trust
+or parse a repository shell wrapper:
+
+```yaml
+test_selection:
+  cmake_ctest:
+    test_file_glob: src/test/*.cpp
+    build_dir: build
+    configure_args:
+      - -DPEGTL_BUILD_EXAMPLES=OFF
+    target_prefix: pegtl-test-
+    test_prefix: pegtl-test-
+```
+
+For one changed `src/test/name.cpp`, Stet itself renders configure → exact
+`cmake --build build --target pegtl-test-name` → anchored
+`ctest --test-dir build -R '^pegtl-test-name$'`. It refuses multiple changed
+test paths, an unmapped path, malformed or shell-unsafe declarations, and a
+setup proposal that tries a target-less `cmake --build`. The declaration is a
+selection plan only: the exact rendered command must still prove base-fail /
+gold-pass before it becomes task authority. Do not use this block for dynamic
+target names, `CMakeLists.txt` changes, or a generic shell-script parser;
+leave those cases fail-closed until a bounded convention is known.
+
 Proactive gotcha handling:
 
 | Issue | Prevention |
@@ -193,14 +224,25 @@ Proactive gotcha handling:
 | Repo expects setup steps before tests | Encode them in the Dockerfile, keep `stet init --test` focused on test execution |
 | Monorepo command drift | Use CI's repo-level runner command; do not infer setup from unrelated leaf package files |
 
-Every exported task instruction now leads with a fair-internet-use policy on
-both the Harbor and worktree backends: general documentation, API reference, and
-error-semantics lookups are permitted, while anything that could reveal the
-task's reference solution or upstream patch is not, including the upstream
-repository, its PRs/commits/diffs, and installing a newer release to obtain the
-fix. Detection is unchanged and independent of the prompt, so a run that reaches
-a solution-bearing route is still flagged. Because agent instructions changed,
-runs recorded before this policy are not prompt-comparable with runs after it.
+Every exported task instruction leads with a workspace network policy on both the
+Harbor and worktree backends: documentation, API reference, and library or
+concept research are permitted, while fetching code, commits, diffs, or
+pull/merge requests from the repository's hosted remotes, forks, or mirrors is
+not, nor is downloading raw source files from code-hosting sites for any project
+(a reference implementation is an answer too), nor is running version-control
+commands that fetch from any remote, nor
+upgrading or reinstalling the project's own published packages to obtain a
+change instead of implementing it. The wording is deliberately shaped as
+ordinary workspace policy and names no task, grading, or evaluation: an agent
+that infers it is being measured reacts to the measurement. Detection is
+independent of the prompt, so a run that reaches a solution-bearing route is
+flagged whether or not the policy was delivered.
+
+The delivered wording is versioned (`v1`) and recorded per run under
+`network_policy.prompt_version` in `runner_runtime.v1.json`, surfaced in the
+report as `evidence.network_posture.prompt_versions`. The wording is harness
+surface: cells are prompt-comparable only with cells that share the version, and
+runs recorded before this policy are not comparable with runs after it.
 
 Harbor task exports default to runtime internet enabled. Keep package downloads
 and equivalent dependency prewarming in the Dockerfile or install config anyway
@@ -215,27 +257,46 @@ only when the actual agent and verifier phases must run without network.
 Cursor-backed Harbor exports also bake Cursor Agent into the task image, so
 agent phases do not depend on runtime installer access. Model-backed solve
 phases may need provider API access. Cursor-backed candidate runs inject
-temporary CLI policy and hooks as a best-effort tool deterrent, then fail closed
-in reports when the Harbor task explicitly disables network, for example via
-`--harbor-disable-network`, and agent logs show WebFetch/WebSearch or shell
-network-command use; do not treat `allow_internet = true` on those runs as
-permission to move dependency setup or verifier installs back into runtime.
+temporary CLI policy and hooks as a best-effort tool deterrent. Web-tool use is
+now reported whatever the declared posture was, rather than only on runs that
+declared the network off: the flag records the declared posture alongside the
+finding, because a fetch under a declared-closed policy means enforcement failed
+while the same fetch under a declared-open one means the agent disregarded the
+stated policy. Do not treat an open declaration on those runs as permission to
+move dependency setup or verifier installs back into runtime.
 Even when network stays enabled, candidate guards deny obvious target-answer
-routes such as public PR/commit pages, raw target-repo source, GitHub API answer
-endpoints, and target upstream git history fetch/show/apply paths. Provider
-web fetch/search surfaces are no longer denied for the cursor agent on either
-backend: its `.cursor/cli.json` now allows `WebFetch(*)`, so the fair-internet-use
-policy in the instruction is the operative rule there, with the source-fetch
-routes above still guarded independently of the prompt. The Harbor claude-code
-agent still runs with `WebFetch`/`WebSearch` disallowed. Candidate-visible denials are intentionally
+routes such as public PR/commit pages, raw source on any host (not only the
+target repo's, since a reference implementation is an answer too), GitHub API
+answer endpoints, target upstream git history fetch/show/apply paths, and fetches
+from the working copy's own configured remotes, which is the only route that can
+see the leak on a private repository with no public slug. The denial is scoped to
+those routes rather than to the tools that reach them: `curl` and `wget` run, so
+an agent following the stated policy can read documentation and registries
+instead of spending turns discovering its fetch tools were refused outright. Provider web fetch and
+search surfaces are denied uniformly across the candidate arms — cursor,
+claude-code, and codex all run with them off — because one arm with provider web
+access confounds model capability with tool availability in every cross-arm
+comparison. Candidate-visible denials are intentionally
 generic; use the operator artifacts for precise route and validity diagnostics.
 Some provider CLIs still expose harness-looking launch details such as `/app`,
 sandbox/trust flags, or headless execution modes; treat those as residual
 eval-awareness risk until the provider wrappers support less revealing launch
 metadata.
-`--harbor-disable-network` runs tasks with `network_mode=none` (no DNS or
+`--harbor-disable-network` runs tasks with `network_mode=no-network` (no DNS or
 egress) and is rejected for model-backed agents, which cannot reach their
 provider API offline; it is valid only for offline agents (oracle, nop).
+
+`--network-tier` declares the posture for a run that does keep network. `open`
+(the default) gives every phase public egress. `provider-only` keeps build and
+verifier egress public so dependency setup still works, and allowlists the agent
+phase to its provider endpoints, which is what makes an unrelated-host fetch
+fail rather than merely be flagged. It requires Harbor's container egress
+control, so it is accepted only with the docker backend on a Linux host; the
+worktree backend and non-Linux hosts (including macOS) fail fast with
+`stet_network_tier_unsupported`, and it never silently degrades to `open`. Whichever tier ran is written into the exported `task.toml`
+per phase and recorded under `network_policy.declared_tier` in
+`runner_runtime.v1.json`, so the declared policy and what actually ran are the
+same statement.
 
 The active Harbor export cache automatically converges to its 5 GiB ceiling and
 reconciles toward 4 GiB using deterministic least-recently-used entries, except
@@ -435,7 +496,16 @@ recipe directly — a `.sh` that emits install_config JSON (run locally on the
 host), or a static `.json` — bypasses LLM generation (no model client needed even
 with `--llm-install-config` left on), and derives the allowlist from the recipe's
 own commands so forms like `env PATH=… cargo test` and toolchain installers are
-auto-allowed. A toolchain preflight then fails loud
+auto-allowed. When an explicit `--test` or selector produces a different F2P
+surface, Stet preserves the recipe's broader `test_cmd` as provenance, derives
+extractor-supported named functions authored in `test.patch` before trying
+file/package fallbacks, and retains only subsets that are distinct from F2P and
+terminal authority. Each retained command runs with only its selected authored
+test hunk and must pass on both base and gold; this prevents unrelated tests in
+the full authored patch from supplying private implementation dependencies. If
+no independent subset can be derived and proved, build fails closed instead of
+grading the entire recipe surface as pass-to-pass. A
+toolchain preflight then fails loud
 (`toolchain preflight: rust test runner "cargo" is not installed …`) before any
 fan-out/materialization for a non-base toolchain (Rust) the recipe doesn't
 install, instead of a downstream "gold tests did not run". `stet init` on a Rust
@@ -461,6 +531,17 @@ For less common ecosystems, preserve the real CI verifier as an explicit
 configured `--test` command instead of editing Stet's built-in allowlist. Stet
 trusts operator-provided test commands exactly after shell-safety checks; the
 built-in allowlist mainly constrains model-generated install/test commands.
+
+The built-in allowlist covers npm/pip/go/cargo/bazel/make/bundle/uv plus an
+extended build-tool tier: `mvn`, `./mvnw`, `gradle`, `./gradlew`,
+`dotnet restore|build|test`, `cmake`, `ctest`, `ninja`, `meson`, `corepack
+enable|prepare`, `autoreconf`, `./configure`, `composer`, `sbt`. `cp`/`mv` are
+admitted only when every path argument is repository-relative and free of `..`.
+Shell interpreters (`bash -c`, `python -c`, `node -e`), fetchers (`curl`,
+`wget`), `git` and `sudo` stay rejected; a rejection names the override
+(`--install-allowlist <path>`), which extends the built-in list and is accepted
+by `stet build` and `stet suite onboard`. Each admitted command's matching entry
+is recorded in the task's `build_logs/install_allowlist_provenance.json`.
 
 ### Fail closed when a repo is not buildable
 
@@ -510,9 +591,20 @@ Debug loop (up to 5 attempts). Ordered by frequency:
 
 `--llm-install-config` is **on by default** (it generates the install recipe and
 may narrow generated verifiers, both of which lift dataset quality), so
-`suite build` / `scenario generate` require `--ai-cmd` unless you pass
-`--llm-install-config=false` to opt out (not recommended; you get lower-fidelity
-broad verifiers).
+`suite build` / `scenario generate` need a model client. Use `--ai-cmd` or
+configure `ai.default_provider`; `scenario generate --ai-model <model>` pins
+the default resolver's model. For discovery, a provider-recognized
+`--ai-model <model>` (or `discover.ai_model`) likewise pins the resolved
+provider command as well as the manifest record. An unmapped custom model name
+remains manifest metadata; add its `ai.models.<name>.provider` mapping when it
+must select the executable provider command. Pass `--llm-install-config=false` to opt out
+(not recommended; you get lower-fidelity broad verifiers).
+
+For Codex discovery, `discover.reasoning_effort` or
+`stet suite discover --reasoning-effort low|medium|high|xhigh|max` pins and records
+the native Codex effort under `llm_policy`. It requires Stet's direct Codex
+binary resolution; Stet refuses an explicit `--ai-cmd` or `repo_wrapper`
+instead of silently ignoring the requested effort.
 
 After >= 80% gold pass, verify test_cmd relevance: pick a task with test
 patch, confirm test_cmd runs those files. Under `--llm-install-config`, build
@@ -547,6 +639,24 @@ and strength, selected targets, covered paths, fallback, setup blocker class
 when known, and a legacy v1 projection. Unsupported, ambiguous, malformed,
 stale, or missing evidence keeps the broad command with `left_broad` or
 `abstained`; selector coverage is corpus evidence, not model-quality evidence.
+For authored tests, the receipt keeps two authorities distinct: `selected_commands`
+and `discriminator_set` explain the narrow base-fail/gold-pass admission witness,
+while `terminal_coverage_commands` retains the complete selector-approved
+authored surface that candidate validation must pass. A test may therefore be
+required for scoring even when it passes at base and is not a discriminator.
+Automatic discovery additionally persists a `scoring_surface` target ledger.
+Every authored target has a required, excluded-with-evidence, or unresolved
+disposition, and required targets must be observed in a reporter-attested gold
+run of a persisted scoring command. `complete` is the default READY state;
+`broad_complete` requires explicit policy, while `scoring_surface_unresolved`
+rejects the task. Historical receipts without the ledger remain `legacy_absent`.
+When a task carries persisted `validation.fail_to_pass_tests`, Harbor export
+regenerates `tests/test_outputs.py` from that ordered list instead of the
+original install-config test command, so default Harbor-projected evals and
+explicit retests execute the same F2P scoring authority.
+Compile/typecheck-only base failures are labeled `compile_only`, not assertion
+evidence. Every terminal scoring command is runner-native and must pass on gold
+before it is persisted.
 `proof_strength: selector_command_unverified` (reason `f2p_proposal_differential_unattested`)
 is reserved for a base-fail/gold-pass result on a non-extractor-derived
 command that lacks an attested named-test differential (>=1 named test
@@ -624,6 +734,14 @@ script aliases (`pnpm`/`yarn`/`npm test` -> the `vitest`/`jest` runner in
 narrowed test command, earlier entries run as preamble first), and synthesizes
 `solution.sh` when a task omits it. The gold pass-to-pass suite stays the broad
 original command whenever an alias is resolved or a preamble exists.
+Regeneration also refreshes the authored-target `scoring_surface`; only
+`complete` tasks count as scoring. Broad or unresolved surfaces remain
+non-scoring with current diagnostics instead of inheriting stale READY evidence.
+An identity-matched task that already carries complete dynamic F2P authority,
+the requested backend, and at least the requested flake policy is rebound and
+reused without Harbor replay. Progress and resumable infrastructure blockers
+are written atomically to `.stet/dataset-regenerate-f2p.v1.json`; infrastructure
+failure leaves the task's existing scoring artifacts unchanged.
 
 **CHECKPOINT: Report iteration results. Proceed to scale on approval.**
 
@@ -817,14 +935,64 @@ ai_task_generated` (vs `ai_task` for manifest-carried). Without `--ai-cmd`
 under the default shape, rev-range tasks are skipped with reason
 `ai_task_generation_unavailable` and base/head builds fail with the same
 reason (single-task; no partial dataset is produced). If the AI call or the
-parse of its output fails, the reason is `ai_task_generation_failed`. Pass
-`--prompt-shape legacy` to opt out of natural-shape generation entirely.
+parse of its output fails, the reason is `ai_task_generation_failed`.
 Explicit `--prompt-shape self-contained-natural` keeps the existing hard
 failure (`prompt_shape_requires_ai_task`) when `ai_task` cannot be produced.
 Every task records the decision under `meta.prompt_provenance` in `task.yaml`,
 and `build-summary.json` reports `prompt_shape_fallbacks`,
 `prompt_shape_explicit_failures`, plus the two `ai_task_generation_*`
-counters. For materialized tasks with selector evidence, `build-summary.json`
+counters.
+
+### Legacy prompts are a recorded degradation
+
+`--prompt-shape legacy` (and the `ai_task_missing` fallback to it) produces
+instructions made of commit subjects or PR prose, not a synthesized user-style
+prompt. Both routes now require `--allow-legacy-prompt-shape`; without it
+build refuses (`legacy_prompt_shape_not_allowed`) and the affected task is
+rejected instead of materialized. With the opt-out the corpus is marked
+degraded: `build-summary.json` records `prompt_regime: legacy-degraded`,
+`prompt_regime_certifiable: false`, `legacy_prompt_tasks`, and
+`certified_ready` (ready minus legacy tasks). Legacy tasks are not certified
+READY.
+
+`prompt_regime` is a dataset-version property. A `legacy-degraded` corpus is
+not baseline-comparable with a `synthesized-natural` one; do not compare a
+frozen baseline across that boundary.
+
+### Gold-identifier leak gate
+
+Synthesized instructions pass a deterministic (no-model) gate before a task is
+materialized. Build extracts code-shaped identifiers (snake_case, camelCase,
+PascalCase) that gold.patch added lines introduce and that do not appear in
+the exact base tree or pre-implementation human text (PR title/body, commit
+messages). If the instruction names a survivor, the task is rejected with
+reason `prompt_gold_identifier_leak` and the offending identifiers are named.
+Rerun build to synthesize a fresh instruction.
+
+Build separately requires a gold-added copy literal to appear verbatim in the
+synthesized instruction when the selected hidden test patch also binds that
+exact literal. This test-bound intersection avoids guessing whether
+language-specific source strings are user-facing while still rejecting an
+instruction that omits exact copy its hidden assertions require. A missing
+bound value rejects the task with `prompt_missing_underivable_literal`.
+
+### Required-interface disclosure (Go)
+
+Greenfield-API tasks whose hidden tests compile against exact gold identifiers
+absent from base get a compact "Required interface" block appended to the
+synthesized prompt naming the exported surface those tests bind (function /
+type / field names). Disclosure is derived from fair (non-private-binding)
+tests present in `test.patch` at prompt assembly — it is not yet re-narrowed
+to the finally proven F2P selector set. Provenance records the disclosed set
+under `prompt_provenance.required_interface`. The leak gate carves these
+identifiers out so disclosure and leak-rejection cannot conflict.
+
+Tests that reference gold-introduced **unexported** symbols are deselected
+per-test with reason `binds_private_surface` in `build_logs/test_selection.json`
+(`deselected_targets`). When nothing fair survives, proof strength is demoted
+(`private_surface_demoted`) rather than hard-rejected.
+
+For materialized tasks with selector evidence, `build-summary.json`
 also includes a separate `test_selector` rollup with selector status,
 reason-code, proof-strength, runner, target-kind, fallback, and legacy-v1
 counts.
