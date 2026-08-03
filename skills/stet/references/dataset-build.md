@@ -458,9 +458,54 @@ store (`SSL_CERT_FILE`, `SSL_CERT_DIR`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`,
 `NODE_EXTRA_CA_CERTS`) so they reach what the operator's own toolchain reaches.
 On a proxied or TLS-inspected network these were previously stripped, and the
 failure surfaced only as an unexplained timeout. Candidate verification keeps the
-agent-containment posture and forwards none of them. Credentials, tokens, netrc,
-and agent sockets are withheld in every phase; a repo whose external fetches
-need authentication must pre-warm its `repository_cache`.
+agent-containment posture and forwards none of them.
+
+Stet also replaces `HOME` and withholds ambient credentials. Repository wrappers
+run during selection and verification, so inheriting the operator's complete
+login state would expose unrelated credentials, make a successful baseline
+machine-dependent, and let candidate execution inherit authority it was never
+granted. For a private dependency, explicitly authorize only the required names
+on the disposable worktree backend:
+
+```bash
+export GH_AUTH_TOKEN=...
+stet suite build --harbor-backend worktree \
+  --credential-env GH_AUTH_TOKEN ...
+
+export AWS_SHARED_CREDENTIALS_FILE="$HOME/.aws/credentials"
+export AWS_PROFILE=customer-profile
+stet suite onboard --harbor-backend worktree \
+  --credential-file-env AWS_SHARED_CREDENTIALS_FILE \
+  --credential-env AWS_PROFILE ...
+```
+
+Trusted `.stet/stet.yaml` can declare the same names without storing values:
+
+```yaml
+build:
+  credential_env: [GH_AUTH_TOKEN, AWS_PROFILE]
+  credential_file_env: [AWS_SHARED_CREDENTIALS_FILE]
+```
+
+Explicit `--credential-env` and `--credential-file-env` flags replace their
+corresponding YAML lists. Values are still read only from the launching process.
+
+Both flags are repeatable. `--credential-file-env` validates that the named
+variable points to a readable regular file and also supports
+`AWS_CONFIG_FILE` and `AWS_WEB_IDENTITY_TOKEN_FILE`. Values and file contents
+remain process-local; durable rerun receipts retain names only and require fresh
+credential re-entry. Stet forwards them only to the selector and base/gold
+verifiers, redacts exact values from Stet-owned diagnostics and verifier
+artifacts, and rejects any credential-bearing verifier invocation that also
+includes candidate verification. Run the candidate in a fresh credential-free
+invocation so it cannot observe reference-phase cache residue. Credential
+forwarding fails closed with Docker or `--worktree-keep`; source credential
+files are referenced in place, never copied into Stet caches, and must remain
+unchanged for the invocation. Stet checks their full contents when preparing
+each trusted phase and rejects rotation detected at that boundary so redaction
+and readiness-cache identity stay bound to the authorized bytes. Because the
+source path remains live during a phase, do not rotate it until the command
+finishes.
 
 Keep the output root operator-controlled for the full build. Stet rejects a
 symlinked output root and unsafe physical ancestry, and serializes concurrent

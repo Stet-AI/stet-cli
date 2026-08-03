@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.12.1-rc.1] - 2026-08-03
+
+### Fixed
+- Let operators explicitly forward names-only GitHub and AWS file-backed
+  credential inputs from trusted `.stet/stet.yaml` configuration or CLI flags
+  into selector and base/gold worktree phases. This prevents private dependency
+  wrappers from falling into interactive login under Stet's replaced `HOME`,
+  while candidate execution remains credential-free and durable output redacts
+  credential values, paths, and file contents. ([274421f0])
+
+[v0.12.1-rc.1]: https://github.com/Stet-AI/stet/compare/v0.12.0...v0.12.1-rc.1
+[274421f0]: https://github.com/Stet-AI/stet/commit/274421f0
+
 ## [v0.12.0] - 2026-08-01
 
 This release makes the agent-first build and onboarding loop more trustworthy on
