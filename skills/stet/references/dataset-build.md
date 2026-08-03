@@ -507,6 +507,28 @@ and readiness-cache identity stay bound to the authorized bytes. Because the
 source path remains live during a phase, do not rotate it until the command
 finishes.
 
+This reference-only build authority is separate from candidate execution. If a
+coding agent or candidate verifier must fetch private dependencies, a trusted
+`.stet/stet.yaml` may authorize execution credentials by name:
+
+```yaml
+runner:
+  backend: worktree
+  worktree:
+    credential_env: [GH_AUTH_TOKEN, AWS_PROFILE]
+    credential_file_env: [AWS_SHARED_CREDENTIALS_FILE]
+```
+
+Values remain in the launching process and are forwarded only into the
+worktree coding agent and candidate verifier; Stet still replaces `HOME` and
+withholds every ambient variable not named here. Candidate code can read and
+exfiltrate this authority, so use only short-lived, read-only, narrowly scoped
+credentials that are safe to disclose to the candidate. Stet rejects this mode
+with Docker or retained worktrees, validates file-backed credentials before
+use, exposes only disposable per-phase copies of their authorized bytes,
+redacts exact values from Stet-owned logs and verifier artifacts, and refuses
+to persist a candidate patch containing an authorized credential.
+
 Keep the output root operator-controlled for the full build. Stet rejects a
 symlinked output root and unsafe physical ancestry, and serializes concurrent
 Stet builds on the resolved physical root, but is not an OS security boundary

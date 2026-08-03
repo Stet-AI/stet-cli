@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.12.2] - 2026-08-03
+
+### Fixed
+- Let trusted `.stet/stet.yaml` configuration forward explicitly named
+  environment and file-backed credentials into worktree coding-agent and
+  candidate-verifier execution. Stet keeps a replacement `HOME`, withholds
+  unlisted ambient variables, exposes disposable file snapshots, redacts exact
+  credential material from owned output, and refuses credential-bearing
+  candidate patches. ([e8f0e686])
+- Prevent automatic update checks from replacing a newer running Stet binary
+  with an older cached or published release, and reject malformed release
+  versions rather than guessing their precedence. ([861f453f], [04b47f31])
+
+[v0.12.2]: https://github.com/Stet-AI/stet/compare/v0.12.1...v0.12.2
+[e8f0e686]: https://github.com/Stet-AI/stet/commit/e8f0e686
+[861f453f]: https://github.com/Stet-AI/stet/commit/861f453f
+[04b47f31]: https://github.com/Stet-AI/stet/commit/04b47f31
+
 ## [v0.12.1] - 2026-08-03
 
 ### Fixed
