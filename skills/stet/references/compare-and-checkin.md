@@ -129,6 +129,14 @@ Report compare results with baseline/candidate/delta explicitly. The report now
 includes metric narrative lines and a failure taxonomy for all recommendation
 types (promote, hold, inspect), not just inspect.
 
+When an `eval run` has exactly two persisted arms, read it as the same paired
+decision surface: the Trial Result leads with strict, mechanical, adapted, and
+adaptive task-paired outcomes; renders every task's equivalence and code-review
+evidence; and reports behavior as per-task geometric ratios plus descriptive
+run totals. It remains an `INSPECT`-only descriptive read: a run root does not
+authorize a promotion, rollback, or default change. Do not replace that ledger
+with a scalar pass-rate summary.
+
 `stet eval compare` also runs a paired bootstrap post-pass and attaches
 `aggregate.<metric>.uncertainty` blocks (`baseline_ci`, `candidate_ci`,
 `delta_ci`, `win_loss_tie`, `bootstrap`) for `tests_pass_rate`,
@@ -421,8 +429,12 @@ Machine-readable default:
 - `agent_test_replay` is secondary behavioral evidence only. A current
   `test_selection/v2` receipt must carry a certified replay plan bound to its
   dynamic proof; absent legacy receipts and unsupported runner plans are
-  explicit skips, never functional F2P credit. `--skip-quality` performs no
-  evaluator or adapted-reference model call.
+  explicit skips, never functional F2P credit. `--skip-quality` suppresses
+  evaluator-based quality grading, not functional recovery: every eligible
+  strict-F2P failure still receives an adapted-reference attempt when an AI
+  client is configured. A model-generated test delta that violates the static
+  test-only contract or cannot compose is given a bounded corrective retry;
+  oracle, infrastructure, and executed-test failures remain terminal.
 - After a recall-active run, read the terminal "Behavioral recall" panel (and
   its programmatic source `task_selection_adequacy.test_verdict_basis`). It
   renders the strict precise-gold-fn pass-rate as a high-precision lower bound
@@ -433,9 +445,14 @@ Machine-readable default:
   `non_solve_cells`) — use those, not the collapsed aggregate, for a compare or
   multi-arm read. The panel is intentionally silent on clean test-backed corpora
   (no impl-divergent or inconclusive cells), so its absence is not a defect.
-- When adapted-reference ran, also read the terminal "Adapted-reference adapter"
-  panel (same `test_verdict_basis` source). The lane fires only on eligible
-  test failures and is LLM-mediated, so per-arm `adapter_fired_cells` /
+- When adapted-reference ran, read the terminal "Adaptive-reference coverage"
+  panel before interpreting the matched adapted-reference outcome rate. It
+  derives per-arm strict-F2P attempt coverage from the persisted task ledger,
+  separating dispatch skips, safety suppressions, non-strict exclusions, and
+  missing legacy receipts. A failed selected-test cell marked `not_applicable`
+  is an explicit historical dispatch miss, not a complete-coverage result; a
+  sparse matched denominator is not a dispatch
+  denominator. The lane is LLM-mediated, so per-arm `adapter_fired_cells` /
   outcome buckets (`accepted`, `base_pass`, `gold_fail`, …) and
   `adapter_never_rebound_tasks` (tasks where every fired cell is `gold_fail`
   only — now meaning the canonical reference test failed on gold, not that the
@@ -513,6 +530,10 @@ Machine-readable default:
   as reliability-of-producing-a-patch.
 - Within `decision_receipt.compare`, prefer `failure_taxonomy`,
   `grader_coverage`, and `task_flips` before scraping per-task artifacts.
+- In the task-paired report, read equivalence as paired equivalent/non-equivalent
+  outcomes and code review on its native paired 0-100 overall-score scale (or
+  paired pass/fail signals when that score is absent). Neither is a model winner
+  by itself; both are directional task evidence.
 - If built-in grader outcomes are missing or unknown, `grader_coverage` lists
   the affected arm/task IDs. For equivalence, also read
   `missing_equivalence`; it qualifies the headline metric and emits the exact
@@ -559,7 +580,9 @@ Machine-readable default:
   `stet runs regrade-graders --grader craft --grader discipline` or
   `stet runs regrade-graders --repo <repo> --from-repo-quality`; this preserves
   the completed harness/test evidence and regenerates run summaries from
-  canonical task details.
+  canonical task details. Recovery defaults to the frozen manifest task slice,
+  not every directory below `validation/`; `--task-id` may narrow that slice
+  but cannot expand it.
 - If a run-root repair fails terminally, treat that runtime as authoritative:
   `stet eval report --out <run-root>` stays `INSPECT`/inconclusive and directs
   you to `stet eval status --out <run-root>` until a successful retry completes.
@@ -600,8 +623,10 @@ Machine-readable default:
   and compatibility eval reports, preserves typed lineage through
   copy/combine/stitch, rolls back touched artifacts on failure, and fails closed
   on missing, partial, or conflicting provenance.
-- Treatment-aware existing-root compare supports only `plugin_overlay`,
-  `prompt_language`, `reasoning_effort`, and `model_reasoning_bundle`. Use
+- Treatment-aware existing-root compare supports `plugin_overlay`,
+  `instruction_surface`, `prompt_language`, `model`, `reasoning_effort`, and
+  `model_reasoning_bundle`. Use `instruction_surface` for a delivered
+  root `AGENTS.md` or `CLAUDE.md` treatment, `model` with fixed reasoning,
   `reasoning_effort` with a fixed model, and `model_reasoning_bundle` only when
   model and reasoning both change. An empty surface means exact
   equivalence, and unknown values fail closed. Do not use `--extra-arm-root`
@@ -720,7 +745,11 @@ Flow-specific recovery steps:
   `validation/<model_key>/<task_id>/task_decision.json`
 - `revalidate`: rerun tests only when that is the missing signal; prefer
   `stet runs repair-patches` for patch-present cells because it wraps the
-  no-agent `--revalidate-tests-only` path and follow-on evidence repair
+  no-agent `--revalidate-tests-only` path and follow-on evidence repair. On a
+  multi-arm root, revalidation must refresh every persisted arm and every
+  realized task in one command; a one-arm or task-subset repair is not a paired
+  model result, and the report withholds strict comparison until coverage is
+  symmetric.
 - `supersede one cell`: when a patch-present cell must be replaced to recover
   provider trajectory evidence, use exactly one `--task-id` with
   `--stitch-rerun --supersede-existing-cell --supersession-reason <reason>`;
@@ -740,6 +769,10 @@ Flow-specific recovery steps:
   support it.
 
 Recovery rules:
+- Treat `stet eval status` and ordinary `stet eval report --out` as read-only
+  projections over authority. Derived report/task-history material may refresh,
+  but these reads must not create or rewrite partial receipts or other authority
+  inputs.
 - If the compare is blocked by invalid or partially valid evidence, explain that
   as a validity problem first, not as a model-quality regression.
 - When grader coverage is partial, prefer `repair compare` or `retry grader`

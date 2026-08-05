@@ -292,6 +292,26 @@ flags override suite values for a temporary launch.
   safe resume command after an interruption.
 - `stet eval report` is the canonical decision surface over finished artifacts.
 - `stet eval status` is the canonical health/check-in surface for active roots.
+- For a two-arm comparison, begin with the report's task-paired rows: strict
+  functional pass, mechanical agent-test pass, adapted-reference test pass, and
+  adaptive functional lower bound. Each arm uses the **same both-applicable
+  task IDs**; one-sided `N/A` and unresolved pairs remain explicit, and W/L/T
+  counts only resolved pairs. Do not compare independently filtered arm means.
+  Then read every task ledger entry (strict, mechanical, adaptive, equivalence,
+  quality, and any fresh-test receipt) before calling a winner. Behavioral
+  counters are descriptive and report candidate/baseline paired geometric
+  ratios with zero and missing pairs exposed rather than smoothed away. For
+  task-level interpretation, read `comparison.behavior.baseline` and
+  `comparison.behavior.candidate`; these project trajectory provenance,
+  verification behavior, patch/test-fixture footprint, timing, and cost without
+  assigning a behavioral winner.
+- If an otherwise complete root lacks an additive built-in equivalence or
+  code-review result, use `stet runs repair-ai-coverage --out <root>
+  --model-key <arm> --task-id <id>` and then regenerate `eval status` and
+  `eval report`. Repair preserves and verifies the persisted evaluator profile;
+  do not supply a different evaluator merely to fill coverage. If the original
+  prompt is absent, repair reconstructs it only from receipt-bound task content
+  and artifacts; `prompt_reconstruction_failed` is a stop-and-inspect result.
 - Stranded patches (quota-interrupted windows): if a root holds non-empty
   `agent.patch` files with no `validation/` behind them, `eval report`/`eval
   status` fail closed (report → `inspect` with a `stranded_patches` block;

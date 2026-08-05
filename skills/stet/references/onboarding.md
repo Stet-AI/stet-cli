@@ -67,6 +67,11 @@ rules, or selector internals before Stet can do useful work.
 - When a Bazel `--test` command names a concrete label, Stet query-proves and
   attempts that exact label before derived candidates; dynamic base-fail/gold-pass
   evidence remains authoritative.
+- For `suite onboard`, an explicit broad Go or pytest `--test` with no explicit
+  `--ai-cmd` can derive named targets from `test.patch` locally, even when repo
+  config names an AI provider. The derived selector stays provisional until
+  physical base-fail/gold-pass proof replaces it; shell-controlled commands and
+  candidates without a provable target fail closed.
 - Automatic config-diff onboarding is targeted-only. An omitted
   `test_selector.fallback` resolves to `skip_task`, so an unprovable candidate
   is skipped instead of running a broad repository verifier. `keep_broad` is

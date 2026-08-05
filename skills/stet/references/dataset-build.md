@@ -30,6 +30,9 @@ daemon needed, but requires a local repo with every task base commit).
 A harness-less worktree route requires explicit `--harbor-backend worktree` and
 an explicit `--test` or persisted test command; Stet does not infer a verifier
 or apply harness selector or runner defaults when no harness manifest exists.
+When that backend is explicit, a harness used only for `test_selection` may
+omit `runner.harbor_cmd` and `environment.dockerfile`; those fields are
+required only for Docker-backed verification.
 The worktree backend uses Stet-owned `GOCACHE` and `TMPDIR` roots for each
 task/command; it deliberately preserves an existing `GOMODCACHE` so it does
 not redownload modules per task. Do not redirect `GOMODCACHE` per evaluation
@@ -194,6 +197,9 @@ that convention as a typed harness declaration instead of asking Stet to trust
 or parse a repository shell wrapper:
 
 ```yaml
+version: 1
+schema: stet.harness/v1
+
 test_selection:
   cmake_ctest:
     test_file_glob: src/test/*.cpp
@@ -204,15 +210,25 @@ test_selection:
     test_prefix: pegtl-test-
 ```
 
+Save this as `.stet/stet.harness.yaml`. Suite builds discover that default
+harness path automatically; do not pass it to `--config`, which is for the
+general `stet.yaml` config. With an explicit worktree backend this selector-only
+harness needs no Docker settings. Docker or default backend selection still
+requires the Docker harness fields.
+
 For one changed `src/test/name.cpp`, Stet itself renders configure → exact
 `cmake --build build --target pegtl-test-name` → anchored
-`ctest --test-dir build -R '^pegtl-test-name$'`. It refuses multiple changed
+`ctest --test-dir build -R '^pegtl-test-name$'`. The declaration supplies the
+test authority, so a manifest build does not also need a static `--test` or
+`test_defaults` command. It refuses multiple changed
 test paths, an unmapped path, malformed or shell-unsafe declarations, and a
 setup proposal that tries a target-less `cmake --build`. The declaration is a
 selection plan only: the exact rendered command must still prove base-fail /
-gold-pass before it becomes task authority. Do not use this block for dynamic
-target names, `CMakeLists.txt` changes, or a generic shell-script parser;
-leave those cases fail-closed until a bounded convention is known.
+gold-pass before it becomes task authority. For that exact one-file proof, a
+sibling `CMakeLists.txt` registration hunk is allowed only when its sole added
+nonempty line is the changed source filename and it has no deletion; dynamic
+target names, other CMake edits, and generic shell-script parsing remain
+fail-closed.
 
 Proactive gotcha handling:
 
@@ -430,8 +446,27 @@ between runs is safe but not parallel.
 `stet dataset regenerate-f2p` accepts the same `--bazel-cache-root` flag but
 reads no config file. Stet creates the directory if missing and never deletes
 or GC-reaps an operator-supplied root. Unset keeps today's ephemeral
-MkdirTemp root. This knob is applied on the worktree backend only; the Docker
-harbor path does not share a selector repository cache today.
+MkdirTemp root.
+
+The durable root partitions environment-dependent Bazel state -- the query
+workspace, query output base, and per-task action caches -- by the task's
+environment-group fingerprint, which hashes the configured test command along
+with install and pre-install commands, environment variables, runtime version,
+and timeouts. Changing any of those -- including `--test` -- starts a fresh
+cohort whose query workspace and output base are cold, so external repository
+rules re-extract and re-execute once per cohort. The Bazelisk and repository
+download caches are content-addressed, so they live in a single
+`.stet-bazel-verifier-cache-v1/shared/` directory under the root instead: a new
+cohort reuses bytes an earlier cohort already fetched, and once `shared/` is
+warm the root keeps working on a network-restricted host. Roots warmed by older
+stet versions hold their downloads under per-cohort
+`.stet-bazel-verifier-cache-v1/cohorts/<fingerprint>/trusted/` directories,
+which are no longer read; on a network-restricted host, warm `shared/` once
+with network access or copy such a cohort's `trusted/repository` contents into
+`.stet-bazel-verifier-cache-v1/shared/repository` (content-addressed, so the
+copy is byte-safe). This knob
+is applied on the worktree backend only;
+the Docker harbor path does not share a selector repository cache today.
 
 When a selector query fails -- including on timeout or cancellation -- the error
 now carries the elapsed time, the exact `bazel` argv, the names of the forwarded
@@ -507,6 +542,19 @@ and readiness-cache identity stay bound to the authorized bytes. Because the
 source path remains live during a phase, do not rotate it until the command
 finishes.
 
+Some tooling (for example a Bazel remote-cache credential helper) reads a fixed
+path under `HOME` rather than an environment variable, which breaks under the
+replaced `HOME`. Authorize such files with repeatable
+`--credential-home-file <src>[=<relative-dest>]` (or `build.credential_home_file`
+in trusted `.stet/stet.yaml`): Stet snapshots the file bytes at launch and
+materializes them at the same HOME-relative path inside each trusted phase's
+replaced `HOME`. A bare `<src>` must live under your real `HOME` and keeps its
+relative path; otherwise name the destination explicitly
+(`/opt/secrets/token=.config/vendor/token`). Destinations must stay relative,
+cannot target Stet-owned agent-auth directories, and contents are redacted from
+Stet-owned diagnostics; rerun receipts retain the path specs only, never file
+contents.
+
 This reference-only build authority is separate from candidate execution. If a
 coding agent or candidate verifier must fetch private dependencies, a trusted
 `.stet/stet.yaml` may authorize execution credentials by name:
@@ -517,10 +565,13 @@ runner:
   worktree:
     credential_env: [GH_AUTH_TOKEN, AWS_PROFILE]
     credential_file_env: [AWS_SHARED_CREDENTIALS_FILE]
+    credential_home_file: ["~/.config/vendor/token"]
 ```
 
 Values remain in the launching process and are forwarded only into the
-worktree coding agent and candidate verifier; Stet still replaces `HOME` and
+worktree coding agent and candidate verifier (`credential_home_file` entries are
+materialized into their replaced `HOME` with the same spec form as
+`--credential-home-file`); Stet still replaces `HOME` and
 withholds every ambient variable not named here. Candidate code can read and
 exfiltrate this authority, so use only short-lived, read-only, narrowly scoped
 credentials that are safe to disclose to the candidate. Stet rejects this mode
@@ -993,8 +1044,12 @@ Update `apex/tasks/agent_docs/datasets.md` with the finalized recipe.
 ## Prompt shape (`--prompt-shape`)
 
 `stet suite build` defaults to `--prompt-shape self-contained-natural`, which
-emits the `ai_task` (imperative goal-first prose) verbatim. The manifest path
-(`stet suite discover`) carries `ai_task` from discover-time enrichment. For
+emits the `ai_task` verbatim. Enrichment writes `ai_task` as a single
+imperative sentence (under 40 words) naming the behavioral outcome, not the
+mechanism, so the agent still discovers the files and chooses the
+approach. The manifest path
+(`stet suite discover`) carries `ai_task` from discover-time enrichment, which
+also writes an `ai_task_provenance` receipt build checks (see below). For
 `--rev-range` and `--base/--head` paths, build generates `ai_task` after patch
 split by calling the configured `--ai-cmd` against the split gold patch plus
 PR/MR or commit context; the resulting provenance records `selected_source:
@@ -1022,9 +1077,43 @@ degraded: `build-summary.json` records `prompt_regime: legacy-degraded`,
 `certified_ready` (ready minus legacy tasks). Legacy tasks are not certified
 READY.
 
-`prompt_regime` is a dataset-version property. A `legacy-degraded` corpus is
-not baseline-comparable with a `synthesized-natural` one; do not compare a
-frozen baseline across that boundary.
+### Manifest `ai_task` must carry a generation receipt
+
+`ai_task` is the only manifest field build cannot recompute from the
+repository, so its presence is not evidence that a model wrote it: a
+hand-edited manifest fills the field exactly as `stet suite discover` does.
+Build therefore admits a manifest-carried `ai_task` only when the task also
+carries a generation receipt — `ai_task_provenance` (generator, model, prompt
+and response digests, plus a digest of the `ai_task` value itself), or, for
+manifests written before that field existed, a clean
+`llm_diagnostics.enrichment` reference. The two are not equally strong: the
+`ai_task_provenance` digest is bound to the instruction, so rewriting `ai_task`
+in place invalidates the receipt, while the older enrichment reference only
+shows that an enrichment call happened and survives such a rewrite. Rebuild an
+older manifest with `stet suite discover` if you need the stronger binding.
+Both receipts are self-signed: they catch a missing receipt and an instruction
+edited after discover wrote it, which is what a curation script produces by
+accident, but neither is a defense against a producer that forges the block
+outright. Treat the check as provenance hygiene, not as a trust boundary
+against the tool that wrote the manifest.
+Without either receipt the task is skipped
+with reason `unattested_ai_task_not_allowed`; rebuild the manifest with `stet
+suite discover`, or pass `--allow-unattested-ai-task` to admit it as a
+recorded degradation (`prompt_regime: unattested-provenance`,
+`prompt_regime_certifiable: false`, `unattested_prompt_tasks`). Such tasks are
+not certified READY.
+
+Certification is a positive claim, not the absence of a known failure:
+`prompt_regime_certifiable` is true only when `attested_prompt_tasks` accounts
+for every ready task, and `certified_ready` is that attested count. A corpus
+built before this check reads as not certifiable when its summary is
+re-normalized, because nothing in it establishes where its instructions came
+from.
+
+`prompt_regime` is a dataset-version property. A `legacy-degraded` or
+`unattested-provenance` corpus is not baseline-comparable with a
+`synthesized-natural` one; do not compare a frozen baseline across that
+boundary.
 
 ### Gold-identifier leak gate
 

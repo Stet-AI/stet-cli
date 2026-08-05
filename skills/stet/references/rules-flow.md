@@ -56,9 +56,11 @@ Roles:
   different slice is not a matched baseline.
 - `manifest resolve`: inspect normalized inputs before launch. Prints the canonical resolved change manifest as YAML (or JSON with `--json`); injected defaults (e.g. `context.baseline.source`, `context.candidate.source`, `policy.version`, `treatments[*].path`) are inlined silently — there is no separate validation verdict. On a malformed manifest, `manifest resolve` exits non-zero; without `--json` it emits a plain-text stderr line, and with `--json` it emits a structured `{"error": {"code", "message", "field"}}` envelope on stdout. A non-zero exit is the validation contract — treat it as "malformed manifest" and read `error.code` / `error.field` (or the stderr line) for the field-precise reason.
 - `eval rules plan`: preflight tasks, arms, graders, frozen-baseline reuse, cost confidence, missing pricing/cost data, and cheaper alternatives without launching compare evidence. It persists an `eval_rules_plan.v1.json` receipt with replay-validity identity that a matching launch can reuse. Before replay, plan resolves every charged arm through the same local provider/config boundary as execution; `launch_error.phase: resolve_arm_model` means the model cannot launch, so use a registry-backed key for CLI `--baseline-model` / `--candidate-model`, configure its provider, or pass `--ai-cmd` for a custom provider. Keep `model:<name or alias>` selector syntax inside YAML manifests; do not pass that selector wrapper literally as a CLI model value. Before launch, require every verifier stdout/stderr path named by replay validity to remain readable after plan cleanup; a missing path is a fail-closed artifact-lifecycle blocker, not reusable gold proof. It is not free: plan runs the Harbor `oracle`-agent gold-replay validation containers to populate `replay_validity` and runs the LLM-grader preflight, so under contention it routinely takes 8–10+ minutes. Replay validity uses matching proven dynamic F2P selector evidence from `build_logs/test_selection.json` when available, then `task.yaml` `validation.fail_to_pass_tests`, before falling back to broader `tests/test_outputs.py` commands. A future `--quick-plan` that skips replay validation does not exist yet; when an operator needs a sub-minute readiness check, reach for `stet manifest resolve` instead. The next command, `stet eval rules` without `--plan`, is the charged launch. The plan output's `task_selection_adequacy.verdict` is usually informational; values such as `insufficient_history` describe historical sample size for confidence calibration. Exception: AGENTS.md/CLAUDE.md rules runs below 10 selected retained tasks are blocked as `task_selection`; expand the onboarding dataset first instead of launching a tiny rules comparison. The plan receipt also carries an `interpretation` (`kind: preview`) block; narrate it to the user per the operator-contract interpretation rule — state the odds and tier-matched verb from `confidence`, offer `one_liner` verbatim, and never relay raw posture tokens.
+
+  If every replay verifier is blocked by a typed Harbor runtime failure (for example, an unavailable Docker daemon, auth, quota, or rate limit), `replay_validity.status` is `unchecked`, not `replay_slice_invalid`. A recognized pre-test dependency-fetch failure receives one confirmation retry; if it remains blocked, it is likewise `unchecked`. Preserve the per-task receipts, restore the Docker or registry/proxy prerequisite, and rerun the same plan; do not drop or replace tasks on that evidence.
 - `eval rules`: launch the bounded rules-backed run. By default the compare projects Harbor test outcomes. Pass `--retest-tests` (or equivalently `--validate-arg "--retest-tests"`) on the main `stet eval rules` launch to run real validate-side tests on both arms instead of projecting; it applies symmetrically to baseline and candidate. The setting is persisted in the rules runtime artifact and re-applied automatically by `--relaunch-arm`, so a relaunch retests the same way the original launch did. Retest is opt-in only on the main launch (not the `checkpoint`/`holdout`/`skill` subcommands). When the fresh compare writes incomplete required grader coverage, launch makes one bounded in-place repair/regrade attempt before final reporting; use `eval rules repair` if coverage remains incomplete or the run is interrupted.
 - `eval status`: explain the current phase or health
-- `eval rules repair`: recover an incomplete rules compare from the persisted runtime; when the surface is replayable, it can resume a baseline-phase compare or rerun a missing/partial candidate arm while preserving completed evidence, then repair/regrade missing coverage. `eval rules resume` remains accepted for compatibility. Pass `--parse-retries N` to forward grader JSON parse-repair attempts during regrade recovery. Pass `--report-mode separate_axes|strict_publishable_pass` to pin the reporting mode when the baseline and candidate arms were produced by Stet binaries whose default drifted; baseline mode is used automatically otherwise.
+- `eval rules repair`: recover/rebuild report and grader coverage from the persisted runtime without running a model-under-test agent. A `patch_repair_required` blocker means a non-empty `agent.patch` lacks validation; run the emitted `stet runs repair-patches --out <arm-root>` command. Patch repair first runs functional verifier retests with no model or evaluator invocation, then separately backfills AI coverage and requested graders; unavailable evaluator capacity leaves a retryable quality receipt without discarding the verifier result. `--revalidate-tests-only` rejects `--discover` and `--ai-cmd`; it uses only the retained patch. Only explicit `--relaunch-arm <arm>` can spend tokens, and only for selected transient empty-patch cells. `eval rules resume` remains accepted for compatibility. Pass `--parse-retries N` to forward grader JSON parse-repair attempts during regrade recovery. Pass `--report-mode separate_axes|strict_publishable_pass` to pin the reporting mode when the baseline and candidate arms were produced by Stet binaries whose default drifted; baseline mode is used automatically otherwise.
 - `grader_profile_mismatch`: repair/regrade blockers include expected and actual evaluator runtime, provider, command hash, and measuring-device digests so operators can distinguish real profile drift from reconstruction bugs.
 - `eval report`: read the finished rollout decision. Default reporting uses
   exact F2P task-validity evidence. When the operator is claiming independent
@@ -168,13 +170,11 @@ Within `task_selection`, AGENTS.md/CLAUDE.md runs may emit
 `code=instruction_dataset_too_small` when the retained dataset has fewer than
 10 qualifying tasks. Qualifying means `proven_dynamic_f2p` selector proof
 (`repo_tests_only` and tasks with no qualifying selector evidence are
-excluded, fail-closed), then deduped by source commit and by a two-segment
-touched-subsystem key so one PR or one area of the repo cannot be double- or
-triple-counted; only when at least two qualifying tasks exist and every one
-collapses to the same non-empty subsystem key (a flat top-level tests/ dir, a
-monorepo package root) does the degenerate-signal guard skip subsystem dedupe
-and fall back to commit-only dedupe, which the error message discloses. Follow
-the remediation: expand or rebuild the onboarding dataset
+excluded, fail-closed), then deduped by exact source commit so one PR cannot
+be double-counted. Multiple independently replayable commits in the same
+package remain distinct tasks; package concentration is a signal to inspect in
+task-selection evidence, not a reason to block launch. Follow the remediation:
+expand or rebuild the onboarding dataset
 with an onboarding-scale discover command such as
 `stet suite discover --repo . --rev-range HEAD~200..HEAD --limit 200 --target-pass 25`,
 keep quality lanes on, then rerun `stet eval rules` with a larger retained
@@ -292,7 +292,7 @@ underfloor suite.
 For a predeclared, fixed directional study only, an operator may record
 `change.rules.instruction_dataset_policy:
 operator_authorized_retain_proof_qualified`. This retains duplicate
-source-commit/subsystem entries only when all ten selected tasks still carry
+source-commit entries only when all ten selected tasks still carry
 `proven_dynamic_f2p` proof; it does not lower the floor or waive missing
 proof. The plan and runtime receipts expose the exception, and the resulting
 instruction-surface evidence remains non-independent.
@@ -343,11 +343,11 @@ overrides; CLI values take precedence over suite YAML. `stet eval rules skill`
 also accepts `--task-order-seed` and writes it into its synthesized iteration
 suite; omit the flag for fresh per-run randomness.
 
-Harbor task-dependency caching is automatic: at image bake Stet injects a
-build-time BuildKit cache mount for language download/package caches (Go modules,
-Cargo registry/git, npm/pnpm/yarn, pip/uv) so repeated builds reuse downloaded
-deps. There is no flag; set `STET_TASK_DEP_CACHE=off` to disable it. Reclaim the
-shared cache with `stet harbor cleanup --prune-buildkit --apply`.
+When Stet injects a task dependency-install command, it runs in an ordinary
+Dockerfile layer so the resolved Go, Cargo, Node, Python, or other runtime
+dependencies persist in the finished verifier image. Stet does not mount a
+transient task dependency cache over that destination: a warmed builder cache
+alone is not evidence that the finished image can run selected tests offline.
 
 Harbor's Docker backend remains the default. Use `--harbor-backend worktree`
 only when the operator explicitly wants local, Docker-free execution from a
@@ -585,7 +585,7 @@ to silence it.
 Common next steps:
 - `promote`: `stet promote --change-manifest .stet/rules/stet.change.yaml --reason "..."`
 - `promote override`: `stet promote --change-manifest .stet/rules/stet.change.yaml --reason "..." --allow-inspect` when trust remains `inspect` and the operator is intentionally overriding the gate
-- `repair compare`: `stet eval rules repair --change-manifest .stet/rules/stet.change.yaml --json` when the persisted rules runtime exists but the canonical Trial Result is incomplete; use this for OOM/rate-limit interruptions before deleting the compare root, because repair reruns only missing/retryable arm tasks and can replay unchanged AGENTS.md/CLAUDE.md overlays from the change manifest. `resume` remains accepted as a compatibility alias. Repair cannot recover a terminal arm failure: when status/report emit a `repair` block with code `RULES_COMPARE_ARM_FAILED` or `RULES_ACTIVE_ARM_FAILED`, inspect the failed arm root, address the harness failure (auth, config, missing bundle, etc.), then relaunch instead of repairing
+- `repair compare`: `stet eval rules repair --change-manifest .stet/rules/stet.change.yaml --json` when the persisted rules runtime exists but the canonical Trial Result is incomplete; it never reruns a model. For a `patch_repair_required` blocker, reuse the captured patch with the emitted `stet runs repair-patches --out <arm-root>` command; for `arm_relaunch_required`, inspect the transient empty-cell receipt and opt in with `--relaunch-arm`. `resume` remains accepted as a compatibility alias. Repair cannot recover a terminal arm failure: when status/report emit a `repair` block with code `RULES_COMPARE_ARM_FAILED` or `RULES_ACTIVE_ARM_FAILED`, inspect the failed arm root, address the harness failure (auth, config, missing bundle, etc.), then relaunch instead of repairing
 - `relaunch arm`: when one arm lost every cell's `agent.patch` to a transient single-arm wipeout (e.g. an HTTP 429 that left results+validation present but `agent_no_patch`/empty patches and no arm summary), plain `repair`/`resume` stays non-spending and emits an `arm_relaunch_required` blocker; rerun `stet eval rules resume --rules-root <dir> --relaunch-arm candidate` to relaunch only that arm's empty cells while reusing every good cell and the sibling arm byte-for-byte. Accepts a comma list and repeats (`--relaunch-arm candidate,baseline`) or `all`; it spends tokens. Prefer it over `--restart`, which discards everything
   When validation never started, relaunch is offered only when the selected trial's matching, regular in-root `result.json` records exact `infra_runtime_error`; timeout, integrity, verifier, malformed, mismatched, or symlinked evidence remains non-relaunchable.
 - `retry graders`: use the `repair-ai-coverage` or `regrade-graders` command emitted by report/status; add `--parse-retries N` for saved grader prompts that failed JSON/schema parsing, and keep the emitted `--grading-timeout` for timeout-gapped custom graders
@@ -624,6 +624,12 @@ change:
 Context defaults: baseline reads from the default git branch (committed
 version), candidate reads from the working tree (uncommitted edits). Override
 with explicit `context.baseline` / `context.candidate` blocks if needed.
+
+For a predeclared `agents_md` or `claude_md` on/off study whose baseline must
+be empty even when the baseline ref contains the file, declare
+`baseline_content: ""` on that treatment. The plan and runtime receipts record
+`baseline_content_source: explicit_content` and its SHA-256; this is
+incompatible with frozen-baseline reuse, so run a fresh baseline arm.
 If AGENTS.md or CLAUDE.md is new in the candidate and absent at the baseline
 ref, rules treats the baseline instruction file as empty; keep using this flow
 instead of switching to config-diff.
@@ -723,6 +729,13 @@ Docker-backed Harbor runs use an environment build/start timeout multiplier of
 `3`. If startup still reaches Harbor's exact environment-start timeout, Stet
 records a terminal infra cell with no agent or patch attempt, continues sibling
 cells, and excludes that cell from missing-grader coverage.
+
+Claude Code's own per-command ceiling backgrounds any build or test suite that
+outruns it. Set `STET_AGENT_COMMAND_TIMEOUT` to a Go duration such as `30m` to
+raise it for every Claude Code arm on both the Docker-Harbor and worktree
+backends; unset or `off` keeps the CLI default, and any ambient host
+`BASH_*_TIMEOUT_MS` is ignored either way. Zero, negative, unparsable, and
+over-6h values fail the run instead of degrading silently.
 
 Rules reports include each compare arm's effective runner settings when Stet
 has them. If a Claude Code compare emits

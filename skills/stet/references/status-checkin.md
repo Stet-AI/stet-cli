@@ -74,6 +74,10 @@ other       inspect latest task evidence if progress stops; stop with this statu
 - If status and persisted evidence disagree, follow evidence refs and persisted
   reports before deciding. Explain the contradiction and fail closed to inspect
   when the evidence remains degraded.
+- If a persisted partial receipt has an unsupported version, mismatched output
+  root, or lifecycle fields that claim gate, release, trusted, or promoted
+  authority, `eval status` and `eval report` fail closed. Repair or replace that
+  receipt; do not trust its embedded lifecycle projection.
 
 ## Common Next Steps
 

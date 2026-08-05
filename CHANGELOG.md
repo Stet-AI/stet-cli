@@ -6,6 +6,122 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.13.0] - 2026-08-05
+
+This release makes onboarding and builds work on real customer repositories:
+forked Bazel toolchains, LFS-tracked paths, network-restricted hosts, and
+fixed-HOME credential helpers are now handled in trusted phases, manifest
+`ai_task` instructions require attested provenance, and subprocess, cache, and
+Harbor execution layers are hardened against parallel-load races and hung
+cleanup.
+
+### Added
+- `--credential-home-file <src>[=<relative-dest>]` (and the
+  `build.credential_home_file` / `runner.worktree.credential_home_file` config
+  keys) materialize operator-approved credential files into the replaced HOME
+  of trusted phases, for tooling that reads fixed HOME paths such as a Bazel
+  remote-cache credential helper. File bytes are snapshotted at authorization,
+  written 0700/0600 behind a symlink-refusing join, redacted from Stet-owned
+  diagnostics, and bound into the run fingerprint; destinations that collide
+  with Stet-owned agent directories (`.claude`, `.codex`, `.config/cursor`)
+  are rejected. ([30506f8e])
+
+### Changed
+- Manifest-carried `ai_task` instructions now require a generation receipt
+  (`ai_task_provenance`, or a clean `llm_diagnostics.enrichment` reference for
+  older manifests). Unattested tasks are skipped as
+  `unattested_ai_task_not_allowed`; `--allow-unattested-ai-task` admits them as
+  a recorded degradation (`prompt_regime: unattested-provenance`, not
+  certified READY). ([342d0ac0])
+- Enrichment now emits the manifest `ai_task` as a single outcome-focused
+  instruction instead of a multi-part template. ([5c53988a])
+
+### Fixed
+- Runtime probes whose output is recognized but unparsable — for example a
+  fork-suffixed `Build label: 9.1.1-glyd1` from a patched Bazel — no longer
+  abstain with a missing observed-environment fingerprint: the fingerprint
+  falls back to hashing the raw normalized probe output, and every
+  empty-fingerprint branch now records an explicit unavailable reason in
+  parser evidence and the gate message. Genuinely ambiguous output (two or
+  more distinct version records) still fails closed. ([30506f8e])
+- Materialized Python tasks now probe `python3 --version` instead of
+  `python --version`, matching hosts that ship no bare `python`. ([30506f8e])
+- Git-LFS smudge is disabled in the disposable object store used for worktree
+  materialization and when the verifier resets held-out test targets to base,
+  so repos with LFS-tracked paths build and validate without a reachable LFS
+  remote even when a global gitconfig declares a required LFS filter.
+  ([30506f8e], [4f387368])
+- Successful `--source-mode reference` base/head builds now write
+  `build-summary.json`; previously the build exited 1 after materializing the
+  task ("read build summary: … no such file or directory"), which failed CI
+  wrappers and left eval tooling treating the dataset as incomplete.
+  ([4f387368])
+- Share the worktree Bazel selector's Bazelisk and repository download caches
+  across environment-group cohorts under `--bazel-cache-root` (both are
+  content-addressed, so cross-cohort reuse is byte-safe). Changing the test
+  command no longer starts a cohort with a cold repository cache, which on
+  network-restricted hosts failed the selector as `abstained_query_failed`.
+  Repository caches under existing
+  `.stet-bazel-verifier-cache-v1/cohorts/<fingerprint>/trusted/` directories
+  are no longer read, so the new `.stet-bazel-verifier-cache-v1/shared/`
+  directory starts cold: on a network-restricted host, warm it once with
+  network access or copy an existing cohort's `trusted/repository` contents
+  into `.stet-bazel-verifier-cache-v1/shared/repository` before the first
+  post-upgrade run. Stet never deletes an operator-owned
+  cache root, so reclaim the old per-cohort directories manually if disk
+  space matters. ([f0caded9])
+- Serialize the worktree Bazel selector's binary-readiness cache and retry
+  preflights that failed for non-cacheable reasons, so concurrent cohorts no
+  longer inherit a neighbor's transient failure. ([dd8cd346])
+- Cancel subprocess process groups SIGTERM-first with a bounded force-kill
+  fallback so buffered agent output is flushed before termination, and bound
+  Harbor agent execution, Docker cleanup, and Claude command timeouts
+  explicitly. ([fafd5496], [e928166f], [904a4a58])
+- Tolerate never-materialized output roots during completion registration
+  instead of failing with a raw `lstat` error. ([ded8db24])
+- Honor declared test-command overrides for opaque commands and bind the
+  worktree selector to its final harness authority in `stet suite build`.
+  ([1d33be65], [5c684fdf], [b3fbf154])
+- Make onboarding completion replay idempotent and route target selection
+  through a deterministic authority. ([9222d23b], [60a0e6c2])
+- Void candidate test verdicts when the gold baseline itself fails, instead
+  of scoring against a broken baseline. ([6b1cb716])
+
+### Internal
+- Harden R7 head-to-head decision and report authority to fail closed on
+  stale, contradictory, or asymmetric evidence, and centralize decision
+  projection (STET-743, plus related eval-report correctness fixes).
+  ([d609fffc], [eb2e5da3])
+- Migrate durable build evidence to a single revisioned writer core with
+  secured provenance and path reads (STET-729). ([96b5be9c], [cf28669a])
+- Add deterministic live-scenario validation lanes that prove worktree,
+  Docker, Harbor, and Windows execution boundaries before release
+  (STET-732–STET-767). ([c919a690], [207089c5])
+
+[v0.13.0]: https://github.com/Stet-AI/stet/compare/v0.12.0-rc.2...v0.13.0
+[30506f8e]: https://github.com/Stet-AI/stet/commit/30506f8e
+[342d0ac0]: https://github.com/Stet-AI/stet/commit/342d0ac0
+[5c53988a]: https://github.com/Stet-AI/stet/commit/5c53988a
+[4f387368]: https://github.com/Stet-AI/stet/commit/4f387368
+[f0caded9]: https://github.com/Stet-AI/stet/commit/f0caded9
+[dd8cd346]: https://github.com/Stet-AI/stet/commit/dd8cd346
+[fafd5496]: https://github.com/Stet-AI/stet/commit/fafd5496
+[e928166f]: https://github.com/Stet-AI/stet/commit/e928166f
+[904a4a58]: https://github.com/Stet-AI/stet/commit/904a4a58
+[ded8db24]: https://github.com/Stet-AI/stet/commit/ded8db24
+[1d33be65]: https://github.com/Stet-AI/stet/commit/1d33be65
+[5c684fdf]: https://github.com/Stet-AI/stet/commit/5c684fdf
+[b3fbf154]: https://github.com/Stet-AI/stet/commit/b3fbf154
+[9222d23b]: https://github.com/Stet-AI/stet/commit/9222d23b
+[60a0e6c2]: https://github.com/Stet-AI/stet/commit/60a0e6c2
+[6b1cb716]: https://github.com/Stet-AI/stet/commit/6b1cb716
+[d609fffc]: https://github.com/Stet-AI/stet/commit/d609fffc
+[eb2e5da3]: https://github.com/Stet-AI/stet/commit/eb2e5da3
+[96b5be9c]: https://github.com/Stet-AI/stet/commit/96b5be9c
+[cf28669a]: https://github.com/Stet-AI/stet/commit/cf28669a
+[c919a690]: https://github.com/Stet-AI/stet/commit/c919a690
+[207089c5]: https://github.com/Stet-AI/stet/commit/207089c5
+
 ## [v0.12.2] - 2026-08-03
 
 ### Fixed
