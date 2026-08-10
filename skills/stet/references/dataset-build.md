@@ -424,11 +424,22 @@ On a Bazel repo, the fail-to-pass selector runs a `bazel query` per task in an
 isolated output base, so each query pays a cold Bazel startup even when the same
 query is about a second in a warm workspace. A query that exceeds the timeout
 fails the task closed at `stage: selector` with
-`runtime_classification: timeout` and is not retried. The default timeout is
+`runtime_classification: timeout` and is never retried. Only a typed transient
+`ExternalDepsException`/exit-37 query gets one bounded same-task retry. The default timeout is
 10m. On `stet suite build`, raise it with `build.bazel_query_timeout` in
 `.stet/stet.yaml` or `--bazel-query-timeout`, and the flag wins over config.
 `stet dataset regenerate-f2p` takes the same `--bazel-query-timeout` flag but
 reads no config file. Values must be positive Go durations, such as `20m`.
+
+For a package whose query enumerates more than 16 test rules, the 16-label
+value remains the discovery overflow threshold. Set
+`build.bazel_candidate_budget` / `--bazel-candidate-budget` to admit a bounded
+validated full set (default 16, maximum 4096), and set
+`build.bazel_dynamic_attempt_budget` / `--bazel-dynamic-attempt-budget` separately
+for the dynamic F2P attempt budget. Both budgets reject rather than truncate;
+Stet never samples the first N labels.
+`stet dataset regenerate-f2p` accepts the same two explicit budget flags but
+does not read build config.
 
 Cold Bazel startups also re-download external repos into the selector's
 `repository_cache`, and then re-extract and re-execute every external
@@ -732,19 +743,8 @@ unless the repo declares a `test_selector` config. During strict F2P proof,
 Stet may derive flags-preserving Bazel label candidates when `bazel query` (or
 Bazelisk) resolves a package pattern to actual test-rule labels and proves their
 direct srcs, Rust crate srcs, direct data source files, or buildfiles cover
-required test-patch directories. Large-package reverse-dependency recovery
-first query-proves every changed source label; a missing or ambiguous source
-abstains before any reverse-dependency query. Recursive patterns
-are never recorded as strict F2P identities. An actual label is accepted only after the same dynamic
-base-fail/gold-pass check as other targeted candidates. When Bazel candidate
-derivation abstains (query pattern failure, the >16-label bound, or no
-covering target), the build keeps the original broad command and reruns
-base+gold for it under the same multi-run flake policy, accepting only on a
-broad base-fail/gold-pass — recorded as `proof_strength: abstained_kept_broad`
-with `fallback: keep_broad`. It never falls back to a partial or first-N label
-subset. Infrastructure failures (disk/extraction errors, missing toolchain
-binaries, selector crashes) classify as `executor_runtime_error`, skip the task
-instead of minting a fallback proof, and are never recorded as `f2p_failed`.
+required test-patch directories. Large-package reverse-dependency recovery first query-proves every changed source label; a missing or ambiguous source abstains before any reverse-dependency query. Recursive patterns are never recorded as strict F2P identities. An actual label is accepted only after the same dynamic base-fail/gold-pass check as other targeted candidates. When Bazel candidate
+derivation abstains (query pattern failure, unsafe/out-of-pattern label, budget overflow, or no covering target), the build keeps the original broad command and reruns base+gold for it under the same multi-run flake policy, accepting only on a broad base-fail/gold-pass — recorded as `proof_strength: abstained_kept_broad` with `fallback: keep_broad`. It never falls back to an incomplete label subset. Overflow recovery may use `--keep_going` only for source-rdeps after every changed source is strictly proven; a typed transient `ExternalDepsException`/exit-37 query receives exactly one same-task retry. Timeout, cancellation, auth/toolchain failure, and exhausted retry fail closed. Query attempt provenance records exit code, complete/partial mode, elapsed time, redacted diagnostics, and digests. `--bazel-candidate-budget` / `build.bazel_candidate_budget` separately bounds the full candidate set (default 16, maximum 4096), while `--bazel-dynamic-attempt-budget` / `build.bazel_dynamic_attempt_budget` separately bounds dynamic attempts; neither path truncates or samples first-N labels. Infrastructure failures (disk/extraction errors, missing toolchain binaries, selector crashes) classify as `executor_runtime_error`, skip the task instead of minting a fallback proof, and are never recorded as `f2p_failed`.
 If a base verifier fails before an intended changed test executes—for example,
 zero-test import, collection, or generated-fixture setup failure—Stet records
 `verifier_pretest_failure` and abstains instead of minting dynamic F2P.
@@ -1023,9 +1023,20 @@ in place without redoing accepted work, rerun with `--retry-rejected`
 task dirs byte-for-byte, retries only `f2p_failed` / `gold_validation_failed` /
 `executor_runtime_error` classes, appends each retry under `attempts/<n>/`
 without deleting prior receipts, and refuses a retry if the on-disk patch no
-longer matches the manifest's recorded checksum. Build verification reruns
+longer matches the manifest's recorded checksum. A root left by a run
+interrupted before `build-summary.json` was written is recovered from its prior
+task and `rejected/` evidence instead of failing, while an empty or mistyped
+`--out` still fails rather than silently starting a fresh build. Build
+verification reruns
 default to 2 attempts (`--flake-reruns N` to override); a divergent outcome
 across attempts is rejected, never silently accepted.
+
+When retained rejection sidecars exist, `build-summary.json` also carries a
+bounded `skip_evidence` projection with the reason count, typed stage/signal/
+retryability/runtime classification, a redacted error, and relative artifact
+references. The onboarding receipt mirrors this under
+`candidate_pool.skip_reasons[].evidence`; use the task-level `rejection.json`
+for complete per-task authority.
 
 For `--source-mode reference`, retry is still manifest-only: it reopens the
 recorded immutable git authority and refuses altered patches, task identity, or
@@ -1082,21 +1093,30 @@ READY.
 `ai_task` is the only manifest field build cannot recompute from the
 repository, so its presence is not evidence that a model wrote it: a
 hand-edited manifest fills the field exactly as `stet suite discover` does.
-Build therefore admits a manifest-carried `ai_task` only when the task also
-carries a generation receipt — `ai_task_provenance` (generator, model, prompt
-and response digests, plus a digest of the `ai_task` value itself), or, for
-manifests written before that field existed, a clean
-`llm_diagnostics.enrichment` reference. The two are not equally strong: the
-`ai_task_provenance` digest is bound to the instruction, so rewriting `ai_task`
-in place invalidates the receipt, while the older enrichment reference only
-shows that an enrichment call happened and survives such a rewrite. Rebuild an
-older manifest with `stet suite discover` if you need the stronger binding.
-Both receipts are self-signed: they catch a missing receipt and an instruction
-edited after discover wrote it, which is what a curation script produces by
-accident, but neither is a defense against a producer that forges the block
-outright. Treat the check as provenance hygiene, not as a trust boundary
-against the tool that wrote the manifest.
-Without either receipt the task is skipped
+Every field of the receipt blocks themselves — `ai_task_provenance` (generator,
+model, prompt and response digests, plus a digest of the `ai_task` value) and
+the older `llm_diagnostics.enrichment` reference — is equally hand-computable,
+so build does not accept either block on its face. It verifies them against
+the enrichment response `stet suite discover` retains next to the manifest at
+`llm-diagnostics/<task_id>/enrichment.raw.txt`: the file must resolve under the
+manifest directory, digest to the recorded `response_sha256` (both copies of it,
+when `ai_task_provenance` is also present), parse, and carry an `<ai-task>` body
+equal to the manifest's `ai_task`. Re-deriving the instruction from the retained
+response is the check; the digests only tie the receipt blocks to that response.
+
+A manifest separated from its `llm-diagnostics/` tree can therefore no longer be
+certified, whatever receipts it carries. Keep that directory alongside the
+manifest when moving or copying it, or rebuild with `stet suite discover`. A
+`raw_response` that is absolute or escapes the manifest directory is refused
+without being read.
+
+This stays provenance hygiene, not a trust boundary against the tool that wrote
+the manifest: it establishes that the instruction came out of a recorded
+enrichment call rather than a curation hypothesis typed into the field, and a
+producer that fabricates the response file too can still satisfy it.
+
+When the instruction cannot be re-derived — no retained response, digest
+mismatch, unparseable response, or a different `<ai-task>` — the task is skipped
 with reason `unattested_ai_task_not_allowed`; rebuild the manifest with `stet
 suite discover`, or pass `--allow-unattested-ai-task` to admit it as a
 recorded degradation (`prompt_regime: unattested-provenance`,
@@ -1147,6 +1167,17 @@ Tests that reference gold-introduced **unexported** symbols are deselected
 per-test with reason `binds_private_surface` in `build_logs/test_selection.json`
 (`deselected_targets`). When nothing fair survives, proof strength is demoted
 (`private_surface_demoted`) rather than hard-rejected.
+
+`deselected_targets` also records candidates the F2P ladder deliberately did
+not spend a trial on. Both apply only to build-system-query-derived candidates
+(Bazel today); explicit test commands and proposal- or extractor-derived
+candidates always run and always fail closed. `redundant_variant_coverage`
+means a config-variant pseudo-label (`.asan`, `.dbg`, `.tsan`, …) was skipped
+because an already-proven label covers every path it covers.
+`no_test_targets` means the candidate matched no test target at all (Bazel
+exit 4), so nothing ran and nothing failed; it is a benign skip, not a failed
+trial, and is never retried. If every candidate is skipped, the task still
+ends with no F2P proof.
 
 For materialized tasks with selector evidence, `build-summary.json`
 also includes a separate `test_selector` rollup with selector status,

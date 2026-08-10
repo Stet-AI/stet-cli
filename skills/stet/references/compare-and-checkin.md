@@ -47,6 +47,21 @@ stet eval compare \
   --json
 ```
 
+For split baseline and candidate roots, use the native no-spend combine compare:
+
+```bash
+stet eval combine compare \
+  --baseline-source-root <baseline-n20> --baseline-source-root <baseline-n5> \
+  --candidate-source-root <candidate-n20> --candidate-source-root <candidate-n5> \
+  --baseline-combined-root <baseline-combined> \
+  --candidate-combined-root <candidate-combined> \
+  --baseline-model <baseline-model> --candidate-model <candidate-model> \
+  --comparison-surface model --out <compare-root> --expect-tasks 25
+```
+
+When explicit baseline and candidate models differ, `--comparison-surface model`
+is required; otherwise the command fails before either combined root is written.
+
 For an existing-root question with two or more arms where the answer is a
 standing rather than "baseline or candidate?", use generic multi-arm compare:
 
@@ -347,7 +362,10 @@ interpreting the counts: `agent_no_patch`, `patch_capture_empty`,
 outcomes, while `setup_failed_before_agent`, `agent_never_ran`, and
 `verifier_failed_before_patch_application` are invalidating infra blockers. The
 operator needs to know whether the delta is model/task signal or an artifact of
-broken setup or verification.
+broken setup or verification. `oracle_test_patch_conflict` is also an
+invalidating infra blocker, not a test failure: the hidden oracle `test.patch`
+still would not apply after the verifier restored the paths that patch owns, so
+the agent's implementation was never measured.
 
 Do not read `behavior_metrics.patch_calls: 0` (or `distinct_patched_files: 0`) as
 patchless — those count formal patch-tool calls the trajectory parser observed,
@@ -530,18 +548,26 @@ Machine-readable default:
   as reliability-of-producing-a-patch.
 - Within `decision_receipt.compare`, prefer `failure_taxonomy`,
   `grader_coverage`, and `task_flips` before scraping per-task artifacts.
+- Before any coverage repair, read `decision_receipt.compare.task_provenance`.
+  If its root or arm status is `warning` or `partial`, an arm accounting status
+  is `partial` or `warning`, an arm's accounted count differs from its realized
+  count, or it lists unaccounted task IDs, reconcile the realized/accounted task
+  sets first and rerun `stet eval status`/`stet eval report`. No
+  `repair-ai-coverage` or `regrade-graders` command is authorized until task
+  launch provenance is complete; authorized smoke reuse is complete only when
+  its status is `ok`, accounting is `accounted`, and counts match.
 - In the task-paired report, read equivalence as paired equivalent/non-equivalent
   outcomes and code review on its native paired 0-100 overall-score scale (or
   paired pass/fail signals when that score is absent). Neither is a model winner
   by itself; both are directional task evidence.
 - If built-in grader outcomes are missing or unknown, `grader_coverage` lists
   the affected arm/task IDs. For equivalence, also read
-  `missing_equivalence`; it qualifies the headline metric and emits the exact
-  `stet runs repair-ai-coverage` command to refresh only those tasks. Until
-  that repair succeeds, keep the recommendation inspect-only for rollout, but
-  still summarize `evidence_quality.directional_read` and taskwise quality/cost
-  movement as iteration signal when `directional_read.status` is `usable` or
-  `limited`.
+  `missing_equivalence`; it qualifies the headline metric and, once task launch
+  provenance is complete, emits the exact `stet runs repair-ai-coverage`
+  command to refresh only those tasks. Until that repair succeeds, keep the
+  recommendation inspect-only for rollout, but still summarize
+  `evidence_quality.directional_read` and taskwise quality/cost movement as
+  iteration signal when `directional_read.status` is `usable` or `limited`.
 - Read `decision_receipt.compare.behavior_coverage` before claiming behavioral
   or process-efficiency differences. If it is blocked, report captured/total
   counts and the listed `missing_task_ids`; do not silently omit the behavior
@@ -773,6 +799,10 @@ Recovery rules:
   projections over authority. Derived report/task-history material may refresh,
   but these reads must not create or rewrite partial receipts or other authority
   inputs.
+- A named study with `disposition.status=permanent_inspect_only` is a terminal,
+  preserved qualification receipt. `stet study status|report` remains readable,
+  while `study start`, `study scan --write`, study attachment, and
+  `eval report --study` fail closed without a rerun or repair action.
 - If the compare is blocked by invalid or partially valid evidence, explain that
   as a validity problem first, not as a model-quality regression.
 - When grader coverage is partial, prefer `repair compare` or `retry grader`

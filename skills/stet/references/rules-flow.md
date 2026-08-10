@@ -53,7 +53,10 @@ Roles:
   task slice, Harness Surface, Search Space, grader coverage, and validity. A
   partial baseline arm is not reusable until it has required arm artifacts such
   as `manifest.json` plus `reports/summary.json`; a completed baseline from a
-  different slice is not a matched baseline.
+  different slice is not a matched baseline. When repo context cannot be
+  assembled, `--json` emits a structured `error` envelope on stdout and keeps a
+  non-zero exit; use `error.code` and `error.action` to choose the next setup
+  step.
 - `manifest resolve`: inspect normalized inputs before launch. Prints the canonical resolved change manifest as YAML (or JSON with `--json`); injected defaults (e.g. `context.baseline.source`, `context.candidate.source`, `policy.version`, `treatments[*].path`) are inlined silently — there is no separate validation verdict. On a malformed manifest, `manifest resolve` exits non-zero; without `--json` it emits a plain-text stderr line, and with `--json` it emits a structured `{"error": {"code", "message", "field"}}` envelope on stdout. A non-zero exit is the validation contract — treat it as "malformed manifest" and read `error.code` / `error.field` (or the stderr line) for the field-precise reason.
 - `eval rules plan`: preflight tasks, arms, graders, frozen-baseline reuse, cost confidence, missing pricing/cost data, and cheaper alternatives without launching compare evidence. It persists an `eval_rules_plan.v1.json` receipt with replay-validity identity that a matching launch can reuse. Before replay, plan resolves every charged arm through the same local provider/config boundary as execution; `launch_error.phase: resolve_arm_model` means the model cannot launch, so use a registry-backed key for CLI `--baseline-model` / `--candidate-model`, configure its provider, or pass `--ai-cmd` for a custom provider. Keep `model:<name or alias>` selector syntax inside YAML manifests; do not pass that selector wrapper literally as a CLI model value. Before launch, require every verifier stdout/stderr path named by replay validity to remain readable after plan cleanup; a missing path is a fail-closed artifact-lifecycle blocker, not reusable gold proof. It is not free: plan runs the Harbor `oracle`-agent gold-replay validation containers to populate `replay_validity` and runs the LLM-grader preflight, so under contention it routinely takes 8–10+ minutes. Replay validity uses matching proven dynamic F2P selector evidence from `build_logs/test_selection.json` when available, then `task.yaml` `validation.fail_to_pass_tests`, before falling back to broader `tests/test_outputs.py` commands. A future `--quick-plan` that skips replay validation does not exist yet; when an operator needs a sub-minute readiness check, reach for `stet manifest resolve` instead. The next command, `stet eval rules` without `--plan`, is the charged launch. The plan output's `task_selection_adequacy.verdict` is usually informational; values such as `insufficient_history` describe historical sample size for confidence calibration. Exception: AGENTS.md/CLAUDE.md rules runs below 10 selected retained tasks are blocked as `task_selection`; expand the onboarding dataset first instead of launching a tiny rules comparison. The plan receipt also carries an `interpretation` (`kind: preview`) block; narrate it to the user per the operator-contract interpretation rule — state the odds and tier-matched verb from `confidence`, offer `one_liner` verbatim, and never relay raw posture tokens.
 
@@ -206,9 +209,24 @@ For agentic v2.alpha pointwise grading, set
 `eval.grader_runtime: v2.alpha_rewardkit` or pass
 `--grader-runtime v2.alpha_rewardkit`, and still provide
 `eval.grader_ai_model_id` / `--grader-ai-model-id`. Stet rewrites the existing
-candidate-blind `verification_contract.v1` as one flat 30–40-item binary rubric
-covering every reporting dimension, then runs exactly one read-only agentic
-judge session per task/arm. The judge sees only `{repo/, agent.patch,
+candidate-blind `verification_contract.v1` as one flat 30–40-item binary rubric.
+Reporting dimensions are compatibility tags, not per-dimension quotas;
+synthesis favors task-relevant guardrails, behavioral separators, and stretch
+criteria with future-model headroom. Calibration outcomes establish actual
+model separation and ceiling headroom; contract generation alone does not.
+For Codex synthesis, the contract cache sidecar binds the mint's actual model
+invocations and token usage; a cache hit makes no new call, and dollar cost is
+unavailable when the provider does not report it. If deterministic validation
+exhausts the bounded synthesis attempts, the task validation directory retains
+a raw-free failure receipt with the same usage, typed failure, and response
+hash/byte identity; no contract is published.
+Stet then runs one read-only agentic judge
+session per task/arm, with bounded retries only for malformed response shapes.
+If that bounded response-shape retry budget is exhausted, the task remains
+unavailable with `failure_kind=evaluator_runtime` and
+`failure_category=runtime`; contract validation continues to fail closed as
+`config` / `config` before judge invocation.
+The judge sees only `{repo/, agent.patch,
 verification_contract.v1.json}` and every yes/no verdict requires a valid
 candidate-evidence line citation from `repo/` or `agent.patch`; a contract
 citation may only supplement it. Stet also re-derives the staged contract's
@@ -218,28 +236,48 @@ closed. Tasks missing a staged `verification_contract.v1` fail closed as
 unavailable; on `stet runs regrade-graders`, add
 `--synthesize-verification-contracts` to synthesize missing candidate-blind
 contracts (cached by task identity, so every arm of the same task reuses one
-identical contract). Synthesis accepts Claude models only and uses a fresh
-prompt-only, zero-tool Claude session with only process basics and Claude
-authentication in its environment; default `--parse-retries 1` permits one semantic
+identical contract). Synthesis accepts Claude or Codex models and uses the
+provider-specific isolated prompt-only transport: Claude uses its zero-tool
+Claude session, while Codex uses native Codex CLI execution with isolated
+configuration and read-only sandboxing. Default `--parse-retries 1` permits one semantic
 repair after the initial synthesis response, while transport failures do not
-retry. `--seeds` must remain `1`; malformed or partial **judge** output
-is not repaired or retried. It cannot be combined with `eval.grader_ai_cmd`,
+retry. Add `--force-fresh-verification-contract` with
+`--synthesize-verification-contracts` to quarantine and rebuild an otherwise
+valid staged/cache contract; invalid regular confined staged/cache entries are
+also quarantined before rebuild, while unsafe paths still fail closed. Use
+`--verification-contract-cache-dir <dir>` to bind cache authority to an
+isolated run root instead of the default user cache. `--seeds` must remain `1`; after an exit-0 invocation, only a
+deterministically malformed **judge** response shape may be retried within
+`--parse-retries`; runner, timeout, invalid usage telemetry, citation/evidence,
+and scoring failures are terminal. It cannot be combined with `eval.grader_ai_cmd`,
 `--grader-ai-cmd`, `--grader-provider`, or a silent v1 fallback. Docker and
 worktree backends are supported, but worktree evidence must carry current
 decision-grade integrity for the selected task/base commit.
 
-The existing alpha trace records the Claude judge's `total_cost_usd`, wall/API
-duration, and turn count. Stet accepts only one successful, non-refusal Claude
-JSON envelope with exact structured criterion output; missing cost telemetry,
-malformed output, and error envelopes fail closed without a repair call.
+The alpha trace records actual judge invocations and usage. Claude records its
+reported cost, wall/API duration, and turn count. Native Codex records required
+token usage and reports cost as unavailable when the CLI does not provide it;
+missing or inconsistent usage is terminal. Error envelopes and malformed output
+after the bounded structural retry budget also fail closed without further calls.
+`--provider-cost-cap-usd <amount>` is a stricter pre-invocation gate than
+`--call-budget`: it requires a provider-issued, non-overridable all-in USD
+reservation covering synthesis, judging, repairs, retries, and overhead. When
+the selected provider exposes no such bound authority or USD observability, the
+ordinary command emits `provider_cost_admission.v1` with zero invocations and
+stops; a call count or token estimate never satisfies this gate.
+When native Codex exits before a usable grade, the unavailable trace retains
+only the exit code, stdout/stderr SHA-256 and byte counts, a fixed failure
+class, any observed fixed terminal event type, and whether a provider response
+was observed. If the failed process emitted one internally consistent completed
+usage event, the trace also retains its token counts and reported cost status;
+otherwise usage remains unavailable. It never persists raw command output.
 
-The current direct alpha judge is a zero-subagent macOS Claude session with
-only `Read`, `Grep`, and `Glob`; shell, write, delegation, and web tools are
-technically denied. Its subprocess environment contains only `PATH`, `HOME`,
-`TMPDIR`, and resolved Claude authentication; ambient proxy, routing, model,
-runtime, and effort controls are excluded. Outbound provider transport remains
-allowed, so the recorded profile does not claim provider-only networking. A
-Cursor/Composer **grader** fails closed before invocation
+The direct alpha judge supports zero-subagent macOS Claude and native Codex
+profiles. Claude receives only `Read`, `Grep`, and `Glob`. Codex runs direct
+`codex exec` with an isolated home, read-only workspace, no user/project rules,
+read-only shell/search, no write/delegation/web extensions, and outbound network
+limited to the bound Codex executable. Each profile binds its executable and confinement identity.
+A Cursor/Composer **grader** fails closed before invocation
 because the installed headless Cursor CLI has no enforceable tool allowlist.
 This does not prevent Cursor/Composer from being the independent model under
 test when the grader is Claude.

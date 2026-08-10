@@ -6,6 +6,174 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.14.0] - 2026-08-10
+
+This release makes onboarding recovery and Dataset Factory decisions
+evidence-bound, expands Bazel selection safely for large packages, and hardens
+grader execution and CLI recovery. A candidate-bound Chuck/Bazel tripwire now
+blocks publication unless three pinned customer-shaped runs satisfy the release
+identity, evidence, and resource checks.
+
+### Added
+- Add a sealed onboarding recovery policy and ledger: bind the target floor,
+  recovery pool, cleanup receipt, retryability, and producer action to exact
+  operation, candidate, and attempt identities; persist decisions and return
+  typed next actions for resume, retry, replacement, or human intervention.
+  ([206fc2e7], [4c43c2bb], [ec727a76], [599d371e])
+- Add no-spend `stet suite factory universe` source admission. Validate
+  candidate-blind source manifests and keep invalid states as typed
+  `needs_action` without discovery, qualification, provider calls, tests, or
+  evaluation. ([52becc8a])
+- Add source- and ledger-bound Dataset Factory readiness and materialization
+  planning. Keep prospective facts no-spend and return typed new-request
+  actions without claiming qualification, selection, provider execution,
+  tests, or corpus authority. ([de35bbf9])
+- Add `stet suite factory universe seal` to persist a source-bound
+  prospective-universe membership ledger; shortfalls remain typed
+  `needs_action` and do not authorize selection, qualification, provider calls,
+  tests, or evaluation. ([a174d420])
+- Add `--provider-cost-cap-usd` to grader regrade admission. Require a
+  provider-issued, non-overridable all-in reservation and per-call/total cost
+  observability; unavailable authority blocks before any provider invocation.
+  ([b24c79d2])
+- Add a native Codex `v2.alpha_rewardkit` judge path with macOS Seatbelt
+  admission, isolated HOME and runtime state, read-only/no-delegation policy,
+  strict structured-output and usage validation, and raw-free fixed failure
+  receipts. ([303e63d6])
+- Add bounded full-set Bazel candidate and dynamic-attempt budgets
+  (`--bazel-candidate-budget` / `build.bazel_candidate_budget` and
+  `--bazel-dynamic-attempt-budget` / `build.bazel_dynamic_attempt_budget`),
+  each capped at 4096 and rejecting overflow instead of sampling or truncating
+  the first N labels. ([0bf88c1c], [b26ee13e])
+- Add Docker-free local worktree controls to `stet eval run` and persist
+  source-bound agent-test replay worktrees for durable recovery.
+  ([0c783f5d], [1bbb0fe8])
+- Require a clean-candidate Chuck/Bazel release tripwire in CI and release
+  workflows: run the pinned journey three times, bind source/scenario/candidate
+  identity, and block publication on missing dynamic proof, manual rescue,
+  unresolved release-blocking incidents, or resource-bound evidence.
+  ([84e6e5e4], [3eeb8e9f])
+
+### Changed
+- Make Bazel overflow recovery source-scoped: after every changed test source
+  is exactly query-proven, scoped keep-going `rdeps` may retain only safe,
+  in-pattern actual test labels. A typed transient `ExternalDepsException` /
+  exit 37 receives one same-identity retry; partial query evidence stays
+  non-authoritative, and dynamic base-fail/gold-pass remains the only F2P/READY
+  authority. ([0bf88c1c])
+- Keep onboarding readiness tied to the requested launch floor; under-floor
+  receipts now recommend expansion instead of presenting partial setup as
+  ready. ([b8133bf6])
+- Bind RewardKit contract synthesis, provider usage, and per-task grader
+  applicability to task and contract identity; distinguish missing from
+  not-applicable grading and retain typed unavailable outcomes instead of
+  fabricating scores. ([303e63d6])
+- Verify manifest `ai_task` attestation against the retained enrichment
+  response (`llm-diagnostics/<task_id>/enrichment.raw.txt`): recorded digests
+  must match the file and the re-parsed `<ai-task>` body must equal the
+  manifest `ai_task`. A manifest separated from its `llm-diagnostics/`
+  directory is no longer certifiable; `--allow-unattested-ai-task` remains a
+  recorded degradation. ([c36e64b9])
+- Keep repository context read-only, expose lifecycle readiness in baseline
+  status, and preserve machine-readable context and strict-manifest errors.
+  ([48c5c3f0], [cd42ed99], [35ad4de7], [0637a8b8])
+- Preserve retained failed compare-arm evidence and make mixed-vintage combine,
+  multi-arm repair revalidation, retest repair, and P2P adequacy honor
+  authoritative proof state. ([a20f6686], [ed39bb2c], [ae85df95],
+  [ee9d77c3], [b3dd0591])
+
+### Fixed
+- Separate release readiness from post-release customer acceptance in the live
+  guard. Three clean candidate-bound journey receipts can authorize publication,
+  while customer-only incidents, arbitrary-repository assertions, and external
+  acceptance remain fail-closed under the customer profile. ([3eeb8e9f])
+- Preserve the one same-identity retry for a transient Bazel
+  `ExternalDepsException` even when Bazel also prints its generic internal-crash
+  banner, while continuing to fail closed on authentication, Java/toolchain,
+  sysctl, timeout, and negated-marker diagnostics. ([01a0e731])
+- Classify Bazel internal-query, sysctl, and `ProcessHandle` crashes as typed
+  toolchain infrastructure failures instead of semantic F2P failures.
+  ([dbef7740])
+- Admit deletion only for UUID-scoped Bazel
+  `command-<UUID>.profile.gz` files under verifier output bases; other cache
+  mutations and deletions remain blocked. ([9d1eacc8])
+- Distinguish logically removed scratch roots awaiting physical reclamation
+  from failed or retained cleanup in verifier warnings. ([308727b0])
+- Disable Git-LFS filters at every git invocation against the disposable
+  worktree object store — agent patch capture, worktree file overlay commits,
+  and the verifier status snapshot — so a global gitconfig declaring a required
+  LFS filter with no reachable endpoint no longer loses agent patches with exit
+  128 or degrades verifier parser evidence.
+  ([db14130c])
+- Skip Bazel config-variant pseudo-labels (`.asan`/`.dbg`/`.tsan` siblings
+  returned by the gold test query) after the primary label proves, recording a
+  `redundant_variant_coverage` receipt instead of burning one gold trial each;
+  record a gold-trial Bazel exit 4 ("no test targets were found") on a
+  query-derived candidate as a benign `no_test_targets` skip instead of a
+  failed trial. Explicit test commands and the no-proof failure path are
+  unchanged. ([cd3cf6dc])
+- Let `--retry-rejected` recover an interrupted manifest root missing
+  `build-summary.json` when prior task or rejection evidence exists, while
+  still refusing empty or mistyped output roots; recovery makes no completed-
+  root claim. Persist direct-build failure summaries and bounded aggregate
+  rejection evidence, and classify selector/executor infrastructure failures
+  as "task not judged" rather than F2P verdicts. ([43bada49], [f0915f61],
+  [cf082ba0])
+- Reject manifest-mode `--limit` and `--skip`, fail closed on runstore source or
+  request drift, and propagate cancellation through `eval rules plan` replay
+  preflight. ([38bffbab], [bf2dd472], [1cc54a1d])
+- Accept the canonical `Bazel <version>` label for exact Bazel/Bazelisk runtime
+  probes while rejecting mismatched or free-form labels. ([eaba5c61])
+- Classify oracle `test.patch` conflicts separately from behavioral failures and
+  bound adapted-reference AI work to a 10-minute call with one timeout retry.
+  ([a6787a7d])
+- Harden Windows live-scenario executable resolution and native-runtime
+  boundaries for hosted toolcache paths. ([8095c3fb], [2b0fb253])
+
+[v0.14.0]: https://github.com/Stet-AI/stet/compare/v0.13.0...v0.14.0
+[206fc2e7]: https://github.com/Stet-AI/stet/commit/206fc2e7
+[4c43c2bb]: https://github.com/Stet-AI/stet/commit/4c43c2bb
+[ec727a76]: https://github.com/Stet-AI/stet/commit/ec727a76
+[599d371e]: https://github.com/Stet-AI/stet/commit/599d371e
+[52becc8a]: https://github.com/Stet-AI/stet/commit/52becc8a
+[de35bbf9]: https://github.com/Stet-AI/stet/commit/de35bbf9
+[a174d420]: https://github.com/Stet-AI/stet/commit/a174d420
+[303e63d6]: https://github.com/Stet-AI/stet/commit/303e63d6
+[0bf88c1c]: https://github.com/Stet-AI/stet/commit/0bf88c1c
+[b26ee13e]: https://github.com/Stet-AI/stet/commit/b26ee13e
+[84e6e5e4]: https://github.com/Stet-AI/stet/commit/84e6e5e4
+[3eeb8e9f]: https://github.com/Stet-AI/stet/commit/3eeb8e9f
+[01a0e731]: https://github.com/Stet-AI/stet/commit/01a0e731
+[dbef7740]: https://github.com/Stet-AI/stet/commit/dbef7740
+[9d1eacc8]: https://github.com/Stet-AI/stet/commit/9d1eacc8
+[308727b0]: https://github.com/Stet-AI/stet/commit/308727b0
+[b24c79d2]: https://github.com/Stet-AI/stet/commit/b24c79d2
+[0c783f5d]: https://github.com/Stet-AI/stet/commit/0c783f5d
+[1bbb0fe8]: https://github.com/Stet-AI/stet/commit/1bbb0fe8
+[b8133bf6]: https://github.com/Stet-AI/stet/commit/b8133bf6
+[c36e64b9]: https://github.com/Stet-AI/stet/commit/c36e64b9
+[48c5c3f0]: https://github.com/Stet-AI/stet/commit/48c5c3f0
+[cd42ed99]: https://github.com/Stet-AI/stet/commit/cd42ed99
+[35ad4de7]: https://github.com/Stet-AI/stet/commit/35ad4de7
+[0637a8b8]: https://github.com/Stet-AI/stet/commit/0637a8b8
+[a20f6686]: https://github.com/Stet-AI/stet/commit/a20f6686
+[ed39bb2c]: https://github.com/Stet-AI/stet/commit/ed39bb2c
+[ae85df95]: https://github.com/Stet-AI/stet/commit/ae85df95
+[ee9d77c3]: https://github.com/Stet-AI/stet/commit/ee9d77c3
+[b3dd0591]: https://github.com/Stet-AI/stet/commit/b3dd0591
+[db14130c]: https://github.com/Stet-AI/stet/commit/db14130c
+[cd3cf6dc]: https://github.com/Stet-AI/stet/commit/cd3cf6dc
+[43bada49]: https://github.com/Stet-AI/stet/commit/43bada49
+[f0915f61]: https://github.com/Stet-AI/stet/commit/f0915f61
+[cf082ba0]: https://github.com/Stet-AI/stet/commit/cf082ba0
+[38bffbab]: https://github.com/Stet-AI/stet/commit/38bffbab
+[bf2dd472]: https://github.com/Stet-AI/stet/commit/bf2dd472
+[1cc54a1d]: https://github.com/Stet-AI/stet/commit/1cc54a1d
+[eaba5c61]: https://github.com/Stet-AI/stet/commit/eaba5c61
+[a6787a7d]: https://github.com/Stet-AI/stet/commit/a6787a7d
+[8095c3fb]: https://github.com/Stet-AI/stet/commit/8095c3fb
+[2b0fb253]: https://github.com/Stet-AI/stet/commit/2b0fb253
+
 ## [v0.13.0] - 2026-08-05
 
 This release makes onboarding and builds work on real customer repositories:

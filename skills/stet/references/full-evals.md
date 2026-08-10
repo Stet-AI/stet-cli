@@ -108,6 +108,12 @@ evidence stays sorted for comparison and replay. Prefer suite manifest
 `eval.harness_cli_cache` for stable throttling/cache policy; use matching CLI
 flags only for one-off overrides.
 
+For Docker-free local verifier execution, pass
+`--harbor-backend worktree` and optionally use `--worktree-keep`,
+`--worktree-allow-pre-install`, `--worktree-install=false`, and
+`--worktree-concurrency N` (`0` uses the default; the worktree path requires
+`--repo`). Docker remains the default backend.
+
 For Docker Desktop hosts, do not raise all concurrency knobs together. Use:
 
 ```bash

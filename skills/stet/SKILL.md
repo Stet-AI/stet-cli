@@ -189,6 +189,7 @@ models, setting up a repo, improving a skill, or checking a release?"
 | Shared skill addition or skill revision | Classify new-skill A/B vs revision, choose test posture, then use rules evidence or `stet eval rules skill` | [rules-skill-loop](references/rules-skill-loop.md), [iterative-improvement](references/iterative-improvement.md) |
 | Optimization loop or "keep improving" | Read native loop state, update check-in, select/launch one allowed next action | [iterative-improvement](references/iterative-improvement.md) |
 | Repo eval setup | Inspect CI/history, infer a starter slice, default AGENTS.md/CLAUDE.md first signals to recommended graders, clarify only when the non-instruction setup grader setting is ambiguous, then init/discover/build and repair/widen until ready or concretely blocked | [onboarding](references/onboarding.md) |
+| Imperative dataset request with an immutable source archive | Use the no-spend Factory boundary first. It can return a candidate-manifest action or a source-bound membership ledger; seal only from exact immutable refs, and never turn either into a corpus, model run, or evaluation | [dataset-factory](references/dataset-factory.md) |
 | Large reusable dataset | `stet suite discover` and `stet suite build`; for a first enforced reference build, prepare its exact base authority with `stet suite bootstrap-authority` | [dataset-build](references/dataset-build.md) |
 | Research, plan, or custom artifact quality | Choose or write custom rubrics first | [rubric-authoring](references/rubric-authoring.md) |
 | Promote, monitor, or roll back | Lifecycle commands after canonical Trial Result evidence | [release-lifecycle](references/release-lifecycle.md) |
@@ -247,6 +248,9 @@ Rules workbench obligations:
 - Before fresh Stet work on a repo, orient with `stet context --repo <repo>
   --json` unless you are already anchored on a specific active run, completed
   root, report, or setup artifact.
+- Context is a read-only projection: it does not refresh or write persisted
+  partial-run receipts. Use the explicit eval status/report paths for
+  write-authorized lifecycle updates.
 - Before any launch that would spend a baseline arm, check for an exact reusable
   frozen baseline or a complete arm/root that can be frozen. Use `--baseline
   <reference>` when task slice, Harness Surface, Search Space, grader set, and
