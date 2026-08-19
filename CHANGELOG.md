@@ -6,6 +6,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.14.1] - 2026-08-19
+
+This patch release unblocks Bazel task selection in large, multi-platform
+monorepos and closes the validation gap that allowed lower-level selector tests
+to pass without proving the public build path.
+
+### Fixed
+- Wire `--bazel-candidate-budget` and `--bazel-dynamic-attempt-budget` through
+  pre-materialization selection, retain complete overflow-aware candidate sets
+  instead of enforcing the legacy 16-label gate, and keep first-N sampling
+  forbidden with explicit no-sampling authority in canonical selector receipts.
+  ([398f22c1], [4cbef53c])
+- Treat exhausted dependency-query retries as task-local selector
+  infrastructure failures, so an unhealthy canary is rejected without ending
+  healthy sibling or fanout work; shared authentication, toolchain, resource,
+  and timeout failures remain run-blocking. ([398f22c1])
+- Execute explicit manual fixed-manifest `keep_broad` fallback through real
+  base/gold verification, while automatic and omitted fallback policies remain
+  fail-closed with durable selector rejection receipts. ([398f22c1])
+- Strengthen the Chuck/Bazel release guard with closed-world scenario and
+  receipt validation, mutation coverage, and CI ownership triggers so release
+  evidence must prove the public high-cardinality selector boundary.
+  ([398f22c1])
+- Persist an explicit empty termination error for successful live-scenario
+  verification results, so the release guard can distinguish verified success
+  from an omitted execution state and fail closed on incomplete receipts.
+  ([2c9b08e0])
+
+[v0.14.1]: https://github.com/Stet-AI/stet/compare/v0.14.0...v0.14.1
+[398f22c1]: https://github.com/Stet-AI/stet/commit/398f22c1
+[4cbef53c]: https://github.com/Stet-AI/stet/commit/4cbef53c
+[2c9b08e0]: https://github.com/Stet-AI/stet/commit/2c9b08e0
+
 ## [v0.14.0] - 2026-08-10
 
 This release makes onboarding recovery and Dataset Factory decisions

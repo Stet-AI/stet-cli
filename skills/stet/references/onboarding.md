@@ -127,7 +127,9 @@ rules, or selector internals before Stet can do useful work.
 - Before parallel task building, rank test-bearing publish candidates first
   and prove one representative gold canary end to end. Repair a shared
   environment failure once and fail fast if the repaired attempt is still
-  shared-failing; when the environment is
+  shared-failing. A selector-stage `query_retry_exhausted` receipt is task-local:
+  reject that candidate and try another canary, while auth, toolchain, timeout,
+  resource, and selector-crash failures remain shared and blocking. When the environment is
   valid but the oracle is unsuitable, search the bounded starter pool (at
   most `max(15, --target-ready)` ranked candidates). Only fan out after one
   canary proves gold, and stop adding work once the requested retained
